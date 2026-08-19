@@ -25,6 +25,7 @@ fn void test_unicode_display_width() @test
     test::eq(strutils::string_display_width("ℝ"), 1); // U+211D
     test::eq(strutils::string_display_width("𝔸"), 1); // U+1D538 (Plane 1)
     test::eq(strutils::string_display_width("𝒜"), 1); // U+1D49C (Plane 1)
+    test::eq(strutils::string_display_width("𝔤"), 1); // U+1D524 (Fraktur Plane 1)
     test::eq(strutils::string_display_width("λ"), 1); // Greek
     test::eq(strutils::string_display_width("∫"), 1); // Integral
 
@@ -124,7 +125,6 @@ fn void test_multiline_paragraph_reflow() @test
     ast::Document doc = parser::parse_document(md);
     defer doc.free();
 
-    // We should have: PARAGRAPH, BLANK, PARAGRAPH
     test::eq((int)doc.blocks.len, 3);
     test::eq((int)doc.blocks[0].kind, (int)ast::BlockKind.PARAGRAPH);
     test::eq((int)doc.blocks[1].kind, (int)ast::BlockKind.BLANK);
@@ -168,7 +168,6 @@ fn void test_multiline_callout() @test
     test::eq((int)doc.blocks[0].callout.kind, (int)ast::CalloutKind.NOTE);
     test::eq(doc.blocks[0].callout.title, "NOTE");
 
-    // All lines should be joined in callout spans
     test::eq((int)doc.blocks[0].callout.spans.len, 1);
     test::eq(doc.blocks[0].callout.spans[0].text, "This is the first line of the note. And this is the second line of the note. And the third line.");
 }
@@ -202,4 +201,78 @@ fn void test_latex_2d_fractions_and_matrices() @test
     test::eq(mat.height, 2);
     test::eq(mat.rows[0], "⎛ 1  0 ⎞");
     test::eq(mat.rows[1], "⎝ 0  1 ⎠");
+}
+
+fn void test_extensible_arrows() @test
+{
+    ast::Arena arena;
+    arena.init(8192);
+    defer arena.free();
+
+    math::MathBox arrow = math::render_latex_to_box(&arena, "A \\xrightarrow[\\text{below}]{\\text{above}} B");
+    test::eq(arrow.height, 3);
+    test::eq(arrow.baseline, 1);
+}
+
+fn void test_fraktur_and_gothic() @test
+{
+    ast::Arena arena;
+    arena.init(8192);
+    defer arena.free();
+
+    math::MathBox fk = math::render_latex_to_box(&arena, "\\mathfrak{g} \\in \\mathfrak{sl}(2, \\mathbb{C})");
+    test::gt(fk.width, 0);
+}
+
+fn void test_big_operators_and_limits() @test
+{
+    ast::Arena arena;
+    arena.init(8192);
+    defer arena.free();
+
+    math::MathBox union_box = math::render_latex_to_box(&arena, "\\bigcup_{i=1}^n A_i");
+    test::eq(union_box.height, 5); // 1 (sup) + 3 (glyph) + 1 (sub)
+}
+
+fn void test_primes_and_derivatives() @test
+{
+    ast::Arena arena;
+    arena.init(8192);
+    defer arena.free();
+
+    math::MathBox p1 = math::render_latex_to_box(&arena, "f'''(x)");
+    test::gt(p1.width, 0);
+}
+
+fn void test_modulo_congruence() @test
+{
+    ast::Arena arena;
+    arena.init(8192);
+    defer arena.free();
+
+    math::MathBox pmod = math::render_latex_to_box(&arena, "a \\equiv b \\pmod{m}");
+    test::gt(pmod.width, 0);
+}
+
+fn void test_oeis_symbols_suite() @test
+{
+    ast::Arena arena;
+    arena.init(16384);
+    defer arena.free();
+
+    // Relations from OEIS wiki
+    String t1 = math::transform_math(&arena, "\\leqslant \\geqslant \\nleq \\ngeq \\lll \\ggg \\prec \\succ \\preceq \\succeq \\bowtie \\smile \\frown \\ulcorner \\urcorner \\llcorner \\lrcorner \\eth \\digamma");
+    test::gt(strutils::string_display_width(t1), 0);
+
+    // Negated relations
+    String t2 = math::transform_math(&arena, "\\nshortmid \\nshortparallel \\nvdash \\nvDash \\nVdash \\nVDash \\ntriangleleft \\ntriangleright \\nsubseteq \\subsetneq \\supsetneq");
+    test::gt(strutils::string_display_width(t2), 0);
+
+    // Number sets
+    String t3 = math::transform_math(&arena, "\\N \\Z \\Q \\R \\C \\H \\O");
+    test::gt(strutils::string_display_width(t3), 0);
+
+    // Greek uppercase & lowercase
+    String t4 = math::transform_math(&arena, "\\Alpha \\Beta \\Gamma \\Delta \\Digamma \\alpha \\beta \\gamma \\delta \\digamma");
+    test::gt(strutils::string_display_width(t4), 0);
 }

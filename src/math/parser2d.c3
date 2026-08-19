@@ -51,19 +51,6 @@ fn void Math2DParser.skip_spaces(Math2DParser* p)
     }
 }
 
-fn bool is_relational_sym(String name)
-{
-    if (strutils::string_eq(name, "leq") || strutils::string_eq(name, "le") || strutils::string_eq(name, "geq") || strutils::string_eq(name, "ge") || strutils::string_eq(name, "neq") || strutils::string_eq(name, "ne") || strutils::string_eq(name, "approx") || strutils::string_eq(name, "equiv") || strutils::string_eq(name, "sim") || strutils::string_eq(name, "simeq") || strutils::string_eq(name, "cong") || strutils::string_eq(name, "propto") || strutils::string_eq(name, "ll") || strutils::string_eq(name, "gg") || strutils::string_eq(name, "subset") || strutils::string_eq(name, "supset") || strutils::string_eq(name, "subseteq") || strutils::string_eq(name, "supseteq") || strutils::string_eq(name, "in") || strutils::string_eq(name, "notin") || strutils::string_eq(name, "ni") || strutils::string_eq(name, "models") || strutils::string_eq(name, "vdash") || strutils::string_eq(name, "perp") || strutils::string_eq(name, "parallel")) return true;
-    if (strutils::string_eq(name, "to") || strutils::string_eq(name, "rightarrow") || strutils::string_eq(name, "leftarrow") || strutils::string_eq(name, "uparrow") || strutils::string_eq(name, "downarrow") || strutils::string_eq(name, "leftrightarrow") || strutils::string_eq(name, "Rightarrow") || strutils::string_eq(name, "Leftarrow") || strutils::string_eq(name, "Leftrightarrow") || strutils::string_eq(name, "implies") || strutils::string_eq(name, "iff") || strutils::string_eq(name, "mapsto") || strutils::string_eq(name, "longrightarrow") || strutils::string_eq(name, "longleftarrow") || strutils::string_eq(name, "Longrightarrow") || strutils::string_eq(name, "Longleftrightarrow")) return true;
-    return false;
-}
-
-fn bool is_binary_sym(String name)
-{
-    if (strutils::string_eq(name, "pm") || strutils::string_eq(name, "mp") || strutils::string_eq(name, "times") || strutils::string_eq(name, "cdot") || strutils::string_eq(name, "div") || strutils::string_eq(name, "oplus") || strutils::string_eq(name, "ominus") || strutils::string_eq(name, "otimes") || strutils::string_eq(name, "odot") || strutils::string_eq(name, "cap") || strutils::string_eq(name, "cup") || strutils::string_eq(name, "setminus") || strutils::string_eq(name, "ast") || strutils::string_eq(name, "star") || strutils::string_eq(name, "circ") || strutils::string_eq(name, "bullet")) return true;
-    return false;
-}
-
 fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
 {
     p.skip_spaces();
@@ -111,554 +98,109 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
         }
         String cmd = p.src[cmd_start : p.pos - cmd_start];
 
-        // ── Tag: \tag{label}, \tag*{label} ──────────────────────────────────
-        if (strutils::string_eq(cmd, "tag"))
-        {
-            p.skip_spaces();
-            bool starred = false;
-            if (p.peek() == '*') { p.get(); starred = true; }
-            p.skip_spaces();
-            if (p.peek() == '{') p.get();
-            usz t_start = p.pos;
-            while (!p.eof() && p.peek() != '}') p.pos++;
-            String raw_tag = p.src[t_start : p.pos - t_start];
-            if (p.peek() == '}') p.get();
-
-            buffer::ByteBuffer tb;
-            tb.init(64);
-            defer tb.free();
-            if (!starred) tb.append_char('(');
-            tb.append_slice(raw_tag);
-            if (!starred) tb.append_char(')');
-            *prev_atom = MathAtomKind.ORD;
-            return box_from_string(p.arena, tb.to_arena_string(p.arena));
-        }
-
-        // ── Long Vectors: \overrightarrow{AB}, \overleftarrow{AB} ───────────
-        if (strutils::string_eq(cmd, "overrightarrow") || strutils::string_eq(cmd, "overleftarrow"))
-        {
-            MathBox inner = parse_math_group(p);
-            bool is_right = strutils::string_eq(cmd, "overrightarrow");
-            *prev_atom = MathAtomKind.INNER;
-            return box_overarrow(p.arena, inner, is_right);
-        }
-
-        // ── Cancellation: \cancel{x}, \bcancel, \xcancel ────────────────────
-        if (strutils::string_eq(cmd, "cancel") || strutils::string_eq(cmd, "bcancel") || strutils::string_eq(cmd, "xcancel"))
-        {
-            MathBox inner = parse_math_group(p);
-            *prev_atom = MathAtomKind.ORD;
-            return box_cancel(p.arena, inner);
-        }
-
-        // ── Color: \color{name}{expr}, \textcolor, \mathcolor ───────────────
-        if (strutils::string_eq(cmd, "color") || strutils::string_eq(cmd, "textcolor") || strutils::string_eq(cmd, "mathcolor"))
-        {
-            p.skip_spaces();
-            if (p.peek() == '{') p.get();
-            usz c_start = p.pos;
-            while (!p.eof() && p.peek() != '}') p.pos++;
-            String c_name = p.src[c_start : p.pos - c_start];
-            if (p.peek() == '}') p.get();
-
-            char* ansi_col = (char*)ansi::FG_CYAN;
-            if (strutils::string_eq(c_name, "red") || strutils::string_eq(c_name, "pink")) { ansi_col = (char*)ansi::FG_PINK; }
-            else if (strutils::string_eq(c_name, "green")) { ansi_col = (char*)ansi::FG_GREEN; }
-            else if (strutils::string_eq(c_name, "orange")) { ansi_col = (char*)ansi::FG_ORANGE; }
-            else if (strutils::string_eq(c_name, "yellow")) { ansi_col = (char*)ansi::FG_YELLOW; }
-            else if (strutils::string_eq(c_name, "purple") || strutils::string_eq(c_name, "magenta")) { ansi_col = (char*)ansi::FG_PURPLE; }
-            else if (strutils::string_eq(c_name, "gray") || strutils::string_eq(c_name, "grey")) { ansi_col = (char*)ansi::FG_MUTED; }
-
-            MathBox inner = parse_math_group(p);
-            *prev_atom = MathAtomKind.INNER;
-            return box_colorize(p.arena, inner, ansi_col);
-        }
-
-        // ── Fractions: \frac{num}{den}, \dfrac, \tfrac, \cfrac ──────────────
-        if (strutils::string_eq(cmd, "frac") || strutils::string_eq(cmd, "dfrac") || strutils::string_eq(cmd, "tfrac") || strutils::string_eq(cmd, "cfrac"))
-        {
-            MathBox num = parse_math_group(p);
-            MathBox den = parse_math_group(p);
-            *prev_atom = MathAtomKind.INNER;
-            return box_fraction(p.arena, num, den);
-        }
-
-        // ── Boxed: \boxed{expr} ──────────────────────────────────────────────
-        if (strutils::string_eq(cmd, "boxed"))
-        {
-            MathBox inner = parse_math_group(p);
-            *prev_atom = MathAtomKind.INNER;
-            return box_boxed(p.arena, inner);
-        }
-
-        // ── Binomial: \binom{n}{k} ───────────────────────────────────────────
-        if (strutils::string_eq(cmd, "binom") || strutils::string_eq(cmd, "dbinom") || strutils::string_eq(cmd, "tbinom"))
-        {
-            MathBox top_b = parse_math_group(p);
-            MathBox bot_b = parse_math_group(p);
-            MathBox[2] stack;
-            stack[0] = top_b;
-            stack[1] = bot_b;
-            MathBox inner = box_vconcat_list(p.arena, stack[0:2]);
-            *prev_atom = MathAtomKind.INNER;
-            return box_delimiters(p.arena, inner, '(', ')');
-        }
-
-        // ── Overset & Underset: \overset{top}{base}, \underset{bot}{base} ────
-        if (strutils::string_eq(cmd, "overset") || strutils::string_eq(cmd, "stackrel"))
-        {
-            MathBox top_b = parse_math_group(p);
-            MathBox base_b = parse_math_group(p);
-            *prev_atom = MathAtomKind.ORD;
-            return box_limits_op(p.arena, base_b, box_empty(p.arena), top_b);
-        }
-        if (strutils::string_eq(cmd, "underset"))
-        {
-            MathBox bot_b = parse_math_group(p);
-            MathBox base_b = parse_math_group(p);
-            *prev_atom = MathAtomKind.ORD;
-            return box_limits_op(p.arena, base_b, bot_b, box_empty(p.arena));
-        }
-
-        // ── Overbrace & Underbrace ───────────────────────────────────────────
-        if (strutils::string_eq(cmd, "overbrace"))
-        {
-            MathBox inner = parse_math_group(p);
-            MathBox label = box_empty(p.arena);
-            p.skip_spaces();
-            if (p.peek() == '^')
-            {
-                p.get();
-                label = parse_math_group(p);
-            }
-            *prev_atom = MathAtomKind.INNER;
-            return box_overbrace(p.arena, inner, label);
-        }
-        if (strutils::string_eq(cmd, "underbrace"))
-        {
-            MathBox inner = parse_math_group(p);
-            MathBox label = box_empty(p.arena);
-            p.skip_spaces();
-            if (p.peek() == '_')
-            {
-                p.get();
-                label = parse_math_group(p);
-            }
-            *prev_atom = MathAtomKind.INNER;
-            return box_underbrace(p.arena, inner, label);
-        }
-
-        // ── Substack: \substack{line1 \\ line2} ──────────────────────────────
-        if (strutils::string_eq(cmd, "substack"))
-        {
-            p.skip_spaces();
-            if (p.peek() == '{') p.get();
-            List{MathBox} lines;
-            lines.init(mem, 4);
-            defer lines.free();
-
-            while (!p.eof())
-            {
-                lines.push(parse_math_expression(p, false, true));
-                p.skip_spaces();
-                if (p.peek() == '\\' && p.pos + 1 < (usz)p.src.len && p.src[p.pos + 1] == '\\')
-                {
-                    p.pos += 2;
-                }
-                else if (p.peek() == '}')
-                {
-                    p.get();
-                    break;
-                }
-                else
-                {
-                    break;
-                }
-            }
-            *prev_atom = MathAtomKind.ORD;
-            return box_vconcat_list(p.arena, lines.entries[:(usz)lines.size]);
-        }
-
-        // ── Square Root: \sqrt[n]{expr} ──────────────────────────────────────
-        if (strutils::string_eq(cmd, "sqrt"))
-        {
-            MathBox deg = box_empty(p.arena);
-            p.skip_spaces();
-            if (p.peek() == '[')
-            {
-                p.get();
-                deg = parse_math_expression(p, false, false);
-                p.skip_spaces();
-                if (p.peek() == ']') p.get();
-            }
-            MathBox inner = parse_math_group(p);
-            *prev_atom = MathAtomKind.INNER;
-            return box_sqrt(p.arena, inner, deg);
-        }
-
-        // ── Summation: \sum ──────────────────────────────────────────────────
-        if (strutils::string_eq(cmd, "sum"))
-        {
-            MathBox sub = box_empty(p.arena);
-            MathBox sup = box_empty(p.arena);
-            for (int k = 0; k < 2; k++)
-            {
-                p.skip_spaces();
-                if (p.peek() == '_') { p.get(); sub = parse_math_group(p); }
-                else if (p.peek() == '^') { p.get(); sup = parse_math_group(p); }
-            }
-            *prev_atom = MathAtomKind.OP;
-            return box_summation_op(p.arena, sub, sup);
-        }
-
-        // ── Product & Coproduct: \prod, \coprod ──────────────────────────────
-        if (strutils::string_eq(cmd, "prod") || strutils::string_eq(cmd, "coprod"))
-        {
-            MathBox sub = box_empty(p.arena);
-            MathBox sup = box_empty(p.arena);
-            for (int k = 0; k < 2; k++)
-            {
-                p.skip_spaces();
-                if (p.peek() == '_') { p.get(); sub = parse_math_group(p); }
-                else if (p.peek() == '^') { p.get(); sup = parse_math_group(p); }
-            }
-            *prev_atom = MathAtomKind.OP;
-            return box_product_op(p.arena, sub, sup);
-        }
-
-        // ── Integrals: \int, \iint, \iiint, \oint ────────────────────────────
-        if (strutils::string_eq(cmd, "int") || strutils::string_eq(cmd, "iint") || strutils::string_eq(cmd, "iiint") || strutils::string_eq(cmd, "oint"))
-        {
-            int order = 1;
-            if (strutils::string_eq(cmd, "iint")) { order = 2; }
-            if (strutils::string_eq(cmd, "iiint")) { order = 3; }
-
-            MathBox sub = box_empty(p.arena);
-            MathBox sup = box_empty(p.arena);
-            for (int k = 0; k < 2; k++)
-            {
-                p.skip_spaces();
-                if (p.peek() == '_') { p.get(); sub = parse_math_group(p); }
-                else if (p.peek() == '^') { p.get(); sup = parse_math_group(p); }
-            }
-            *prev_atom = MathAtomKind.OP;
-            return box_integral_op(p.arena, sub, sup, order);
-        }
-
-        // ── Limits: \lim, \max, \min, \sup, \inf, \argmax, \argmin ───────────
-        if (strutils::string_eq(cmd, "lim") || strutils::string_eq(cmd, "liminf") || strutils::string_eq(cmd, "limsup") || strutils::string_eq(cmd, "max") || strutils::string_eq(cmd, "min") || strutils::string_eq(cmd, "sup") || strutils::string_eq(cmd, "inf") || strutils::string_eq(cmd, "argmax") || strutils::string_eq(cmd, "argmin"))
-        {
-            String op_name = cmd;
-            if (strutils::string_eq(cmd, "liminf")) { op_name = "lim inf"; }
-            else if (strutils::string_eq(cmd, "limsup")) { op_name = "lim sup"; }
-            else if (strutils::string_eq(cmd, "argmax")) { op_name = "arg max"; }
-            else if (strutils::string_eq(cmd, "argmin")) { op_name = "arg min"; }
-
-            MathBox op_box = box_from_string(p.arena, op_name);
-            MathBox sub = box_empty(p.arena);
-            MathBox sup = box_empty(p.arena);
-            for (int k = 0; k < 2; k++)
-            {
-                p.skip_spaces();
-                if (p.peek() == '_') { p.get(); sub = parse_math_group(p); }
-                else if (p.peek() == '^') { p.get(); sup = parse_math_group(p); }
-            }
-            *prev_atom = MathAtomKind.OP;
-            return box_limits_op(p.arena, op_box, sub, sup);
-        }
-
-        // ── Delimiters: \left ... \right ─────────────────────────────────────
-        if (strutils::string_eq(cmd, "left"))
-        {
-            p.skip_spaces();
-            char open_ch = p.get();
-            if (open_ch == '\\')
-            {
-                char next_delim = p.get();
-                if (next_delim == '{') { open_ch = '{'; }
-                else if (next_delim == '}') { open_ch = '}'; }
-                else if (next_delim == '|') { open_ch = 'V'; }
-                else if (next_delim == '<' || next_delim == 'l') { open_ch = '<'; }
-            }
-            if (open_ch == '.') open_ch = 0;
-
-            MathBox inner = parse_math_expression(p, false, false);
-
-            char close_ch = ')';
-            p.skip_spaces();
-            if (p.peek() == '\\')
-            {
-                p.get();
-                usz r_start = p.pos;
-                while (!p.eof() && ((p.src[p.pos] >= 'a' && p.src[p.pos] <= 'z') || (p.src[p.pos] >= 'A' && p.src[p.pos] <= 'Z'))) p.pos++;
-                String r_cmd = p.src[r_start : p.pos - r_start];
-                if (strutils::string_eq(r_cmd, "right"))
-                {
-                    p.skip_spaces();
-                    close_ch = p.get();
-                    if (close_ch == '\\')
-                    {
-                        char next_delim = p.get();
-                        if (next_delim == '{') { close_ch = '{'; }
-                        else if (next_delim == '}') { close_ch = '}'; }
-                        else if (next_delim == '|') { close_ch = 'V'; }
-                    }
-                    if (close_ch == '.') close_ch = 0;
-                }
-            }
-
-            *prev_atom = MathAtomKind.INNER;
-            return box_delimiters(p.arena, inner, open_ch, close_ch);
-        }
-
-        // ── Multi-Equation Environments & Matrices ───────────────────────────
-        if (strutils::string_eq(cmd, "begin"))
-        {
-            p.skip_spaces();
-            if (p.peek() == '{') p.get();
-            usz env_start = p.pos;
-            while (!p.eof() && p.peek() != '}') p.pos++;
-            String env_name = p.src[env_start : p.pos - env_start];
-            if (p.peek() == '}') p.get();
-
-            // Optional array column format e.g. {c c c}
-            if (strutils::string_eq(env_name, "array"))
-            {
-                p.skip_spaces();
-                if (p.peek() == '{')
-                {
-                    p.get();
-                    while (!p.eof() && p.peek() != '}') p.pos++;
-                    if (p.peek() == '}') p.get();
-                }
-            }
-
-            List{MathBoxList} env_rows;
-            env_rows.init(mem, 8);
-            defer {
-                for (sz r = 0; r < env_rows.size; r++) env_rows.entries[r].free();
-                env_rows.free();
-            }
-
-            MathBoxList cur_row;
-            cur_row.init(mem, 4);
-
-            int max_cols = 0;
-
-            while (!p.eof())
-            {
-                p.skip_spaces();
-
-                // Check for \end{env}
-                if (p.peek() == '\\')
-                {
-                    usz save_pos = p.pos;
-                    p.get();
-                    usz check_start = p.pos;
-                    while (!p.eof() && ((p.src[p.pos] >= 'a' && p.src[p.pos] <= 'z') || (p.src[p.pos] >= 'A' && p.src[p.pos] <= 'Z'))) p.pos++;
-                    String check_cmd = p.src[check_start : p.pos - check_start];
-                    if (strutils::string_eq(check_cmd, "end"))
-                    {
-                        p.skip_spaces();
-                        if (p.peek() == '{') p.get();
-                        while (!p.eof() && p.peek() != '}') p.pos++;
-                        if (p.peek() == '}') p.get();
-                        if (cur_row.size > 0)
-                        {
-                            if ((int)cur_row.size > max_cols) max_cols = (int)cur_row.size;
-                            env_rows.push(cur_row);
-                            cur_row.init(mem, 4);
-                        }
-                        break;
-                    }
-                    else if (save_pos + 1 < (usz)p.src.len && p.src[save_pos + 1] == '\\') // double backslash \\
-                    {
-                        p.pos = save_pos + 2;
-                        if ((int)cur_row.size > max_cols) max_cols = (int)cur_row.size;
-                        env_rows.push(cur_row);
-                        cur_row.init(mem, 4);
-                        continue;
-                    }
-                    else
-                    {
-                        p.pos = save_pos;
-                    }
-                }
-
-                MathBox cell = parse_math_expression(p, true, true);
-                cur_row.push(cell);
-
-                p.skip_spaces();
-                if (p.peek() == '&')
-                {
-                    p.get(); // consume '&'
-                }
-                else if (p.peek() == '\\' && p.pos + 1 < (usz)p.src.len && p.src[p.pos + 1] == '\\')
-                {
-                    p.pos += 2;
-                    if ((int)cur_row.size > max_cols) max_cols = (int)cur_row.size;
-                    env_rows.push(cur_row);
-                    cur_row.init(mem, 4);
-                }
-            }
-
-            if (cur_row.size > 0)
-            {
-                if ((int)cur_row.size > max_cols) max_cols = (int)cur_row.size;
-                env_rows.push(cur_row);
-            }
-            else
-            {
-                cur_row.free();
-            }
-
-            int num_rows = (int)env_rows.size;
-            int num_cols = max_cols > 0 ? max_cols : 1;
-
-            // Flatten into 1D array of size num_rows * num_cols
-            MathBox* flat_buf = (MathBox*)p.arena.alloc((usz)(num_rows * num_cols) * MathBox::size);
-            for (int r = 0; r < num_rows; r++)
-            {
-                MathBoxList row = env_rows.entries[(usz)r];
-                for (int col = 0; col < num_cols; col++)
-                {
-                    flat_buf[(usz)(r * num_cols + col)] = (col < (int)row.size) ? row.entries[(usz)col] : box_empty(p.arena);
-                }
-            }
-            MathBox[] flat_grid = flat_buf[: (usz)(num_rows * num_cols)];
-
-            *prev_atom = MathAtomKind.INNER;
-
-            // 1. Cases
-            if (strutils::string_eq(env_name, "cases"))
-            {
-                MathBox inner = box_grid_layout(p.arena, flat_grid[: (usz)(num_rows * num_cols)], num_rows, num_cols, 'L', 3);
-                return box_delimiters(p.arena, inner, '{', (char)0);
-            }
-
-            // 2. Align / Aligned / Split / Array
-            if (strutils::string_eq(env_name, "align") || strutils::string_eq(env_name, "align*") || strutils::string_eq(env_name, "aligned") || strutils::string_eq(env_name, "split") || strutils::string_eq(env_name, "array"))
-            {
-                return box_grid_layout(p.arena, flat_grid[: (usz)(num_rows * num_cols)], num_rows, num_cols, 'A', 0);
-            }
-
-            // 3. Gather / Gather*
-            if (strutils::string_eq(env_name, "gather") || strutils::string_eq(env_name, "gather*"))
-            {
-                return box_grid_layout(p.arena, flat_grid[: (usz)(num_rows * num_cols)], num_rows, num_cols, 'C', 0);
-            }
-
-            // 4. Matrices: matrix, pmatrix, bmatrix, vmatrix, Vmatrix, Bmatrix, smallmatrix
-            char bracket_type = 'm';
-            if (strutils::string_eq(env_name, "pmatrix")) { bracket_type = 'p'; }
-            else if (strutils::string_eq(env_name, "bmatrix")) { bracket_type = 'b'; }
-            else if (strutils::string_eq(env_name, "vmatrix")) { bracket_type = 'v'; }
-            else if (strutils::string_eq(env_name, "Vmatrix")) { bracket_type = 'V'; }
-            else if (strutils::string_eq(env_name, "Bmatrix")) { bracket_type = 'B'; }
-
-            MathBox inner = box_grid_layout(p.arena, flat_grid[: (usz)(num_rows * num_cols)], num_rows, num_cols, 'C', 2);
-
-            char open_b = '['; char close_b = ']';
-            if (bracket_type == 'p') { open_b = '('; close_b = ')'; }
-            else if (bracket_type == 'v') { open_b = '|'; close_b = '|'; }
-            else if (bracket_type == 'V') { open_b = 'V'; close_b = 'V'; }
-            else if (bracket_type == 'B') { open_b = '{'; close_b = '}'; }
-            else if (bracket_type == 'm') { return inner; }
-
-            return box_delimiters(p.arena, inner, open_b, close_b);
-        }
-
-        // ── Text / Style Wrappers: \text, \mathbf, \mathbb, \operatorname ───
-        if (strutils::string_eq(cmd, "text"))
-        {
-            p.skip_spaces();
-            if (p.peek() == '{')
-            {
-                p.get();
-                usz t_start = p.pos;
-                while (!p.eof() && p.peek() != '}') p.pos++;
-                String txt = p.src[t_start : p.pos - t_start];
-                if (p.peek() == '}') p.get();
-                *prev_atom = MathAtomKind.ORD;
-                return box_from_string(p.arena, txt);
-            }
-        }
-        if (strutils::string_eq(cmd, "mathbf") || strutils::string_eq(cmd, "mathrm") || strutils::string_eq(cmd, "operatorname") || strutils::string_eq(cmd, "mathit") || strutils::string_eq(cmd, "mathsf") || strutils::string_eq(cmd, "mathtt"))
+        // ── A. Font Styles via Enum ─────────────────────────────────────────
+        MathFontStyle fstyle;
+        if (lookup_font_style(cmd, &fstyle))
         {
             p.skip_spaces();
             if (p.peek() == '*') p.get();
-            MathBox grp = parse_math_group(p);
-            *prev_atom = MathAtomKind.ORD;
-            return grp;
-        }
-        if (strutils::string_eq(cmd, "mathbb"))
-        {
             p.skip_spaces();
-            if (p.peek() == '{')
+
+            switch (fstyle)
             {
-                p.get();
-                buffer::ByteBuffer mb;
-                mb.init(32);
-                defer mb.free();
-                while (!p.eof() && p.peek() != '}')
-                {
-                    char* bb = get_mathbb_char(p.get());
-                    if (bb != null) mb.append_zstr(bb);
-                }
-                if (p.peek() == '}') p.get();
-                *prev_atom = MathAtomKind.ORD;
-                return box_from_string(p.arena, mb.to_arena_string(p.arena));
+                case MATHBB:
+                    if (p.peek() == '{')
+                    {
+                        p.get();
+                        buffer::ByteBuffer mb;
+                        mb.init(32);
+                        defer mb.free();
+                        while (!p.eof() && p.peek() != '}')
+                        {
+                            char* bb = get_mathbb_char(p.get());
+                            if (bb != null) mb.append_zstr(bb);
+                        }
+                        if (p.peek() == '}') p.get();
+                        *prev_atom = MathAtomKind.ORD;
+                        return box_from_string(p.arena, mb.to_arena_string(p.arena));
+                    }
+                    char single_bb = p.get();
+                    char* bb = get_mathbb_char(single_bb);
+                    *prev_atom = MathAtomKind.ORD;
+                    if (bb != null) return box_from_zstr(p.arena, bb);
+                    char[2] ch_bb; ch_bb[0] = single_bb; ch_bb[1] = 0;
+                    return box_from_zstr(p.arena, &ch_bb[0]);
+
+                case MATHCAL:
+                    if (p.peek() == '{')
+                    {
+                        p.get();
+                        buffer::ByteBuffer mb;
+                        mb.init(32);
+                        defer mb.free();
+                        while (!p.eof() && p.peek() != '}')
+                        {
+                            char* cal = get_mathcal_char(p.get());
+                            if (cal != null) mb.append_zstr(cal);
+                        }
+                        if (p.peek() == '}') p.get();
+                        *prev_atom = MathAtomKind.ORD;
+                        return box_from_string(p.arena, mb.to_arena_string(p.arena));
+                    }
+                    char single_cal = p.get();
+                    char* cal = get_mathcal_char(single_cal);
+                    *prev_atom = MathAtomKind.ORD;
+                    if (cal != null) return box_from_zstr(p.arena, cal);
+                    char[2] ch_cal; ch_cal[0] = single_cal; ch_cal[1] = 0;
+                    return box_from_zstr(p.arena, &ch_cal[0]);
+
+                case MATHFRAK:
+                    if (p.peek() == '{')
+                    {
+                        p.get();
+                        buffer::ByteBuffer mb;
+                        mb.init(32);
+                        defer mb.free();
+                        while (!p.eof() && p.peek() != '}')
+                        {
+                            char* fk = get_mathfrak_char(p.get());
+                            if (fk != null) mb.append_zstr(fk);
+                        }
+                        if (p.peek() == '}') p.get();
+                        *prev_atom = MathAtomKind.ORD;
+                        return box_from_string(p.arena, mb.to_arena_string(p.arena));
+                    }
+                    char single_fk = p.get();
+                    char* fk = get_mathfrak_char(single_fk);
+                    *prev_atom = MathAtomKind.ORD;
+                    if (fk != null) return box_from_zstr(p.arena, fk);
+                    char[2] ch_fk; ch_fk[0] = single_fk; ch_fk[1] = 0;
+                    return box_from_zstr(p.arena, &ch_fk[0]);
+
+                default:
+                    MathBox grp = parse_math_group(p);
+                    *prev_atom = MathAtomKind.ORD;
+                    return grp;
             }
-            char single_c = p.get();
-            char* bb = get_mathbb_char(single_c);
-            *prev_atom = MathAtomKind.ORD;
-            if (bb != null) return box_from_zstr(p.arena, bb);
-            char[2] ch; ch[0] = single_c; ch[1] = 0;
-            return box_from_zstr(p.arena, &ch[0]);
-        }
-        if (strutils::string_eq(cmd, "mathcal") || strutils::string_eq(cmd, "mathscr"))
-        {
-            p.skip_spaces();
-            if (p.peek() == '{')
-            {
-                p.get();
-                buffer::ByteBuffer mb;
-                mb.init(32);
-                defer mb.free();
-                while (!p.eof() && p.peek() != '}')
-                {
-                    char* cal = get_mathcal_char(p.get());
-                    if (cal != null) mb.append_zstr(cal);
-                }
-                if (p.peek() == '}') p.get();
-                *prev_atom = MathAtomKind.ORD;
-                return box_from_string(p.arena, mb.to_arena_string(p.arena));
-            }
-            char single_c = p.get();
-            char* cal = get_mathcal_char(single_c);
-            *prev_atom = MathAtomKind.ORD;
-            if (cal != null) return box_from_zstr(p.arena, cal);
-            char[2] ch; ch[0] = single_c; ch[1] = 0;
-            return box_from_zstr(p.arena, &ch[0]);
         }
 
-        // ── Accents: \vec, \hat, \bar, \dot, \ddot, \tilde, \overline ───────
-        if (strutils::string_eq(cmd, "overline"))
+        // ── B. Accents via Enum ─────────────────────────────────────────────
+        MathAccent accent;
+        if (lookup_accent(cmd, &accent))
         {
             MathBox inner = parse_math_group(p);
-            *prev_atom = MathAtomKind.INNER;
-            return box_overline(p.arena, inner);
-        }
-        if (strutils::string_eq(cmd, "vec") || strutils::string_eq(cmd, "hat") || strutils::string_eq(cmd, "bar") || strutils::string_eq(cmd, "dot") || strutils::string_eq(cmd, "ddot") || strutils::string_eq(cmd, "tilde"))
-        {
-            MathBox inner = parse_math_group(p);
-            char* combining = "⃗";
-            if (strutils::string_eq(cmd, "hat")) { combining = "̂"; }
-            else if (strutils::string_eq(cmd, "bar")) { combining = "̄"; }
-            else if (strutils::string_eq(cmd, "dot")) { combining = "̇"; }
-            else if (strutils::string_eq(cmd, "ddot")) { combining = "̈"; }
-            else if (strutils::string_eq(cmd, "tilde")) { combining = "̃"; }
+            if (accent == MathAccent.OVERLINE)
+            {
+                *prev_atom = MathAtomKind.INNER;
+                return box_overline(p.arena, inner);
+            }
+            if (accent == MathAccent.UNDERLINE)
+            {
+                *prev_atom = MathAtomKind.INNER;
+                return box_underline(p.arena, inner);
+            }
 
+            char* combining = get_accent_combining(accent);
             buffer::ByteBuffer mb;
             mb.init(64);
             defer mb.free();
@@ -671,49 +213,574 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
             return box_from_string(p.arena, mb.to_arena_string(p.arena));
         }
 
-        // ── Spacing: \quad, \qquad ───────────────────────────────────────────
-        if (strutils::string_eq(cmd, "quad")) return box_spaces(p.arena, 4);
-        if (strutils::string_eq(cmd, "qquad")) return box_spaces(p.arena, 8);
-
-        // ── Symbol Table Lookup ──────────────────────────────────────────────
-        for (usz s = 0; s < SYMBOLS.len; s++)
+        // ── C. Math Commands via Enum ───────────────────────────────────────
+        MathCommand mcmd;
+        if (lookup_command(cmd, &mcmd))
         {
-            if (strutils::string_eq(cmd, SYMBOLS[s].name))
+            switch (mcmd)
             {
-                if (is_relational_sym(cmd))
-                {
-                    *prev_atom = MathAtomKind.REL;
-                    buffer::ByteBuffer mb;
-                    mb.init(32);
-                    defer mb.free();
-                    mb.append_char(' ');
-                    mb.append_slice(SYMBOLS[s].glyph);
-                    mb.append_char(' ');
-                    return box_from_string(p.arena, mb.to_arena_string(p.arena));
-                }
-                if (is_binary_sym(cmd))
-                {
-                    // Optical unary vs binary distinction
-                    if (*prev_atom == MathAtomKind.ORD || *prev_atom == MathAtomKind.CLOSE || *prev_atom == MathAtomKind.INNER)
+                case TAG:
+                    p.skip_spaces();
+                    bool starred = false;
+                    if (p.peek() == '*') { p.get(); starred = true; }
+                    p.skip_spaces();
+                    if (p.peek() == '{') p.get();
+                    usz t_start = p.pos;
+                    while (!p.eof() && p.peek() != '}') p.pos++;
+                    String raw_tag = p.src[t_start : p.pos - t_start];
+                    if (p.peek() == '}') p.get();
+
+                    buffer::ByteBuffer tb;
+                    tb.init(64);
+                    defer tb.free();
+                    if (!starred) tb.append_char('(');
+                    tb.append_slice(raw_tag);
+                    if (!starred) tb.append_char(')');
+                    *prev_atom = MathAtomKind.ORD;
+                    return box_from_string(p.arena, tb.to_arena_string(p.arena));
+
+                case XRIGHTARROW:
+                case XLEFTARROW:
+                case XLEFTRIGHTARROW:
+                    MathBox xsub = box_empty(p.arena);
+                    p.skip_spaces();
+                    if (p.peek() == '[')
                     {
-                        *prev_atom = MathAtomKind.BIN;
-                        buffer::ByteBuffer mb;
-                        mb.init(32);
-                        defer mb.free();
-                        mb.append_char(' ');
-                        mb.append_slice(SYMBOLS[s].glyph);
-                        mb.append_char(' ');
-                        return box_from_string(p.arena, mb.to_arena_string(p.arena));
+                        p.get();
+                        xsub = parse_math_expression(p, false, false);
+                        p.skip_spaces();
+                        if (p.peek() == ']') p.get();
+                    }
+                    MathBox xsup = parse_math_group(p);
+                    char dir = 'R';
+                    if (mcmd == MathCommand.XLEFTARROW)
+                    {
+                        dir = 'L';
+                    }
+                    else if (mcmd == MathCommand.XLEFTRIGHTARROW)
+                    {
+                        dir = 'B';
+                    }
+                    *prev_atom = MathAtomKind.REL;
+                    return box_xarrow(p.arena, xsup, xsub, dir);
+
+                case UNDERLINE:
+                    MathBox un_inner = parse_math_group(p);
+                    *prev_atom = MathAtomKind.INNER;
+                    return box_underline(p.arena, un_inner);
+
+                case OVERRIGHTARROW:
+                case OVERLEFTARROW:
+                    MathBox o_inner = parse_math_group(p);
+                    bool is_right = (mcmd == MathCommand.OVERRIGHTARROW);
+                    *prev_atom = MathAtomKind.INNER;
+                    return box_overarrow(p.arena, o_inner, is_right);
+
+                case CANCEL:
+                case BCANCEL:
+                case XCANCEL:
+                    MathBox can_inner = parse_math_group(p);
+                    *prev_atom = MathAtomKind.ORD;
+                    return box_cancel(p.arena, can_inner);
+
+                case COLOR:
+                case TEXTCOLOR:
+                case MATHCOLOR:
+                    p.skip_spaces();
+                    if (p.peek() == '{') p.get();
+                    usz c_start = p.pos;
+                    while (!p.eof() && p.peek() != '}') p.pos++;
+                    String c_name = p.src[c_start : p.pos - c_start];
+                    if (p.peek() == '}') p.get();
+
+                    char* ansi_col = (char*)ansi::FG_CYAN;
+                    if (c_name == "red" || c_name == "pink") { ansi_col = (char*)ansi::FG_PINK; }
+                    else if (c_name == "green") { ansi_col = (char*)ansi::FG_GREEN; }
+                    else if (c_name == "orange") { ansi_col = (char*)ansi::FG_ORANGE; }
+                    else if (c_name == "yellow") { ansi_col = (char*)ansi::FG_YELLOW; }
+                    else if (c_name == "purple" || c_name == "magenta") { ansi_col = (char*)ansi::FG_PURPLE; }
+                    else if (c_name == "gray" || c_name == "grey") { ansi_col = (char*)ansi::FG_MUTED; }
+
+                    MathBox col_inner = parse_math_group(p);
+                    *prev_atom = MathAtomKind.INNER;
+                    return box_colorize(p.arena, col_inner, ansi_col);
+
+                case FRAC:
+                case DFRAC:
+                case TFRAC:
+                case CFRAC:
+                    MathBox num = parse_math_group(p);
+                    MathBox den = parse_math_group(p);
+                    *prev_atom = MathAtomKind.INNER;
+                    return box_fraction(p.arena, num, den);
+
+                case BOXED:
+                    MathBox b_inner = parse_math_group(p);
+                    *prev_atom = MathAtomKind.INNER;
+                    return box_boxed(p.arena, b_inner);
+
+                case BINOM:
+                case DBINOM:
+                case TBINOM:
+                    MathBox top_b = parse_math_group(p);
+                    MathBox bot_b = parse_math_group(p);
+                    MathBox[2] stack;
+                    stack[0] = top_b;
+                    stack[1] = bot_b;
+                    MathBox binom_inner = box_vconcat_list(p.arena, stack[0:2]);
+                    *prev_atom = MathAtomKind.INNER;
+                    return box_delimiters(p.arena, binom_inner, '(', ')');
+
+                case OVERSET:
+                case STACKREL:
+                    MathBox o_top = parse_math_group(p);
+                    MathBox o_base = parse_math_group(p);
+                    *prev_atom = MathAtomKind.ORD;
+                    return box_limits_op(p.arena, o_base, box_empty(p.arena), o_top);
+
+                case UNDERSET:
+                    MathBox u_bot = parse_math_group(p);
+                    MathBox u_base = parse_math_group(p);
+                    *prev_atom = MathAtomKind.ORD;
+                    return box_limits_op(p.arena, u_base, u_bot, box_empty(p.arena));
+
+                case OVERBRACE:
+                    MathBox ob_inner = parse_math_group(p);
+                    MathBox ob_label = box_empty(p.arena);
+                    p.skip_spaces();
+                    if (p.peek() == '^')
+                    {
+                        p.get();
+                        ob_label = parse_math_group(p);
+                    }
+                    *prev_atom = MathAtomKind.INNER;
+                    return box_overbrace(p.arena, ob_inner, ob_label);
+
+                case UNDERBRACE:
+                    MathBox ub_inner = parse_math_group(p);
+                    MathBox ub_label = box_empty(p.arena);
+                    p.skip_spaces();
+                    if (p.peek() == '_')
+                    {
+                        p.get();
+                        ub_label = parse_math_group(p);
+                    }
+                    *prev_atom = MathAtomKind.INNER;
+                    return box_underbrace(p.arena, ub_inner, ub_label);
+
+                case SUBSTACK:
+                    p.skip_spaces();
+                    if (p.peek() == '{') p.get();
+                    List{MathBox} lines;
+                    lines.init(mem, 4);
+                    defer lines.free();
+
+                    while (!p.eof())
+                    {
+                        lines.push(parse_math_expression(p, false, true));
+                        p.skip_spaces();
+                        if (p.peek() == '\\' && p.pos + 1 < (usz)p.src.len && p.src[p.pos + 1] == '\\')
+                        {
+                            p.pos += 2;
+                        }
+                        else if (p.peek() == '}')
+                        {
+                            p.get();
+                            break;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    *prev_atom = MathAtomKind.ORD;
+                    return box_vconcat_list(p.arena, lines.entries[:(usz)lines.size]);
+
+                case SQRT:
+                    MathBox deg = box_empty(p.arena);
+                    p.skip_spaces();
+                    if (p.peek() == '[')
+                    {
+                        p.get();
+                        deg = parse_math_expression(p, false, false);
+                        p.skip_spaces();
+                        if (p.peek() == ']') p.get();
+                    }
+                    MathBox sqrt_inner = parse_math_group(p);
+                    *prev_atom = MathAtomKind.INNER;
+                    return box_sqrt(p.arena, sqrt_inner, deg);
+
+                case SUM:
+                    MathBox s_sub = box_empty(p.arena);
+                    MathBox s_sup = box_empty(p.arena);
+                    for (int k = 0; k < 2; k++)
+                    {
+                        p.skip_spaces();
+                        if (p.peek() == '_') { p.get(); s_sub = parse_math_group(p); }
+                        else if (p.peek() == '^') { p.get(); s_sup = parse_math_group(p); }
+                    }
+                    *prev_atom = MathAtomKind.OP;
+                    return box_summation_op(p.arena, s_sub, s_sup);
+
+                case PROD:
+                case COPROD:
+                    MathBox pr_sub = box_empty(p.arena);
+                    MathBox pr_sup = box_empty(p.arena);
+                    for (int k = 0; k < 2; k++)
+                    {
+                        p.skip_spaces();
+                        if (p.peek() == '_') { p.get(); pr_sub = parse_math_group(p); }
+                        else if (p.peek() == '^') { p.get(); pr_sup = parse_math_group(p); }
+                    }
+                    *prev_atom = MathAtomKind.OP;
+                    return box_product_op(p.arena, pr_sub, pr_sup);
+
+                case BIG_UNION:
+                case BIG_INTERSECTION:
+                case BIG_PLUS:
+                case BIG_TIMES:
+                case BIG_DOT:
+                case BIG_SQ_CUP:
+                case BIG_VEE:
+                case BIG_WEDGE:
+                    MathBox b_sub = box_empty(p.arena);
+                    MathBox b_sup = box_empty(p.arena);
+                    for (int k = 0; k < 2; k++)
+                    {
+                        p.skip_spaces();
+                        if (p.peek() == '_') { p.get(); b_sub = parse_math_group(p); }
+                        else if (p.peek() == '^') { p.get(); b_sup = parse_math_group(p); }
+                    }
+                    *prev_atom = MathAtomKind.OP;
+                    bool is_inter = (mcmd == MathCommand.BIG_INTERSECTION || mcmd == MathCommand.BIG_WEDGE);
+                    return box_big_union_op(p.arena, b_sub, b_sup, is_inter);
+
+                case INT:
+                case IINT:
+                case IIINT:
+                case OINT:
+                case OIINT:
+                case OIIINT:
+                    int order = 1;
+                    if (mcmd == MathCommand.IINT || mcmd == MathCommand.OIINT) { order = 2; }
+                    if (mcmd == MathCommand.IIINT || mcmd == MathCommand.OIIINT) { order = 3; }
+
+                    MathBox int_sub = box_empty(p.arena);
+                    MathBox int_sup = box_empty(p.arena);
+                    for (int k = 0; k < 2; k++)
+                    {
+                        p.skip_spaces();
+                        if (p.peek() == '_') { p.get(); int_sub = parse_math_group(p); }
+                        else if (p.peek() == '^') { p.get(); int_sup = parse_math_group(p); }
+                    }
+                    *prev_atom = MathAtomKind.OP;
+                    return box_integral_op(p.arena, int_sub, int_sup, order);
+
+                case LIM:
+                case LIMINF:
+                case LIMSUP:
+                case MAX:
+                case MIN:
+                case SUP:
+                case INF:
+                case ARGMAX:
+                case ARGMIN:
+                    String op_name = cmd;
+                    if (mcmd == MathCommand.LIMINF) { op_name = "lim inf"; }
+                    else if (mcmd == MathCommand.LIMSUP) { op_name = "lim sup"; }
+                    else if (mcmd == MathCommand.ARGMAX) { op_name = "arg max"; }
+                    else if (mcmd == MathCommand.ARGMIN) { op_name = "arg min"; }
+
+                    MathBox op_box = box_from_string(p.arena, op_name);
+                    MathBox lim_sub = box_empty(p.arena);
+                    MathBox lim_sup = box_empty(p.arena);
+                    for (int k = 0; k < 2; k++)
+                    {
+                        p.skip_spaces();
+                        if (p.peek() == '_') { p.get(); lim_sub = parse_math_group(p); }
+                        else if (p.peek() == '^') { p.get(); lim_sup = parse_math_group(p); }
+                    }
+                    *prev_atom = MathAtomKind.OP;
+                    return box_limits_op(p.arena, op_box, lim_sub, lim_sup);
+
+                case PMOD:
+                case POD:
+                    MathBox m_box = parse_math_group(p);
+                    buffer::ByteBuffer pmod_mb;
+                    pmod_mb.init(64);
+                    defer pmod_mb.free();
+                    pmod_mb.append_zstr(" (");
+                    if (mcmd == MathCommand.PMOD) pmod_mb.append_zstr("mod ");
+                    if (m_box.rows.len > 0) pmod_mb.append_slice(m_box.rows[0]);
+                    pmod_mb.append_char(')');
+                    *prev_atom = MathAtomKind.ORD;
+                    return box_from_string(p.arena, pmod_mb.to_arena_string(p.arena));
+
+                case BMOD:
+                    *prev_atom = MathAtomKind.BIN;
+                    return box_from_zstr(p.arena, " mod ");
+
+                case QUAD:
+                    return box_spaces(p.arena, 4);
+
+                case QQUAD:
+                    return box_spaces(p.arena, 8);
+
+                case LEFT:
+                    p.skip_spaces();
+                    char open_ch = p.get();
+                    if (open_ch == '\\')
+                    {
+                        usz d_start = p.pos;
+                        while (!p.eof() && ((p.src[p.pos] >= 'a' && p.src[p.pos] <= 'z') || (p.src[p.pos] >= 'A' && p.src[p.pos] <= 'Z'))) p.pos++;
+                        String d_name = p.src[d_start : p.pos - d_start];
+
+                        if (d_name == "lfloor") { open_ch = 'F'; }
+                        else if (d_name == "lceil") { open_ch = 'C'; }
+                        else if (d_name == "langle") { open_ch = '<'; }
+                        else if (d_name == "lbrace" || d_name == "{") { open_ch = '{'; }
+                        else if (d_name == "rbrace" || d_name == "}") { open_ch = '}'; }
+                        else if (d_name == "vert" || d_name == "|") { open_ch = '|'; }
+                        else if (d_name == "Vert") { open_ch = 'V'; }
+                    }
+                    if (open_ch == '.') open_ch = 0;
+
+                    MathBox inner = parse_math_expression(p, false, false);
+
+                    char close_ch = ')';
+                    p.skip_spaces();
+                    if (p.peek() == '\\')
+                    {
+                        p.get();
+                        usz r_start = p.pos;
+                        while (!p.eof() && ((p.src[p.pos] >= 'a' && p.src[p.pos] <= 'z') || (p.src[p.pos] >= 'A' && p.src[p.pos] <= 'Z'))) p.pos++;
+                        String r_cmd = p.src[r_start : p.pos - r_start];
+                        if (r_cmd == "right")
+                        {
+                            p.skip_spaces();
+                            close_ch = p.get();
+                            if (close_ch == '\\')
+                            {
+                                usz rd_start = p.pos;
+                                while (!p.eof() && ((p.src[p.pos] >= 'a' && p.src[p.pos] <= 'z') || (p.src[p.pos] >= 'A' && p.src[p.pos] <= 'Z'))) p.pos++;
+                                String rd_name = p.src[rd_start : p.pos - rd_start];
+
+                                if (rd_name == "rfloor") { close_ch = 'F'; }
+                                else if (rd_name == "rceil") { close_ch = 'C'; }
+                                else if (rd_name == "rangle") { close_ch = '>'; }
+                                else if (rd_name == "lbrace" || rd_name == "{") { close_ch = '{'; }
+                                else if (rd_name == "rbrace" || rd_name == "}") { close_ch = '}'; }
+                                else if (rd_name == "vert" || rd_name == "|") { close_ch = '|'; }
+                                else if (rd_name == "Vert") { close_ch = 'V'; }
+                            }
+                            if (close_ch == '.') close_ch = 0;
+                        }
+                    }
+
+                    *prev_atom = MathAtomKind.INNER;
+                    return box_delimiters(p.arena, inner, open_ch, close_ch);
+
+                case BEGIN:
+                    p.skip_spaces();
+                    if (p.peek() == '{') p.get();
+                    usz env_start = p.pos;
+                    while (!p.eof() && p.peek() != '}') p.pos++;
+                    String env_name = p.src[env_start : p.pos - env_start];
+                    if (p.peek() == '}') p.get();
+
+                    if (env_name == "array")
+                    {
+                        p.skip_spaces();
+                        if (p.peek() == '{')
+                        {
+                            p.get();
+                            while (!p.eof() && p.peek() != '}') p.pos++;
+                            if (p.peek() == '}') p.get();
+                        }
+                    }
+
+                    List{MathBoxList} env_rows;
+                    env_rows.init(mem, 8);
+                    defer {
+                        for (sz r = 0; r < env_rows.size; r++) env_rows.entries[r].free();
+                        env_rows.free();
+                    }
+
+                    MathBoxList cur_row;
+                    cur_row.init(mem, 4);
+
+                    int max_cols = 0;
+
+                    while (!p.eof())
+                    {
+                        p.skip_spaces();
+
+                        // Check for \end{env}
+                        if (p.peek() == '\\')
+                        {
+                            usz save_pos = p.pos;
+                            p.get();
+                            usz check_start = p.pos;
+                            while (!p.eof() && ((p.src[p.pos] >= 'a' && p.src[p.pos] <= 'z') || (p.src[p.pos] >= 'A' && p.src[p.pos] <= 'Z'))) p.pos++;
+                            String check_cmd = p.src[check_start : p.pos - check_start];
+                            if (check_cmd == "end")
+                            {
+                                p.skip_spaces();
+                                if (p.peek() == '{') p.get();
+                                while (!p.eof() && p.peek() != '}') p.pos++;
+                                if (p.peek() == '}') p.get();
+                                if (cur_row.size > 0)
+                                {
+                                    if ((int)cur_row.size > max_cols) max_cols = (int)cur_row.size;
+                                    env_rows.push(cur_row);
+                                    cur_row.init(mem, 4);
+                                }
+                                break;
+                            }
+                            else if (save_pos + 1 < (usz)p.src.len && p.src[save_pos + 1] == '\\') // double backslash \\
+                            {
+                                p.pos = save_pos + 2;
+                                if ((int)cur_row.size > max_cols) max_cols = (int)cur_row.size;
+                                env_rows.push(cur_row);
+                                cur_row.init(mem, 4);
+                                continue;
+                            }
+                            else
+                            {
+                                p.pos = save_pos;
+                            }
+                        }
+
+                        MathBox cell = parse_math_expression(p, true, true);
+                        cur_row.push(cell);
+
+                        p.skip_spaces();
+                        if (p.peek() == '&')
+                        {
+                            p.get(); // consume '&'
+                        }
+                        else if (p.peek() == '\\' && p.pos + 1 < (usz)p.src.len && p.src[p.pos + 1] == '\\')
+                        {
+                            p.pos += 2;
+                            if ((int)cur_row.size > max_cols) max_cols = (int)cur_row.size;
+                            env_rows.push(cur_row);
+                            cur_row.init(mem, 4);
+                        }
+                    }
+
+                    if (cur_row.size > 0)
+                    {
+                        if ((int)cur_row.size > max_cols) max_cols = (int)cur_row.size;
+                        env_rows.push(cur_row);
                     }
                     else
                     {
-                        *prev_atom = MathAtomKind.ORD;
-                        return box_from_string(p.arena, SYMBOLS[s].glyph);
+                        cur_row.free();
                     }
-                }
-                *prev_atom = MathAtomKind.ORD;
-                return box_from_string(p.arena, SYMBOLS[s].glyph);
+
+                    int num_rows = (int)env_rows.size;
+                    int num_cols = max_cols > 0 ? max_cols : 1;
+
+                    // Flatten into 1D array of size num_rows * num_cols
+                    MathBox* flat_buf = (MathBox*)p.arena.alloc((usz)(num_rows * num_cols) * MathBox::size);
+                    for (int r = 0; r < num_rows; r++)
+                    {
+                        MathBoxList row = env_rows.entries[(usz)r];
+                        for (int col = 0; col < num_cols; col++)
+                        {
+                            flat_buf[(usz)(r * num_cols + col)] = (col < (int)row.size) ? row.entries[(usz)col] : box_empty(p.arena);
+                        }
+                    }
+                    MathBox[] flat_grid = flat_buf[: (usz)(num_rows * num_cols)];
+
+                    *prev_atom = MathAtomKind.INNER;
+
+                    MathEnvironment menv;
+                    if (lookup_environment(env_name, &menv))
+                    {
+                        switch (menv)
+                        {
+                            case CASES:
+                            case DCASES:
+                                MathBox c_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'L', 3);
+                                return box_delimiters(p.arena, c_inner, '{', (char)0);
+
+                            case RCASES:
+                                MathBox rc_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'L', 3);
+                                return box_delimiters(p.arena, rc_inner, (char)0, '}');
+
+                            case ALIGN:
+                            case ALIGNED:
+                            case SPLIT:
+                            case FLALIGN:
+                            case EQNARRAY:
+                            case ARRAY:
+                                return box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'A', 0);
+
+                            case GATHER:
+                            case GATHERED:
+                                return box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 0);
+
+                            case PMATRIX:
+                                MathBox pm_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
+                                return box_delimiters(p.arena, pm_inner, '(', ')');
+
+                            case BMATRIX:
+                                MathBox bm_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
+                                return box_delimiters(p.arena, bm_inner, '[', ']');
+
+                            case VMATRIX:
+                                MathBox vm_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
+                                return box_delimiters(p.arena, vm_inner, '|', '|');
+
+                            case VM_MATRIX:
+                                MathBox vmm_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
+                                return box_delimiters(p.arena, vmm_inner, 'V', 'V');
+
+                            case B_MATRIX:
+                                MathBox bmm_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
+                                return box_delimiters(p.arena, bmm_inner, '{', '}');
+
+                            case MATRIX:
+                            case SMALLMATRIX:
+                                return box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
+                        }
+                    }
+
+                    return box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
+
+                case TEXT:
+                    p.skip_spaces();
+                    if (p.peek() == '{')
+                    {
+                        p.get();
+                        usz txt_start = p.pos;
+                        while (!p.eof() && p.peek() != '}') p.pos++;
+                        String txt = p.src[txt_start : p.pos - txt_start];
+                        if (p.peek() == '}') p.get();
+                        *prev_atom = MathAtomKind.ORD;
+                        return box_from_string(p.arena, txt);
+                    }
+                    *prev_atom = MathAtomKind.ORD;
+                    return box_from_string(p.arena, "text");
             }
+        }
+
+        // ── D. Symbol Table Lookup via Modular Table ─────────────────────────
+        if (SymbolEntry* sym = lookup_symbol(cmd))
+        {
+            *prev_atom = sym.kind;
+            if (sym.kind == MathAtomKind.REL || sym.kind == MathAtomKind.BIN)
+            {
+                buffer::ByteBuffer mb;
+                mb.init(32);
+                defer mb.free();
+                mb.append_char(' ');
+                mb.append_slice(sym.glyph);
+                mb.append_char(' ');
+                return box_from_string(p.arena, mb.to_arena_string(p.arena));
+            }
+            return box_from_string(p.arena, sym.glyph);
         }
 
         *prev_atom = MathAtomKind.ORD;
@@ -733,7 +800,27 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
         return box_from_string(p.arena, num_str);
     }
 
-    // 4. Optical Operators & Relations
+    // 4. Primes: ', '', '''
+    if (c == '\'')
+    {
+        int prime_count = 0;
+        while (!p.eof() && p.peek() == '\'')
+        {
+            prime_count++;
+            p.get();
+        }
+        *prev_atom = MathAtomKind.ORD;
+        if (prime_count == 1) return box_from_zstr(p.arena, "′");
+        if (prime_count == 2) return box_from_zstr(p.arena, "″");
+        if (prime_count == 3) return box_from_zstr(p.arena, "‴");
+        buffer::ByteBuffer pb;
+        pb.init(16);
+        defer pb.free();
+        for (int k = 0; k < prime_count; k++) pb.append_zstr("′");
+        return box_from_string(p.arena, pb.to_arena_string(p.arena));
+    }
+
+    // 5. Optical Operators & Relations
     if (c == '=')
     {
         p.get();
@@ -770,7 +857,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
     if (c == '(' || c == '[') { p.get(); *prev_atom = MathAtomKind.OPEN; char[2] ch; ch[0] = c; ch[1] = 0; return box_from_zstr(p.arena, &ch[0]); }
     if (c == ')' || c == ']') { p.get(); *prev_atom = MathAtomKind.CLOSE; char[2] ch; ch[0] = c; ch[1] = 0; return box_from_zstr(p.arena, &ch[0]); }
 
-    // 5. Normal character
+    // 6. Normal character
     p.get();
     *prev_atom = MathAtomKind.ORD;
     char[2] ch; ch[0] = c; ch[1] = 0;
@@ -821,7 +908,7 @@ fn MathBox parse_math_expression(Math2DParser* p, bool stop_at_amp = false, bool
             String check_cmd = p.src[check_start : p.pos - check_start];
             p.pos = save_pos;
 
-            if (strutils::string_eq(check_cmd, "right") || strutils::string_eq(check_cmd, "end"))
+            if (check_cmd == "right" || check_cmd == "end")
             {
                 break;
             }

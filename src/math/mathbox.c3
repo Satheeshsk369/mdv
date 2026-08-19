@@ -381,6 +381,72 @@ fn MathBox box_product_op(ast::Arena* arena, MathBox sub, MathBox sup)
     return res;
 }
 
+fn MathBox box_big_union_op(ast::Arena* arena, MathBox sub, MathBox sup, bool is_intersection = false)
+{
+    int sym_w = 5;
+    int max_w = sym_w;
+    if (sub.width > max_w) max_w = sub.width;
+    if (sup.width > max_w) max_w = sup.width;
+
+    int sup_h = (sup.width > 0 ? sup.height : 0);
+    int sub_h = (sub.width > 0 ? sub.height : 0);
+    int total_h = sup_h + 3 + sub_h;
+    int base = sup_h + 1;
+
+    String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
+    buffer::ByteBuffer mb;
+    mb.init(512);
+    defer mb.free();
+
+    int cur_r = 0;
+
+    if (sup.width > 0)
+    {
+        for (int r = 0; r < sup.height; r++)
+        {
+            mb.reset();
+            int rw = strutils::string_display_width(sup.rows[r]);
+            int pad = (max_w - rw) / 2;
+            mb.append_spaces(pad);
+            mb.append_slice(sup.rows[r]);
+            mb.append_spaces(max_w - rw - pad);
+            r_buf[cur_r++] = mb.to_arena_string(arena);
+        }
+    }
+
+    char*[3] glyph = is_intersection ? { " ╭─╮ ", " │ │ ", " ╵ ╵ " } : { " ╷ ╷ ", " │ │ ", " ╰─╯ " };
+    for (int i = 0; i < 3; i++)
+    {
+        mb.reset();
+        int pad = (max_w - sym_w) / 2;
+        mb.append_spaces(pad);
+        mb.append_zstr(glyph[i]);
+        mb.append_spaces(max_w - sym_w - pad);
+        r_buf[cur_r++] = mb.to_arena_string(arena);
+    }
+
+    if (sub.width > 0)
+    {
+        for (int r = 0; r < sub.height; r++)
+        {
+            mb.reset();
+            int rw = strutils::string_display_width(sub.rows[r]);
+            int pad = (max_w - rw) / 2;
+            mb.append_spaces(pad);
+            mb.append_slice(sub.rows[r]);
+            mb.append_spaces(max_w - rw - pad);
+            r_buf[cur_r++] = mb.to_arena_string(arena);
+        }
+    }
+
+    MathBox res;
+    res.width = max_w;
+    res.height = total_h;
+    res.baseline = base;
+    res.rows = r_buf[0 : (usz)total_h];
+    return res;
+}
+
 fn MathBox box_integral_op(ast::Arena* arena, MathBox sub, MathBox sup, int int_order = 1)
 {
     int h = 3;
@@ -534,38 +600,6 @@ fn MathBox box_limits_op(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup
     return res;
 }
 
-fn String try_unicode_superscript(ast::Arena* arena, String s)
-{
-    if (s.len == 0) return "";
-    buffer::ByteBuffer mb;
-    mb.init((usz)(s.len * 4 + 8));
-    defer mb.free();
-
-    for (usz i = 0; i < (usz)s.len; i++)
-    {
-        char* sup = get_superscript_char(s[i]);
-        if (sup == null) return "";
-        mb.append_zstr(sup);
-    }
-    return mb.to_arena_string(arena);
-}
-
-fn String try_unicode_subscript(ast::Arena* arena, String s)
-{
-    if (s.len == 0) return "";
-    buffer::ByteBuffer mb;
-    mb.init((usz)(s.len * 4 + 8));
-    defer mb.free();
-
-    for (usz i = 0; i < (usz)s.len; i++)
-    {
-        char* sub = get_subscript_char(s[i]);
-        if (sub == null) return "";
-        mb.append_zstr(sub);
-    }
-    return mb.to_arena_string(arena);
-}
-
 fn MathBox box_supsub(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
 {
     if (sup.width == 0 && sub.width == 0) return base;
@@ -648,6 +682,111 @@ fn MathBox box_supsub(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
     res.height = total_h;
     res.baseline = new_base;
     res.rows = r_buf[0 : (usz)total_h];
+    return res;
+}
+
+fn MathBox box_xarrow(ast::Arena* arena, MathBox sup, MathBox sub, char arrow_dir = 'R')
+{
+    int max_w = sup.width > sub.width ? sup.width : sub.width;
+    int arrow_w = max_w + 4;
+    if (arrow_w < 6) arrow_w = 6;
+
+    int sup_h = sup.width > 0 ? sup.height : 0;
+    int sub_h = sub.width > 0 ? sub.height : 0;
+    int total_h = sup_h + 1 + sub_h;
+    int base = sup_h;
+
+    String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
+    buffer::ByteBuffer mb;
+    mb.init(512);
+    defer mb.free();
+
+    int cur_r = 0;
+
+    // Top label (centered)
+    if (sup.width > 0)
+    {
+        for (int r = 0; r < sup.height; r++)
+        {
+            mb.reset();
+            int rw = strutils::string_display_width(sup.rows[r]);
+            int pad = (arrow_w - rw) / 2;
+            mb.append_spaces(pad);
+            mb.append_slice(sup.rows[r]);
+            mb.append_spaces(arrow_w - rw - pad);
+            r_buf[cur_r++] = mb.to_arena_string(arena);
+        }
+    }
+
+    // Arrow line: ───→, ←───, ←───→
+    mb.reset();
+    if (arrow_dir == 'R')
+    {
+        mb.append_repeat("─", arrow_w - 1);
+        mb.append_zstr("→");
+    }
+    else if (arrow_dir == 'L')
+    {
+        mb.append_zstr("←");
+        mb.append_repeat("─", arrow_w - 1);
+    }
+    else // 'B' (Both)
+    {
+        mb.append_zstr("←");
+        mb.append_repeat("─", arrow_w - 2);
+        mb.append_zstr("→");
+    }
+    r_buf[cur_r++] = mb.to_arena_string(arena);
+
+    // Bottom label (centered)
+    if (sub.width > 0)
+    {
+        for (int r = 0; r < sub.height; r++)
+        {
+            mb.reset();
+            int rw = strutils::string_display_width(sub.rows[r]);
+            int pad = (arrow_w - rw) / 2;
+            mb.append_spaces(pad);
+            mb.append_slice(sub.rows[r]);
+            mb.append_spaces(arrow_w - rw - pad);
+            r_buf[cur_r++] = mb.to_arena_string(arena);
+        }
+    }
+
+    MathBox res;
+    res.width = arrow_w;
+    res.height = total_h;
+    res.baseline = base;
+    res.rows = r_buf[0 : (usz)total_h];
+    return res;
+}
+
+fn MathBox box_underline(ast::Arena* arena, MathBox inner)
+{
+    if (inner.width == 0) return inner;
+    int w = inner.width;
+    int new_h = inner.height + 1;
+    int new_base = inner.baseline;
+
+    String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
+    buffer::ByteBuffer mb;
+    mb.init(512);
+    defer mb.free();
+
+    for (int r = 0; r < inner.height; r++)
+    {
+        r_buf[r] = inner.rows[r];
+    }
+
+    mb.reset();
+    mb.append_repeat("─", w);
+    r_buf[inner.height] = mb.to_arena_string(arena);
+
+    MathBox res;
+    res.width = w;
+    res.height = new_h;
+    res.baseline = new_base;
+    res.rows = r_buf[0 : (usz)new_h];
     return res;
 }
 
@@ -760,6 +899,8 @@ fn MathBox box_delimiters(ast::Arena* arena, MathBox inner, char open_ch, char c
         char[8] r_delim; r_delim[0] = close_ch; r_delim[1] = 0;
         if (open_ch == '{') { l_delim[0] = '{'; l_delim[1] = 0; }
         if (close_ch == '}') { r_delim[0] = '}'; r_delim[1] = 0; }
+        if (open_ch == 'F') { l_delim[0] = 0; l_delim[1] = 0; }
+        if (close_ch == 'F') { r_delim[0] = 0; r_delim[1] = 0; }
 
         MathBox l_box = (open_ch != 0) ? box_from_zstr(arena, &l_delim[0]) : box_empty(arena);
         MathBox r_box = (close_ch != 0) ? box_from_zstr(arena, &r_delim[0]) : box_empty(arena);
@@ -801,6 +942,21 @@ fn MathBox box_delimiters(ast::Arena* arena, MathBox inner, char open_ch, char c
             else if (r == h / 2) { mb.append_zstr("⎨ "); }
             else { mb.append_zstr("⎪ "); }
         }
+        else if (open_ch == 'F') // Floor \lfloor
+        {
+            if (r == h - 1) { mb.append_zstr("⎣ "); }
+            else { mb.append_zstr("⎢ "); }
+        }
+        else if (open_ch == 'C') // Ceil \lceil
+        {
+            if (r == 0) { mb.append_zstr("⎡ "); }
+            else { mb.append_zstr("⎢ "); }
+        }
+        else if (open_ch == '<') // Angle \langle
+        {
+            if (r == 0 || r == h - 1) { mb.append_zstr("⟨ "); }
+            else { mb.append_zstr("│ "); }
+        }
         else if (open_ch == '|')
         {
             mb.append_zstr("│ ");
@@ -840,6 +996,21 @@ fn MathBox box_delimiters(ast::Arena* arena, MathBox inner, char open_ch, char c
             else if (r == h - 1) { mb.append_zstr(" ⎭"); }
             else if (r == h / 2) { mb.append_zstr(" ⎬"); }
             else { mb.append_zstr(" ⎪"); }
+        }
+        else if (close_ch == 'F') // Floor \rfloor
+        {
+            if (r == h - 1) { mb.append_zstr(" ⎦"); }
+            else { mb.append_zstr(" ⎥"); }
+        }
+        else if (close_ch == 'C') // Ceil \rceil
+        {
+            if (r == 0) { mb.append_zstr(" ⎤"); }
+            else { mb.append_zstr(" ⎥"); }
+        }
+        else if (close_ch == '>') // Angle \rangle
+        {
+            if (r == 0 || r == h - 1) { mb.append_zstr(" ⟩"); }
+            else { mb.append_zstr(" │"); }
         }
         else if (close_ch == '|')
         {

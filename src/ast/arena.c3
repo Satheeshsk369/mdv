@@ -1,6 +1,7 @@
 module ast;
 
 import std::core::mem;
+import buffer;
 
 struct ArenaBlock {
     ArenaBlock* next;
@@ -79,6 +80,12 @@ fn String Arena.dup_zstring(Arena* a, char* src)
     }
     buf[len] = 0;
     return (String)buf[:len];
+}
+
+fn String ByteBuffer.to_arena_string(buffer::ByteBuffer* b, Arena* arena)
+{
+    if (b.len == 0) return "";
+    return arena.dup_string(b.to_string());
 }
 
 fn void Arena.free(Arena* a)
