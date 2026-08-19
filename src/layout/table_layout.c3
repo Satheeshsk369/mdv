@@ -93,7 +93,7 @@ fn void render_single_row(
     EmitLineFn emit_fn
 )
 {
-    if (!plain) tb.append_str((char*)ansi::FG_MUTED);
+    if (!plain) tb.append_str((char*)ansi::fg_muted);
     tb.append_str("│");
     if (!plain) tb.append_str((char*)ansi::RESET);
 
@@ -117,12 +117,12 @@ fn void render_single_row(
         {
             if (is_header)
             {
-                tb.append_str((char*)ansi::FG_CYAN);
+                tb.append_str((char*)ansi::fg_cyan);
                 tb.append_str((char*)ansi::BOLD);
             }
             else
             {
-                tb.append_str((char*)ansi::FG_TEXT);
+                tb.append_str((char*)ansi::fg_text);
             }
         }
 
@@ -148,7 +148,7 @@ fn void render_single_row(
         if (!plain) tb.append_str((char*)ansi::RESET);
         tb.append_str(" ");
 
-        if (!plain) tb.append_str((char*)ansi::FG_MUTED);
+        if (!plain) tb.append_str((char*)ansi::fg_muted);
         tb.append_str("│");
         if (!plain) tb.append_str((char*)ansi::RESET);
     }
@@ -229,7 +229,7 @@ fn void render_table(ast::TableBlock* table, int src_line, int term_width, bool 
     defer tb.free();
 
     // Top border: ┌──────┬──────┐
-    if (!plain) tb.append_str((char*)ansi::FG_MUTED);
+    if (!plain) tb.append_str((char*)ansi::fg_muted);
     tb.append_str("┌");
     for (int c = 0; c < cols; c++)
     {
@@ -244,7 +244,7 @@ fn void render_table(ast::TableBlock* table, int src_line, int term_width, bool 
     render_single_row(&tb, table, table.headers, &col_widths, cols, true, plain, src_line, ctx, emit_fn);
 
     // Middle border: ├──────┼──────┤
-    if (!plain) tb.append_str((char*)ansi::FG_MUTED);
+    if (!plain) tb.append_str((char*)ansi::fg_muted);
     tb.append_str("├");
     for (int c = 0; c < cols; c++)
     {
@@ -262,7 +262,7 @@ fn void render_table(ast::TableBlock* table, int src_line, int term_width, bool 
     }
 
     // Bottom border: └──────┴──────┘
-    if (!plain) tb.append_str((char*)ansi::FG_MUTED);
+    if (!plain) tb.append_str((char*)ansi::fg_muted);
     tb.append_str("└");
     for (int c = 0; c < cols; c++)
     {

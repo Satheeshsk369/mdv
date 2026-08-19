@@ -2,6 +2,7 @@ module math;
 
 import std::core::mem;
 import ast;
+import ansi;
 import strutils;
 
 enum MathAtomKind {
@@ -105,6 +106,69 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
             p.pos++;
         }
         String cmd = p.src[cmd_start : p.pos - cmd_start];
+
+        // ── Tag: \tag{label}, \tag*{label} ──────────────────────────────────
+        if (strutils::string_eq(cmd, "tag"))
+        {
+            p.skip_spaces();
+            bool starred = false;
+            if (p.peek() == '*') { p.get(); starred = true; }
+            p.skip_spaces();
+            if (p.peek() == '{') p.get();
+            usz t_start = p.pos;
+            while (!p.eof() && p.peek() != '}') p.pos++;
+            String raw_tag = p.src[t_start : p.pos - t_start];
+            if (p.peek() == '}') p.get();
+
+            MathRowBuilder tb;
+            tb.init(64);
+            defer tb.free();
+            if (!starred) tb.append_char('(');
+            tb.append_slice(raw_tag);
+            if (!starred) tb.append_char(')');
+            *prev_atom = MathAtomKind.ORD;
+            return box_from_string(p.arena, tb.to_arena_string(p.arena));
+        }
+
+        // ── Long Vectors: \overrightarrow{AB}, \overleftarrow{AB} ───────────
+        if (strutils::string_eq(cmd, "overrightarrow") || strutils::string_eq(cmd, "overleftarrow"))
+        {
+            MathBox inner = parse_math_group(p);
+            bool is_right = strutils::string_eq(cmd, "overrightarrow");
+            *prev_atom = MathAtomKind.INNER;
+            return box_overarrow(p.arena, inner, is_right);
+        }
+
+        // ── Cancellation: \cancel{x}, \bcancel, \xcancel ────────────────────
+        if (strutils::string_eq(cmd, "cancel") || strutils::string_eq(cmd, "bcancel") || strutils::string_eq(cmd, "xcancel"))
+        {
+            MathBox inner = parse_math_group(p);
+            *prev_atom = MathAtomKind.ORD;
+            return box_cancel(p.arena, inner);
+        }
+
+        // ── Color: \color{name}{expr}, \textcolor, \mathcolor ───────────────
+        if (strutils::string_eq(cmd, "color") || strutils::string_eq(cmd, "textcolor") || strutils::string_eq(cmd, "mathcolor"))
+        {
+            p.skip_spaces();
+            if (p.peek() == '{') p.get();
+            usz c_start = p.pos;
+            while (!p.eof() && p.peek() != '}') p.pos++;
+            String c_name = p.src[c_start : p.pos - c_start];
+            if (p.peek() == '}') p.get();
+
+            char* ansi_col = (char*)ansi::FG_CYAN;
+            if (strutils::string_eq(c_name, "red") || strutils::string_eq(c_name, "pink")) { ansi_col = (char*)ansi::FG_PINK; }
+            else if (strutils::string_eq(c_name, "green")) { ansi_col = (char*)ansi::FG_GREEN; }
+            else if (strutils::string_eq(c_name, "orange")) { ansi_col = (char*)ansi::FG_ORANGE; }
+            else if (strutils::string_eq(c_name, "yellow")) { ansi_col = (char*)ansi::FG_YELLOW; }
+            else if (strutils::string_eq(c_name, "purple") || strutils::string_eq(c_name, "magenta")) { ansi_col = (char*)ansi::FG_PURPLE; }
+            else if (strutils::string_eq(c_name, "gray") || strutils::string_eq(c_name, "grey")) { ansi_col = (char*)ansi::FG_MUTED; }
+
+            MathBox inner = parse_math_group(p);
+            *prev_atom = MathAtomKind.INNER;
+            return box_colorize(p.arena, inner, ansi_col);
+        }
 
         // ── Fractions: \frac{num}{den}, \dfrac, \tfrac, \cfrac ──────────────
         if (strutils::string_eq(cmd, "frac") || strutils::string_eq(cmd, "dfrac") || strutils::string_eq(cmd, "tfrac") || strutils::string_eq(cmd, "cfrac"))

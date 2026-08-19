@@ -231,6 +231,27 @@ fn int string_display_width(String s)
     return width;
 }
 
+fn bool string_contains(String haystack, String needle)
+{
+    if (needle.len == 0) return true;
+    if (haystack.len < needle.len) return false;
+    usz max_i = (usz)(haystack.len - needle.len);
+    for (usz i = 0; i <= max_i; i++)
+    {
+        bool match = true;
+        for (usz j = 0; j < (usz)needle.len; j++)
+        {
+            if (haystack[i + j] != needle[j])
+            {
+                match = false;
+                break;
+            }
+        }
+        if (match) return true;
+    }
+    return false;
+}
+
 fn int find_first_diff_line(char* old_text, char* new_text)
 {
     if (old_text == null || new_text == null) return 0;
@@ -316,4 +337,62 @@ fn char* load_file_string(char* filename)
     for (sz i = 0; i < len; i++) buf[i] = str_ptr[i];
     buf[len] = 0;
     return (char*)buf.ptr;
+}
+
+fn void decode_html_entities(String in_str, char* out_buf, int max_len)
+{
+    if (out_buf == null || max_len <= 0) return;
+    int out_p = 0;
+    usz i = 0;
+    usz len = (usz)in_str.len;
+
+    while (i < len && out_p < max_len - 1)
+    {
+        if (in_str[i] == '&')
+        {
+            String sub = in_str[i..];
+            char* repl = null;
+            usz skip = 0;
+
+            if (string_starts_with(sub, "&copy;")) { repl = "©"; skip = 6; }
+            else if (string_starts_with(sub, "&trade;")) { repl = "™"; skip = 7; }
+            else if (string_starts_with(sub, "&reg;")) { repl = "®"; skip = 5; }
+            else if (string_starts_with(sub, "&mdash;")) { repl = "—"; skip = 7; }
+            else if (string_starts_with(sub, "&ndash;")) { repl = "–"; skip = 7; }
+            else if (string_starts_with(sub, "&hellip;")) { repl = "…"; skip = 8; }
+            else if (string_starts_with(sub, "&amp;")) { repl = "&"; skip = 5; }
+            else if (string_starts_with(sub, "&lt;")) { repl = "<"; skip = 4; }
+            else if (string_starts_with(sub, "&gt;")) { repl = ">"; skip = 4; }
+            else if (string_starts_with(sub, "&quot;")) { repl = "\""; skip = 6; }
+            else if (string_starts_with(sub, "&apos;")) { repl = "'"; skip = 6; }
+            else if (string_starts_with(sub, "&plusmn;")) { repl = "±"; skip = 8; }
+            else if (string_starts_with(sub, "&times;")) { repl = "×"; skip = 7; }
+            else if (string_starts_with(sub, "&divide;")) { repl = "÷"; skip = 8; }
+            else if (string_starts_with(sub, "&deg;")) { repl = "°"; skip = 5; }
+            else if (string_starts_with(sub, "&infin;")) { repl = "∞"; skip = 7; }
+            else if (string_starts_with(sub, "&ne;")) { repl = "≠"; skip = 4; }
+            else if (string_starts_with(sub, "&le;")) { repl = "≤"; skip = 4; }
+            else if (string_starts_with(sub, "&ge;")) { repl = "≥"; skip = 4; }
+            else if (string_starts_with(sub, "&euro;")) { repl = "€"; skip = 6; }
+            else if (string_starts_with(sub, "&pound;")) { repl = "£"; skip = 7; }
+            else if (string_starts_with(sub, "&yen;")) { repl = "¥"; skip = 5; }
+            else if (string_starts_with(sub, "&check;")) { repl = "✔"; skip = 7; }
+            else if (string_starts_with(sub, "&cross;")) { repl = "✗"; skip = 7; }
+            else if (string_starts_with(sub, "&bull;")) { repl = "•"; skip = 6; }
+
+            if (repl != null)
+            {
+                int r = 0;
+                while (repl[r] != 0 && out_p < max_len - 1)
+                {
+                    out_buf[out_p++] = repl[r++];
+                }
+                i += skip;
+                continue;
+            }
+        }
+
+        out_buf[out_p++] = in_str[i++];
+    }
+    out_buf[out_p] = 0;
 }

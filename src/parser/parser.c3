@@ -291,6 +291,62 @@ fn Document parse_document(String content)
         String trimmed = strutils::string_trim(line);
         int src_start = (int)line_idx;
 
+        // 0. YAML Frontmatter (at start of document)
+        if (line_idx == 0 && strutils::string_eq(trimmed, "---"))
+        {
+            usz fm_start = line_idx;
+            line_idx++;
+
+            const usz MAX_FM_ENTRIES = 32;
+            ast::FrontmatterEntry[MAX_FM_ENTRIES] entries;
+            usz entry_count = 0;
+
+            while (line_idx < line_count)
+            {
+                String cur = raw_lines.items[line_idx];
+                String cur_t = strutils::string_trim(cur);
+                if (strutils::string_eq(cur_t, "---") || strutils::string_eq(cur_t, "..."))
+                {
+                    break;
+                }
+
+                // Find ':'
+                usz c_pos = 0;
+                while (c_pos < (usz)cur_t.len && cur_t[c_pos] != ':') c_pos++;
+
+                if (c_pos < (usz)cur_t.len && entry_count < MAX_FM_ENTRIES)
+                {
+                    String k = strutils::string_trim(cur_t[0:c_pos]);
+                    String v = strutils::string_trim(cur_t[c_pos + 1..]);
+                    // Strip optional quotes
+                    if (v.len >= 2 && ((v[0] == '"' && v[v.len - 1] == '"') || (v[0] == '\'' && v[v.len - 1] == '\'')))
+                    {
+                        v = v[1 : (usz)v.len - 2];
+                    }
+                    entries[entry_count].key = doc.arena.dup_string(k);
+                    entries[entry_count].value = doc.arena.dup_string(v);
+                    entry_count++;
+                }
+                line_idx++;
+            }
+
+            if (entry_count > 0)
+            {
+                ast::FrontmatterEntry* e_buf = (ast::FrontmatterEntry*)doc.arena.alloc(entry_count * ast::FrontmatterEntry::size);
+                for (usz e = 0; e < entry_count; e++) e_buf[e] = entries[e];
+
+                Block b;
+                b.kind = ast::BlockKind.FRONTMATTER;
+                b.src_line_start = (int)fm_start;
+                b.src_line_end = (int)line_idx;
+                b.frontmatter.entries = e_buf[:entry_count];
+                block_list.push(b);
+            }
+
+            line_idx++;
+            continue;
+        }
+
         // 1. Blank Line
         if (trimmed.len == 0)
         {
@@ -567,7 +623,33 @@ fn Document parse_document(String content)
             continue;
         }
 
-        // 7. Blockquote: > ...
+        // 7. Footnote Definitions: [^label]: ...
+        if (strutils::string_starts_with(trimmed, "[^"))
+        {
+            usz col_pos = 2;
+            while (col_pos + 1 < (usz)trimmed.len && !(trimmed[col_pos] == ']' && trimmed[col_pos + 1] == ':'))
+            {
+                col_pos++;
+            }
+
+            if (col_pos + 1 < (usz)trimmed.len)
+            {
+                String fn_label = trimmed[2 : col_pos - 2];
+                String fn_body = strutils::string_trim(trimmed[col_pos + 2..]);
+
+                Block b;
+                b.kind = ast::BlockKind.FOOTNOTE_DEF;
+                b.src_line_start = src_start;
+                b.src_line_end = src_start;
+                b.footnote_def.label = doc.arena.dup_string(fn_label);
+                b.footnote_def.spans = parser::parse_inline(&doc.arena, fn_body);
+                block_list.push(b);
+                line_idx++;
+                continue;
+            }
+        }
+
+        // 8. Blockquote: > ...
         if (strutils::string_starts_with(trimmed, "> ") || strutils::string_eq(trimmed, ">"))
         {
             String quote_text = (trimmed.len > 2) ? trimmed[2..] : "";

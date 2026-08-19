@@ -14,7 +14,7 @@ const ZString ITALIC      = "\x1b[3m";
 const ZString UNDERLINE   = "\x1b[4m";
 const ZString STRIKE      = "\x1b[9m";
 
-// Monokai-inspired palette
+// High-Fidelity Monokai Palette
 const ZString FG_H1       = "\x1b[38;2;249;38;114m\x1b[1m";   // Magenta / Pink
 const ZString FG_H2       = "\x1b[38;2;166;226;46m\x1b[1m";   // Lime Green
 const ZString FG_H3       = "\x1b[38;2;253;151;31m\x1b[1m";   // Warm Orange

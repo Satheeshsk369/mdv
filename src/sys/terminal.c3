@@ -113,12 +113,14 @@ fn bool is_tty()
 
 fn void enter_alt_screen()
 {
-    io::print("\x1b[?1049h\x1b[2J\x1b[3J\x1b[H\x1b[?25l");
+    // Enable alternate screen + disable autowrap (\x1b[?7l) + mouse tracking + clear + hide cursor
+    io::print("\x1b[?1049h\x1b[?7l\x1b[?1000h\x1b[?1002h\x1b[?1006h\x1b[2J\x1b[3J\x1b[H\x1b[?25l");
 }
 
 fn void leave_alt_screen()
 {
-    io::print("\x1b[?1049l\x1b[?25h\x1b[0m");
+    // Disable mouse tracking + enable autowrap (\x1b[?7h) + leave alternate screen + show cursor
+    io::print("\x1b[?7h\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[?1049l\x1b[?25h\x1b[0m");
 }
 
 fn void clear_screen()
@@ -189,13 +191,51 @@ fn void disable_raw_mode()
 
 fn int poll_key()
 {
-    char[32] buf;
-    int n = read(0, (void*)&buf[0], 32);
+    char[64] buf;
+    int n = read(0, (void*)&buf[0], 64);
     if (n <= 0) return 0;
 
     if (buf[0] == 0x1b)
     {
-        if (n == 1) return 'q'; // Single Esc key
+        if (n == 1) return 27; // Single Esc key
+
+        // SGR Mouse mode: \x1b[<button;col;row(M|m)
+        if (n >= 6 && buf[1] == '[' && buf[2] == '<')
+        {
+            int btn = 0;
+            int p = 3;
+            while (p < n && buf[p] >= '0' && buf[p] <= '9')
+            {
+                btn = btn * 10 + (int)(buf[p] - '0');
+                p++;
+            }
+            if (btn == 64) return 1012; // Mouse Wheel Up
+            if (btn == 65) return 1013; // Mouse Wheel Down
+            return 0; // Ignore clicks/drags for view scrolling
+        }
+
+        // X10 Mouse mode: \x1b[M(btn)(x)(y)
+        if (n >= 6 && buf[1] == '[' && buf[2] == 'M')
+        {
+            int btn = ((int)buf[3] & 0xFF) - 32;
+            if (btn == 64) return 1012; // Wheel Up
+            if (btn == 65) return 1013; // Wheel Down
+            return 0;
+        }
+
+        // Application Cursor Keys: \x1bO...
+        if (n >= 3 && buf[1] == 'O')
+        {
+            if (buf[2] == 'A') return 1001; // Up
+            if (buf[2] == 'B') return 1000; // Down
+            if (buf[2] == 'C') return 1007; // Right
+            if (buf[2] == 'D') return 1006; // Left
+            if (buf[2] == 'H') return 1008; // Home
+            if (buf[2] == 'F') return 1009; // End
+            return 0;
+        }
+
+        // ANSI Cursor Keys: \x1b[...
         if (n >= 3 && buf[1] == '[')
         {
             if (buf[2] == 'A') return 1001; // Up
@@ -204,18 +244,23 @@ fn int poll_key()
             if (buf[2] == 'D') return 1006; // Left
             if (buf[2] == '5' && n >= 4 && buf[3] == '~') return 1003; // PgUp
             if (buf[2] == '6' && n >= 4 && buf[3] == '~') return 1002; // PgDn
-            if (buf[2] == 'H') return 'g'; // Home
-            if (buf[2] == 'F') return 'G'; // End
+            if (buf[2] == 'H') return 1008; // Home
+            if (buf[2] == 'F') return 1009; // End
+            if (buf[2] == '1' && n >= 4 && buf[3] == '~') return 1008; // Home
+            if (buf[2] == '4' && n >= 4 && buf[3] == '~') return 1009; // End
+            if (buf[2] == '7' && n >= 4 && buf[3] == '~') return 1008; // Home
+            if (buf[2] == '8' && n >= 4 && buf[3] == '~') return 1009; // End
         }
-        return 0;
+        return 27;
     }
 
     if (buf[0] == 0x03) return 'q'; // Ctrl+C
-    if (buf[0] == 'q' || buf[0] == 'Q') return 'q';
     if (buf[0] == 0x04) return 1004; // Ctrl+D (half page down)
     if (buf[0] == 0x15) return 1005; // Ctrl+U (half page up)
     if (buf[0] == 0x06) return 1002; // Ctrl+F (page down)
     if (buf[0] == 0x02) return 1003; // Ctrl+B (page up)
-    if (buf[0] == ' ') return 1002;  // Space -> PgDn
-    return (int)buf[0];
+    if (buf[0] == 0x09) return 9;    // Tab
+    if (buf[0] == '\r' || buf[0] == '\n') return 10; // Enter
+    if (buf[0] == 0x7f || buf[0] == 0x08) return 127; // Backspace
+    return (int)buf[0] & 0xFF;
 }

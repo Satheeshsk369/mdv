@@ -8,7 +8,8 @@ enum SpanKind {
     CODE_INLINE,
     MATH_INLINE,
     MATH_DISPLAY,
-    LINK
+    LINK,
+    FOOTNOTE_REF
 }
 
 struct Span {
@@ -19,6 +20,7 @@ struct Span {
 }
 
 enum BlockKind {
+    FRONTMATTER,
     HEADING,
     PARAGRAPH,
     CODE_BLOCK,
@@ -28,7 +30,22 @@ enum BlockKind {
     TABLE,
     THEMATIC_BREAK,
     MATH_BLOCK,
+    FOOTNOTE_DEF,
     BLANK
+}
+
+struct FrontmatterEntry {
+    String key;
+    String value;
+}
+
+struct FrontmatterBlock {
+    FrontmatterEntry[] entries;
+}
+
+struct FootnoteDefBlock {
+    String label;
+    Span[] spans;
 }
 
 enum CalloutKind {
@@ -97,6 +114,7 @@ struct Block {
     BlockKind kind;
     int src_line_start;
     int src_line_end;
+    FrontmatterBlock frontmatter;
     HeadingBlock heading;
     ParagraphBlock paragraph;
     CodeBlock code;
@@ -105,6 +123,7 @@ struct Block {
     ListItemBlock list_item;
     TableBlock table;
     MathBlock math_block;
+    FootnoteDefBlock footnote_def;
 }
 
 struct Document {

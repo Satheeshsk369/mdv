@@ -17,37 +17,25 @@ extern fn int system(char* command);
 
 fn void print_version()
 {
-    if (!ansi::plain_mode) io::print(ansi::FG_CYAN);
-    io::print("  mdview ");
-    if (!ansi::plain_mode) io::print(ansi::RESET);
-    io::printn("v0.1.0 — High Performance C3 Markdown & LaTeX Terminal Viewer");
+    io::printn("mdview 0.2.0");
 }
 
 fn void print_help()
 {
     print_version();
     io::printn("");
-    if (!ansi::plain_mode) io::print(ansi::BOLD);
-    io::printn("USAGE:");
-    if (!ansi::plain_mode) io::print(ansi::RESET);
-    io::printn("    mdview <file.md> [line_number]     Live watch preview with instant line sync & colors");
-    io::printn("    mdview <file.md:line>              Live watch synchronized to line (e.g. doc.md:42)");
-    io::printn("    mdview -p, --pager <file.md>       Open in 'less -R -S' one-shot pager");
-    io::printn("    mdview -s, --stdout <file.md>      Output raw rendered text directly to stdout");
-    io::printn("    mdview -P, --plain <file.md>       Output plain Unicode text without ANSI codes");
-    io::printn("    cat file.md | mdview               Read from stdin and render");
+    io::printn("Usage:");
+    io::printn("    mdview <file.md> [line]");
+    io::printn("    mdview [options] <file.md>");
+    io::printn("    cat file.md | mdview");
     io::printn("");
-    if (!ansi::plain_mode) io::print(ansi::BOLD);
-    io::printn("FAST NAVIGATION (WATCH MODE):");
-    if (!ansi::plain_mode) io::print(ansi::RESET);
-    io::printn("    j / ↓              Scroll down 1 line");
-    io::printn("    k / ↑              Scroll up 1 line");
-    io::printn("    d / Ctrl+D         Half page down");
-    io::printn("    u / Ctrl+U         Half page up");
-    io::printn("    Space / Ctrl+F     Full page down");
-    io::printn("    Ctrl+B             Full page up");
-    io::printn("    g / G              Jump to Top / Bottom");
-    io::printn("    q / Esc / Ctrl+C   Exit viewer");
+    io::printn("Options:");
+    io::printn("    -p, --pager              Open in pager (less -R -S)");
+    io::printn("    -s, --stdout             Print rendered text directly to stdout");
+    io::printn("    -P, --plain              Print plain text without ANSI colors");
+    io::printn("    -t, --theme <theme>      Color theme (monokai, catppuccin, nord, tokyonight, dracula, gruvbox)");
+    io::printn("    -h, --help               Show help");
+    io::printn("    -v, --version            Show version");
     io::printn("");
 }
 
@@ -56,7 +44,7 @@ fn void render_file_stdout(char* filename, int width)
     char* content = strutils::load_file_string(filename);
     if (content == null)
     {
-        if (!ansi::plain_mode) io::print(ansi::FG_PINK);
+        if (!ansi::plain_mode) io::print(ansi::fg_pink);
         io::printfn("Error: Could not open file '%s'", (ZString)filename);
         if (!ansi::plain_mode) io::print(ansi::RESET);
         return;
@@ -172,6 +160,15 @@ fn int main(String[] args)
         {
             print_version();
             return 0;
+        }
+        if (strutils::str_eq(arg, "-t") || strutils::str_eq(arg, "--theme"))
+        {
+            if ((usz)(i + 1) < args.len)
+            {
+                i++;
+                ansi::set_theme((char*)args[i].ptr);
+            }
+            continue;
         }
         if (strutils::str_eq(arg, "-w") || strutils::str_eq(arg, "--watch"))
         {

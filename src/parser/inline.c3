@@ -61,9 +61,14 @@ fn void push_text_span(SpanList* list, ast::Arena* arena, String text)
 {
     if (text.len > 0)
     {
+        char[4096] decoded;
+        strutils::decode_html_entities(text, &decoded[0], 4096);
+        int dlen = strutils::str_len(&decoded[0]);
+        String d_str = (String)decoded[:dlen];
+
         Span span = {};
         span.kind = ast::SpanKind.TEXT;
-        span.text = arena.dup_string(text);
+        span.text = arena.dup_string(d_str);
         span.url = "";
         span.children = {};
         list.push(span);
@@ -83,7 +88,42 @@ fn Span[] parse_inline(ast::Arena* arena, String src)
 
     while (i < (usz)src.len)
     {
-        // 1. Math: $...$ or $$...$$
+        // 1. Footnote Reference: [^label]
+        if (src[i] == '[' && i + 1 < (usz)src.len && src[i + 1] == '^')
+        {
+            usz fn_end = i + 2;
+            bool found_fn = false;
+            while (fn_end < (usz)src.len && src[fn_end] != ' ' && src[fn_end] != '\n')
+            {
+                if (src[fn_end] == ']')
+                {
+                    found_fn = true;
+                    break;
+                }
+                fn_end++;
+            }
+
+            if (found_fn)
+            {
+                if (i > text_start)
+                {
+                    push_text_span(&list, arena, src[text_start : i - text_start]);
+                }
+                String label = src[i + 2 : fn_end - (i + 2)];
+                Span span = {};
+                span.kind = ast::SpanKind.FOOTNOTE_REF;
+                span.text = arena.dup_string(label);
+                span.url = "";
+                span.children = {};
+                list.push(span);
+
+                i = fn_end + 1;
+                text_start = i;
+                continue;
+            }
+        }
+
+        // 2. Math: $...$ or $$...$$
         if (src[i] == '$')
         {
             bool is_double = (i + 1 < (usz)src.len && src[i + 1] == '$');

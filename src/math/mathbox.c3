@@ -729,6 +729,107 @@ fn MathBox box_supsub(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
     return res;
 }
 
+fn MathBox box_overarrow(ast::Arena* arena, MathBox inner, bool right_dir = true)
+{
+    if (inner.width == 0) return inner;
+    int w = inner.width;
+    int new_h = inner.height + 1;
+    int new_base = inner.baseline + 1;
+
+    String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
+    MathRowBuilder mb;
+    mb.init(512);
+    defer mb.free();
+
+    mb.len = 0;
+    if (right_dir)
+    {
+        if (w > 1) mb.append_repeat("─", w - 1);
+        mb.append_zstr("→");
+    }
+    else
+    {
+        mb.append_zstr("←");
+        if (w > 1) mb.append_repeat("─", w - 1);
+    }
+    r_buf[0] = mb.to_arena_string(arena);
+
+    for (int r = 0; r < inner.height; r++)
+    {
+        r_buf[r + 1] = inner.rows[r];
+    }
+
+    MathBox res;
+    res.width = w;
+    res.height = new_h;
+    res.baseline = new_base;
+    res.rows = r_buf[0 : (usz)new_h];
+    return res;
+}
+
+fn MathBox box_with_tag(ast::Arena* arena, MathBox eq, String tag_str)
+{
+    if (tag_str.len == 0) return eq;
+    MathBox tag_box = box_from_string(arena, tag_str);
+    return box_hconcat(arena, eq, tag_box, 6);
+}
+
+fn MathBox box_cancel(ast::Arena* arena, MathBox inner)
+{
+    if (inner.height == 0) return inner;
+    String* r_buf = (String*)arena.alloc((usz)inner.height * String::size);
+    MathRowBuilder mb;
+    mb.init(512);
+    defer mb.free();
+
+    for (int r = 0; r < inner.height; r++)
+    {
+        mb.len = 0;
+        String row = inner.rows[r];
+        for (usz i = 0; i < (usz)row.len; i++)
+        {
+            mb.append_char(row[i]);
+            if (row[i] != ' ')
+            {
+                mb.append_zstr("̸");
+            }
+        }
+        r_buf[r] = mb.to_arena_string(arena);
+    }
+
+    MathBox res;
+    res.width = inner.width;
+    res.height = inner.height;
+    res.baseline = inner.baseline;
+    res.rows = r_buf[0 : (usz)inner.height];
+    return res;
+}
+
+fn MathBox box_colorize(ast::Arena* arena, MathBox inner, char* ansi_color)
+{
+    if (inner.height == 0 || ansi_color == null) return inner;
+    String* r_buf = (String*)arena.alloc((usz)inner.height * String::size);
+    MathRowBuilder mb;
+    mb.init(512);
+    defer mb.free();
+
+    for (int r = 0; r < inner.height; r++)
+    {
+        mb.len = 0;
+        mb.append_zstr(ansi_color);
+        mb.append_slice(inner.rows[r]);
+        mb.append_zstr("\x1b[0m\x1b[38;2;255;216;102m\x1b[1m");
+        r_buf[r] = mb.to_arena_string(arena);
+    }
+
+    MathBox res;
+    res.width = inner.width;
+    res.height = inner.height;
+    res.baseline = inner.baseline;
+    res.rows = r_buf[0 : (usz)inner.height];
+    return res;
+}
+
 fn MathBox box_delimiters(ast::Arena* arena, MathBox inner, char open_ch, char close_ch)
 {
     if (inner.height <= 1)
