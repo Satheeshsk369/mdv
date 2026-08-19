@@ -1,6 +1,6 @@
 # C3 Markdown & LaTeX Engine Showcase
 
-Welcome to **mdview**! This document tests and demonstrates the full suite of in-editor Markdown and LaTeX rendering capabilities.
+Welcome to **mdv**! This document tests and demonstrates the full suite of in-editor Markdown and LaTeX rendering capabilities.
 
 ---
 
@@ -90,7 +90,7 @@ $$ \overbrace{a_1 + a_2 + \cdots + a_k}^{\text{total mass}} = \underbrace{\sum_{
 > This note callout provides helpful contextual info without interrupting your reading flow.
 
 > [!TIP]
-> Run `mdview --stdout file.md` in scripts or AI workflows to render full terminal previews instantly!
+> Run `mdv --stdout file.md` in scripts or AI workflows to render full terminal previews instantly!
 
 > [!WARNING]
 > Keep your LaTeX brackets `{}` balanced so expressions transform cleanly.
@@ -140,4 +140,4 @@ def fibonacci(n: int) -> list[int]:
 
 ---
 
-*Compiled and rendered at native speed with C3 & mdview.*
+*Compiled and rendered at native speed with C3 & mdv.*

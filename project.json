@@ -8,7 +8,7 @@
   "build-dir": "build",
   "output": "build",
   "targets": {
-    "mdview": {
+    "mdv": {
       "type": "executable",
       "sources": [
         "src/app/main.c3",

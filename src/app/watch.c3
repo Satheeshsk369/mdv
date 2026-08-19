@@ -336,7 +336,7 @@ fn void draw_viewport(
     // ── Help Modal View ───────────────────────────────────────────────
     if (show_help)
     {
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdv \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
         fb.append_zstr(filename);
         fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;253;151;31m\x1b[1mKeyboard Controls & Keybindings\x1b[0m\x1b[K\n");
 
@@ -392,7 +392,7 @@ fn void draw_viewport(
     // ── Table of Contents (Outline) View ──────────────────────────────
     if (show_toc)
     {
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdv \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
         fb.append_zstr(filename);
         fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;166;226;46m\x1b[1mDocument Outline (Table of Contents)\x1b[0m\x1b[K\n");
 
@@ -467,7 +467,7 @@ fn void draw_viewport(
         char* cwd = terminal::getcwd(&cwd_buf[0], 256);
         if (cwd == null) cwd = ".";
 
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdv \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
         fb.append_zstr(filename);
         fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;166;226;46m\x1b[1mTree: \x1b[0m\x1b[38;2;248;248;242m");
         fb.append_zstr(cwd);
@@ -621,7 +621,7 @@ fn void draw_viewport(
     int cur_src = (cursor_line >= 0 && cursor_line < total && vdoc.lines[cursor_line].src_line >= 0) ? vdoc.lines[cursor_line].src_line + 1 : 1;
     int pct = total > 0 ? ((cursor_line + 1) * 100) / total : 0;
 
-    fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+    fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdv \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
     fb.append_zstr(filename);
     fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m ");
 

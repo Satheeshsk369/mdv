@@ -10,14 +10,14 @@ extern fn char* getenv(char* name);
 fn int main(String[] args)
 {
     io::print(ansi::FG_CYAN);
-    io::printn("==> Building mdview target…");
+    io::printn("==> Building mdv target…");
     io::print(ansi::RESET);
 
-    int res = system("c3c build mdview");
+    int res = system("c3c build mdv");
     if (res != 0)
     {
         io::print(ansi::FG_PINK);
-        io::printn("Error: Failed to build mdview target");
+        io::printn("Error: Failed to build mdv target");
         io::print(ansi::RESET);
         return 1;
     }
@@ -36,27 +36,33 @@ fn int main(String[] args)
     strutils::append_str(&cmd[0], home, 1024);
     strutils::append_str(&cmd[0], "/.local/bin && rm -f ", 1024);
     strutils::append_str(&cmd[0], home, 1024);
-    strutils::append_str(&cmd[0], "/.local/bin/mdview && cp build/mdview ", 1024);
+    strutils::append_str(&cmd[0], "/.local/bin/mdv ", 1024);
+    strutils::append_str(&cmd[0], home, 1024);
+    strutils::append_str(&cmd[0], "/.local/bin/mdview && cp build/mdv ", 1024);
+    strutils::append_str(&cmd[0], home, 1024);
+    strutils::append_str(&cmd[0], "/.local/bin/mdv && ln -sf ", 1024);
+    strutils::append_str(&cmd[0], home, 1024);
+    strutils::append_str(&cmd[0], "/.local/bin/mdv ", 1024);
     strutils::append_str(&cmd[0], home, 1024);
     strutils::append_str(&cmd[0], "/.local/bin/mdview && chmod 755 ", 1024);
     strutils::append_str(&cmd[0], home, 1024);
-    strutils::append_str(&cmd[0], "/.local/bin/mdview", 1024);
+    strutils::append_str(&cmd[0], "/.local/bin/mdv", 1024);
 
     int copy_res = system(&cmd[0]);
     if (copy_res != 0)
     {
         io::print(ansi::FG_PINK);
-        io::printn("Error: Failed to copy binary to ~/.local/bin/mdview");
+        io::printn("Error: Failed to copy binary to ~/.local/bin/mdv");
         io::print(ansi::RESET);
         return 1;
     }
 
     io::print(ansi::FG_GREEN);
     io::print(ansi::BOLD);
-    io::print("✔ Successfully installed mdview to ");
+    io::print("✔ Successfully installed mdv to ");
     io::print(ansi::RESET);
     io::print(ansi::FG_CYAN);
-    io::printfn("%s/.local/bin/mdview", (ZString)home);
+    io::printfn("%s/.local/bin/mdv", (ZString)home);
     io::print(ansi::RESET);
     return 0;
 }

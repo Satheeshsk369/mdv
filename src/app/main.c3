@@ -17,7 +17,7 @@ extern fn int read(int fd, void* buf, ulong count);
 
 fn void print_version()
 {
-    io::printn("mdview 0.2.0");
+    io::printn("mdv 0.2.0");
 }
 
 fn void print_help()
@@ -25,9 +25,9 @@ fn void print_help()
     print_version();
     io::printn("");
     io::printn("Usage:");
-    io::printn("    mdview <file.md> [line]");
-    io::printn("    mdview [options] <file.md>");
-    io::printn("    cat file.md | mdview");
+    io::printn("    mdv <file.md> [line]");
+    io::printn("    mdv [options] <file.md>");
+    io::printn("    cat file.md | mdv");
     io::printn("");
     io::printn("Options:");
     io::printn("    -s, --stdout             Print rendered text directly to stdout");

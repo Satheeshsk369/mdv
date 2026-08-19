@@ -1,4 +1,4 @@
-# mdview
+# mdv
 
 A standalone, high-performance Markdown and 2D LaTeX math terminal viewer written in **C3**. Designed for fast visual previewing in terminal workflows, multiplexers, and CLI pipelines.
 
@@ -49,7 +49,7 @@ A standalone, high-performance Markdown and 2D LaTeX math terminal viewer writte
 ```bash
 c3c run install
 ```
-This compiles the native executable and installs the `mdview` binary globally to `~/.local/bin/mdview`.
+This compiles the native executable and installs the `mdv` binary globally to `~/.local/bin/mdv` (with a symlink from `mdview`).
 
 ---
 
@@ -57,25 +57,25 @@ This compiles the native executable and installs the `mdview` binary globally to
 
 ```bash
 # Open file in live watch mode with auto line sync and Truecolor rendering (Default)
-mdview document.md
+mdv document.md
 
 # Open synchronized to a specific line number
-mdview document.md 45
-mdview document.md:45
-mdview document.md +45
+mdv document.md 45
+mdv document.md:45
+mdv document.md +45
 
 # Disable line wrapping (scroll horizontally with ← / →)
-mdview -nw document.md
+mdv -nw document.md
 
 # Print rendered output directly to stdout (useful for AI visual output & scripts)
-mdview -s document.md
-mdview --stdout document.md
+mdv -s document.md
+mdv --stdout document.md
 
 # Output plain text without ANSI escape codes
-mdview -p document.md
-mdview --plain document.md
+mdv -p document.md
+mdv --plain document.md
 
 # Stream and render from stdin
-curl -s https://raw.githubusercontent.com/.../README.md | mdview
-cat document.md | mdview
+curl -s https://raw.githubusercontent.com/.../README.md | mdv
+cat document.md | mdv
 ```
