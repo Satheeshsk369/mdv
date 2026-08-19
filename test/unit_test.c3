@@ -260,6 +260,22 @@ fn void test_primes_and_derivatives() @test
     test::gt(p1.width, 0);
 }
 
+fn void test_capi_exports() @test
+{
+    // Test 2D export
+    math::CLatexBox box = math::latexmath_render_2d("\\frac{a + 1}{b - 1}");
+    test::eq(box.height, 3);
+    test::eq(box.baseline, 1);
+    test::gt(box.width, 0);
+    math::latexmath_free_2d(&box);
+    test::eq((void*)box.rows, null);
+
+    // Test 1D inline export
+    char* inline_str = math::latexmath_render_inline("x^2 + y^2 = r^2");
+    test::gt(strutils::str_len(inline_str), 0);
+    math::latexmath_free_string(inline_str);
+}
+
 fn void test_modulo_congruence() @test
 {
     ast::Arena arena;
