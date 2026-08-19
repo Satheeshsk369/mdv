@@ -80,6 +80,17 @@ fn bool string_starts_with(String str, String prefix)
     return true;
 }
 
+fn bool string_ends_with(String str, String suffix)
+{
+    if (str.len < suffix.len) return false;
+    sz offset = (sz)(str.len - suffix.len);
+    for (sz i = 0; i < (sz)suffix.len; i++)
+    {
+        if (str[offset + i] != suffix[i]) return false;
+    }
+    return true;
+}
+
 fn String string_trim(String src)
 {
     if (src.len == 0) return src;
@@ -93,7 +104,7 @@ fn String string_trim(String src)
     {
         end--;
     }
-    return src[start:end];
+    return src[start : end - start];
 }
 
 fn int utf8_display_width(char* s)

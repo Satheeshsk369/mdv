@@ -179,7 +179,7 @@ fn Span[][] parse_table_row_cells(ast::Arena* arena, String line, usz* out_col_c
         while (i < len && trimmed[i] != '|') i++;
         usz end = i;
 
-        String raw_cell = strutils::string_trim(trimmed[start:end]);
+        String raw_cell = strutils::string_trim(trimmed[start : end - start]);
         Span[] parsed = parser::parse_inline(arena, raw_cell);
         temp_cols[col_count++] = parsed;
 
@@ -216,7 +216,7 @@ fn ast::Alignment[] parse_table_alignments(ast::Arena* arena, String sep_line, u
         while (i < len && trimmed[i] != '|') i++;
         usz end = i;
 
-        String spec = strutils::string_trim(trimmed[start:end]);
+        String spec = strutils::string_trim(trimmed[start : end - start]);
         if (spec.len > 0)
         {
             bool left = (spec[0] == ':');
@@ -274,7 +274,7 @@ fn Document parse_document(String content)
             line_end--;
         }
 
-        raw_lines.push(content[line_start:line_end]);
+        raw_lines.push(content[line_start : line_end - line_start]);
         if (cursor < total_len && content[cursor] == '\n') cursor++;
     }
 
@@ -307,7 +307,7 @@ fn Document parse_document(String content)
         if (strutils::string_starts_with(trimmed, "```") || strutils::string_starts_with(trimmed, "~~~"))
         {
             String fence = trimmed[0:3];
-            String lang = strutils::string_trim(trimmed[3:trimmed.len]);
+            String lang = strutils::string_trim(trimmed[3..]);
 
             LineList code_lines;
             code_lines.init(16);
@@ -407,7 +407,7 @@ fn Document parse_document(String content)
             int level = 0;
             while ((usz)level < (usz)trimmed.len && trimmed[level] == '#') level++;
             usz text_offset = (usz)(level + 1);
-            String heading_text = strutils::string_trim(trimmed[text_offset:trimmed.len]);
+            String heading_text = strutils::string_trim(trimmed[text_offset..]);
 
             Block b;
             b.kind = ast::BlockKind.HEADING;
@@ -462,7 +462,7 @@ fn Document parse_document(String content)
             if (line_idx < line_count && strutils::string_starts_with(strutils::string_trim(raw_lines.items[line_idx]), ">"))
             {
                 String q_line = strutils::string_trim(raw_lines.items[line_idx]);
-                String body = (q_line.len > 1 && q_line[1] == ' ') ? q_line[2:q_line.len] : q_line[1:q_line.len];
+                String body = (q_line.len > 1 && q_line[1] == ' ') ? q_line[2..] : q_line[1..];
                 b.callout.spans = parser::parse_inline(&doc.arena, body);
                 b.src_line_end = (int)line_idx;
                 line_idx++;
@@ -480,7 +480,7 @@ fn Document parse_document(String content)
         // 7. Blockquote: > ...
         if (strutils::string_starts_with(trimmed, "> ") || strutils::string_eq(trimmed, ">"))
         {
-            String quote_text = (trimmed.len > 2) ? trimmed[2:trimmed.len] : "";
+            String quote_text = (trimmed.len > 2) ? trimmed[2..] : "";
             Block b;
             b.kind = ast::BlockKind.BLOCKQUOTE;
             b.src_line_start = src_start;
@@ -497,10 +497,10 @@ fn Document parse_document(String content)
 
         if (indent + 5 < (usz)line.len)
         {
-            String sub = line[indent:line.len];
+            String sub = line[indent..];
             if (strutils::string_starts_with(sub, "- [ ] ") || strutils::string_starts_with(sub, "* [ ] "))
             {
-                String task_text = sub[6:sub.len];
+                String task_text = sub[6..];
                 Block b;
                 b.kind = ast::BlockKind.LIST_ITEM;
                 b.src_line_start = src_start;
@@ -514,7 +514,7 @@ fn Document parse_document(String content)
             }
             if (strutils::string_starts_with(sub, "- [x] ") || strutils::string_starts_with(sub, "- [X] ") || strutils::string_starts_with(sub, "* [x] ") || strutils::string_starts_with(sub, "* [X] "))
             {
-                String task_text = sub[6:sub.len];
+                String task_text = sub[6..];
                 Block b;
                 b.kind = ast::BlockKind.LIST_ITEM;
                 b.src_line_start = src_start;
@@ -531,7 +531,7 @@ fn Document parse_document(String content)
         // 9. Bullet / Numbered Lists (* , - , + , 1. )
         if (indent + 1 < (usz)line.len && (line[indent] == '*' || line[indent] == '-' || line[indent] == '+') && line[indent + 1] == ' ')
         {
-            String item_text = line[indent + 2:line.len];
+            String item_text = line[indent + 2..];
             Block b;
             b.kind = ast::BlockKind.LIST_ITEM;
             b.src_line_start = src_start;

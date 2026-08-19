@@ -27,6 +27,7 @@ enum BlockKind {
     LIST_ITEM,
     TABLE,
     THEMATIC_BREAK,
+    MATH_BLOCK,
     BLANK
 }
 
@@ -88,6 +89,10 @@ struct TableBlock {
     Span[][][] rows;
 }
 
+struct MathBlock {
+    String latex;
+}
+
 struct Block {
     BlockKind kind;
     int src_line_start;
@@ -99,6 +104,7 @@ struct Block {
     CalloutBlock callout;
     ListItemBlock list_item;
     TableBlock table;
+    MathBlock math_block;
 }
 
 struct Document {

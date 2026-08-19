@@ -5,8 +5,8 @@ import ast;
 import strutils;
 
 struct SymbolEntry {
-    char* name;
-    char* glyph;
+    String name;
+    String glyph;
 }
 
 const SymbolEntry[] SYMBOLS = {
@@ -518,7 +518,7 @@ fn String transform_math(ast::Arena* arena, String input)
                 cmd_end++;
             }
 
-            String cmd = input[cmd_start:cmd_end];
+            String cmd = input[cmd_start : cmd_end - cmd_start];
 
             // ── Quad Spacing: \quad, \qquad ──────────────────────────────────
             if (strutils::string_eq(cmd, "quad"))
@@ -647,7 +647,7 @@ fn String transform_math(ast::Arena* arena, String input)
                     i++;
                     usz arg_start = i;
                     while (i < (usz)input.len && input[i] != '}') i++;
-                    String arg_content = input[arg_start:i];
+                    String arg_content = input[arg_start : i - arg_start];
                     if (i < (usz)input.len && input[i] == '}') i++;
 
                     String t_arg = transform_math(arena, arg_content);
@@ -684,7 +684,7 @@ fn String transform_math(ast::Arena* arena, String input)
                         }
                         if (depth > 0) i++;
                     }
-                    String num = input[n_start:i];
+                    String num = input[n_start : i - n_start];
                     if (i < (usz)input.len && input[i] == '}') i++;
 
                     while (i < (usz)input.len && input[i] == ' ') i++;
@@ -705,7 +705,7 @@ fn String transform_math(ast::Arena* arena, String input)
                             }
                             if (depth > 0) i++;
                         }
-                        String den = input[d_start:i];
+                        String den = input[d_start : i - d_start];
                         if (i < (usz)input.len && input[i] == '}') i++;
 
                         String t_num = transform_math(arena, num);
@@ -790,7 +790,7 @@ fn String transform_math(ast::Arena* arena, String input)
                         }
                         if (depth > 0) i++;
                     }
-                    String rad = input[rad_start:i];
+                    String rad = input[rad_start : i - rad_start];
                     if (i < (usz)input.len && input[i] == '}') i++;
 
                     String t_rad = transform_math(arena, rad);
@@ -808,13 +808,25 @@ fn String transform_math(ast::Arena* arena, String input)
                 continue;
             }
 
+            // ── Standard Functions: \sin, \cos, \tan, etc. ───────────────────────
+            if (strutils::string_eq(cmd, "sin") || strutils::string_eq(cmd, "cos") || strutils::string_eq(cmd, "tan") || strutils::string_eq(cmd, "cot") || strutils::string_eq(cmd, "sec") || strutils::string_eq(cmd, "csc") || strutils::string_eq(cmd, "ln") || strutils::string_eq(cmd, "log") || strutils::string_eq(cmd, "exp") || strutils::string_eq(cmd, "lim") || strutils::string_eq(cmd, "arcsin") || strutils::string_eq(cmd, "arccos") || strutils::string_eq(cmd, "arctan") || strutils::string_eq(cmd, "sinh") || strutils::string_eq(cmd, "cosh") || strutils::string_eq(cmd, "tanh"))
+            {
+                mb.append_slice(cmd);
+                if (cmd_end < (usz)input.len && input[cmd_end] != '(' && input[cmd_end] != '_' && input[cmd_end] != '^' && input[cmd_end] != ' ')
+                {
+                    mb.append_char(' ');
+                }
+                i = cmd_end;
+                continue;
+            }
+
             // ── Symbol Table Lookup ──────────────────────────────────────────
             bool found_sym = false;
             for (usz s = 0; s < SYMBOLS.len; s++)
             {
-                if (strutils::str_eq((char*)cmd.ptr, SYMBOLS[s].name) && (usz)strutils::str_len(SYMBOLS[s].name) == cmd.len)
+                if (strutils::string_eq(cmd, SYMBOLS[s].name))
                 {
-                    mb.append_str(SYMBOLS[s].glyph);
+                    mb.append_slice(SYMBOLS[s].glyph);
                     found_sym = true;
                     i = cmd_end;
                     break;
@@ -843,7 +855,7 @@ fn String transform_math(ast::Arena* arena, String input)
                         usz s_start = i + 1;
                         usz s_end = s_start;
                         while (s_end < (usz)input.len && ((input[s_end] >= 'a' && input[s_end] <= 'z') || (input[s_end] >= 'A' && input[s_end] <= 'Z'))) s_end++;
-                        String scmd = input[s_start:s_end];
+                        String scmd = input[s_start : s_end - s_start];
                         if (strutils::string_eq(scmd, "alpha"))
                         {
                             mb.append_str("ᵅ");
@@ -937,7 +949,7 @@ fn String transform_math(ast::Arena* arena, String input)
                         usz s_start = i + 1;
                         usz s_end = s_start;
                         while (s_end < (usz)input.len && ((input[s_end] >= 'a' && input[s_end] <= 'z') || (input[s_end] >= 'A' && input[s_end] <= 'Z'))) s_end++;
-                        String scmd = input[s_start:s_end];
+                        String scmd = input[s_start : s_end - s_start];
                         if (strutils::string_eq(scmd, "beta"))
                         {
                             mb.append_str("ᵦ");

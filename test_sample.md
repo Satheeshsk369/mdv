@@ -22,6 +22,8 @@ Welcome to **mdview**! This document tests and demonstrates the full suite of in
 - Greek letters and roots: $\alpha + \beta^2 = \sqrt{\gamma} \cdot \theta$
 - Limits & Calculus: $\lim_{x \to 0} \frac{\sin(x)}{x} = 1$ and $\frac{d}{dx}(e^x) = e^x$
 
+$$ e^x = \sum_0^{\infty} \frac{x^n}{n!}  $$
+
 ### Complex Equations
 - Gaussian integral: $\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}$
 - Summation formula: $\sum_{i=1}^n i = \frac{n(n+1)}{2}$
