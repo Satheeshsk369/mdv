@@ -1,18 +1,8 @@
 module math;
 
 import std::core::mem;
-import ast;
+import logic;
 import strutils;
-
-/**
- * C-ABI struct representing a 2D rendered LaTeX equation.
- */
-struct CLatexBox {
-    char** rows;
-    int width;
-    int height;
-    int baseline;
-}
 
 /**
  * Render a LaTeX equation into a 2D multi-line ASCII/Unicode grid.
@@ -30,7 +20,7 @@ fn CLatexBox latexmath_render_2d(char* latex_zstr) @export("latexmath_render_2d"
 
     String latex_str = (String)latex_zstr[:(usz)strutils::str_len(latex_zstr)];
 
-    ast::Arena arena;
+    logic::Arena arena;
     arena.init(16384);
     defer arena.free();
 
@@ -85,7 +75,7 @@ fn char* latexmath_render_inline(char* latex_zstr) @export("latexmath_render_inl
 
     String latex_str = (String)latex_zstr[:(usz)strutils::str_len(latex_zstr)];
 
-    ast::Arena arena;
+    logic::Arena arena;
     arena.init(8192);
     defer arena.free();
 

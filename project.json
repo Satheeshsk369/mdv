@@ -13,7 +13,7 @@
       "sources": [
         "src/app/main.c3",
         "src/app/watch.c3",
-        "src/ast/**",
+        "src/logic/**",
         "src/parser/**",
         "src/math/**",
         "src/layout/**",
@@ -35,7 +35,7 @@
       "output": "build/liblatexmath",
       "sources": [
         "src/math/**",
-        "src/ast/arena.c3",
+        "src/logic/**",
         "src/render/ansi.c3",
         "src/sys/buffer.c3",
         "src/sys/strutils.c3"

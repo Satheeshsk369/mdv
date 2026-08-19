@@ -2,26 +2,15 @@ module math;
 
 import std::core::mem;
 import std::collections::list;
-import ast;
+import logic;
 import ansi;
 import strutils;
 import buffer;
 
 alias MathBoxList = List{MathBox};
 
-enum MathAtomKind {
-    ORD,    // Ordinary symbol or variable (x, 2, \alpha)
-    OP,     // Big operator or named function (\sum, \sin, \lim)
-    BIN,    // Binary operator (+, -, \times, \cdot, \pm)
-    REL,    // Relation (=, \le, \ge, \neq, \approx, \to)
-    OPEN,   // Open delimiter ((, [, {, \langle)
-    CLOSE,  // Close delimiter (), ], }, \rangle)
-    PUNCT,  // Punctuation (,, ;, :)
-    INNER   // Fractions, radicals, boxes
-}
-
 struct Math2DParser {
-    ast::Arena* arena;
+    logic::Arena* arena;
     String src;
     usz pos;
 }
@@ -100,7 +89,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
 
         // ── A. Font Styles via Enum ─────────────────────────────────────────
         MathFontStyle fstyle;
-        if (lookup_font_style(cmd, &fstyle))
+        if (logic::lookup_font_style(cmd, &fstyle))
         {
             p.skip_spaces();
             if (p.peek() == '*') p.get();
@@ -117,7 +106,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                         defer mb.free();
                         while (!p.eof() && p.peek() != '}')
                         {
-                            char* bb = get_mathbb_char(p.get());
+                            char* bb = logic::get_mathbb_char(p.get());
                             if (bb != null) mb.append_zstr(bb);
                         }
                         if (p.peek() == '}') p.get();
@@ -125,7 +114,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                         return box_from_string(p.arena, mb.to_arena_string(p.arena));
                     }
                     char single_bb = p.get();
-                    char* bb = get_mathbb_char(single_bb);
+                    char* bb = logic::get_mathbb_char(single_bb);
                     *prev_atom = MathAtomKind.ORD;
                     if (bb != null) return box_from_zstr(p.arena, bb);
                     char[2] ch_bb; ch_bb[0] = single_bb; ch_bb[1] = 0;
@@ -140,7 +129,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                         defer mb.free();
                         while (!p.eof() && p.peek() != '}')
                         {
-                            char* cal = get_mathcal_char(p.get());
+                            char* cal = logic::get_mathcal_char(p.get());
                             if (cal != null) mb.append_zstr(cal);
                         }
                         if (p.peek() == '}') p.get();
@@ -148,7 +137,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                         return box_from_string(p.arena, mb.to_arena_string(p.arena));
                     }
                     char single_cal = p.get();
-                    char* cal = get_mathcal_char(single_cal);
+                    char* cal = logic::get_mathcal_char(single_cal);
                     *prev_atom = MathAtomKind.ORD;
                     if (cal != null) return box_from_zstr(p.arena, cal);
                     char[2] ch_cal; ch_cal[0] = single_cal; ch_cal[1] = 0;
@@ -163,7 +152,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                         defer mb.free();
                         while (!p.eof() && p.peek() != '}')
                         {
-                            char* fk = get_mathfrak_char(p.get());
+                            char* fk = logic::get_mathfrak_char(p.get());
                             if (fk != null) mb.append_zstr(fk);
                         }
                         if (p.peek() == '}') p.get();
@@ -171,7 +160,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                         return box_from_string(p.arena, mb.to_arena_string(p.arena));
                     }
                     char single_fk = p.get();
-                    char* fk = get_mathfrak_char(single_fk);
+                    char* fk = logic::get_mathfrak_char(single_fk);
                     *prev_atom = MathAtomKind.ORD;
                     if (fk != null) return box_from_zstr(p.arena, fk);
                     char[2] ch_fk; ch_fk[0] = single_fk; ch_fk[1] = 0;
@@ -189,7 +178,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
         String combining;
         bool is_overline;
         bool is_underline;
-        if (lookup_accent(cmd, &accent, &combining, &is_overline, &is_underline))
+        if (logic::lookup_accent(cmd, &accent, &combining, &is_overline, &is_underline))
         {
             MathBox inner = parse_math_group(p);
             if (is_overline)
@@ -217,7 +206,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
 
         // ── C. Math Commands via Enum ───────────────────────────────────────
         MathCommand mcmd;
-        if (lookup_command(cmd, &mcmd))
+        if (logic::lookup_command(cmd, &mcmd))
         {
             switch (mcmd)
             {
@@ -699,7 +688,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
 
                     MathEnvironment menv;
                     MathEnvFlags env_flags;
-                    if (lookup_environment(env_name, &menv, &env_flags))
+                    if (logic::lookup_environment(env_name, &menv, &env_flags))
                     {
                         MathBox inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, env_flags.align_mode, (int)env_flags.col_gap);
                         if (env_flags.delim_left != 0 || env_flags.delim_right != 0)
@@ -729,20 +718,22 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
         }
 
         // ── D. Symbol Table Lookup via Modular Table ─────────────────────────
-        if (SymbolEntry* sym = lookup_symbol(cmd))
+        String sym_glyph;
+        MathAtomKind sym_kind;
+        if (logic::lookup_symbol(cmd, &sym_glyph, &sym_kind))
         {
-            *prev_atom = sym.kind;
-            if (sym.kind == MathAtomKind.REL || sym.kind == MathAtomKind.BIN)
+            *prev_atom = sym_kind;
+            if (sym_kind == MathAtomKind.REL || sym_kind == MathAtomKind.BIN)
             {
                 buffer::ByteBuffer mb;
                 mb.init(32);
                 defer mb.free();
                 mb.append_char(' ');
-                mb.append_slice(sym.glyph);
+                mb.append_slice(sym_glyph);
                 mb.append_char(' ');
                 return box_from_string(p.arena, mb.to_arena_string(p.arena));
             }
-            return box_from_string(p.arena, sym.glyph);
+            return box_from_string(p.arena, sym_glyph);
         }
 
         *prev_atom = MathAtomKind.ORD;
@@ -918,7 +909,7 @@ fn MathBox parse_math_expression(Math2DParser* p, bool stop_at_amp = false, bool
     return res;
 }
 
-fn MathBox render_latex_to_box(ast::Arena* arena, String latex)
+fn MathBox render_latex_to_box(logic::Arena* arena, String latex)
 {
     Math2DParser parser;
     parser.arena = arena;

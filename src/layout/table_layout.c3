@@ -2,7 +2,7 @@ module layout;
 
 import std::core::mem;
 import std::collections::list;
-import ast;
+import logic;
 import ansi;
 import strutils;
 import buffer;
@@ -32,7 +32,7 @@ fn void WrappedCell.free(WrappedCell* cell)
     cell.lines.free();
 }
 
-fn void wrap_cell(ast::Span[] spans, int max_w, WrappedCell* out_cell)
+fn void wrap_cell(Span[] spans, int max_w, WrappedCell* out_cell)
 {
     out_cell.init();
 
@@ -93,8 +93,8 @@ fn void wrap_cell(ast::Span[] spans, int max_w, WrappedCell* out_cell)
 
 fn void render_single_row(
     buffer::ByteBuffer* tb,
-    ast::TableBlock* table,
-    ast::Span[][] cells,
+    TableBlock* table,
+    Span[][] cells,
     int[] col_widths,
     int cols,
     bool is_header,
@@ -104,10 +104,11 @@ fn void render_single_row(
     EmitLineFn emit_fn
 )
 {
-    WrappedCell[] wrapped = mem::alloc_array(WrappedCell, (sz)cols);
+    WrappedCell* wrapped_ptr = (WrappedCell*)logic::g_ctx.scratch_arena.alloc((usz)cols * WrappedCell::size);
+    WrappedCell[] wrapped = wrapped_ptr[0 : (usz)cols];
+    for (int c = 0; c < cols; c++) wrapped[c].init();
     defer {
         for (int c = 0; c < cols; c++) wrapped[c].free();
-        mem::free(wrapped);
     }
 
     int max_lines = 1;
@@ -115,7 +116,7 @@ fn void render_single_row(
     for (int c = 0; c < cols; c++)
     {
         int w = col_widths[c];
-        ast::Span[] cspans = (c < (int)cells.len) ? cells[c] : {};
+        Span[] cspans = (c < (int)cells.len) ? cells[c] : {};
         wrap_cell(cspans, w, &wrapped[c]);
         if ((int)wrapped[c].lines.size > max_lines)
         {
@@ -134,7 +135,7 @@ fn void render_single_row(
         for (int c = 0; c < cols; c++)
         {
             int w = col_widths[c];
-            ast::Alignment align = (c < (int)table.alignments.len) ? table.alignments[c] : ast::Alignment.LEFT;
+            Alignment align = (c < (int)table.alignments.len) ? table.alignments[c] : Alignment.LEFT;
 
             tb.append_zstr(" ");
             if (!plain)
@@ -159,7 +160,7 @@ fn void render_single_row(
 
                 String cell_text = cl.text.to_string();
 
-                if (align == ast::Alignment.CENTER)
+                if (align == Alignment.CENTER)
                 {
                     int lpad = pad / 2;
                     int rpad = pad - lpad;
@@ -167,7 +168,7 @@ fn void render_single_row(
                     tb.append_slice(cell_text);
                     tb.append_spaces(rpad);
                 }
-                else if (align == ast::Alignment.RIGHT)
+                else if (align == Alignment.RIGHT)
                 {
                     tb.append_spaces(pad);
                     tb.append_slice(cell_text);
@@ -196,13 +197,16 @@ fn void render_single_row(
     }
 }
 
-fn void render_table(ast::TableBlock* table, int src_line, int term_width, bool plain, void* ctx, EmitLineFn emit_fn)
+fn void render_table(TableBlock* table, int src_line, int term_width, bool plain, void* ctx, EmitLineFn emit_fn)
 {
     if (table.col_count <= 0) return;
     int cols = table.col_count;
 
-    int[] col_widths = mem::alloc_array(int, (sz)cols);
-    defer mem::free(col_widths);
+    logic::LocalScratchScope scope = logic::enter_scratch_scope(&logic::g_ctx.scratch_arena);
+    defer scope.exit();
+
+    int* col_widths_ptr = (int*)logic::g_ctx.scratch_arena.alloc((usz)cols * int::size);
+    int[] col_widths = col_widths_ptr[0 : (usz)cols];
 
     for (int c = 0; c < cols; c++)
     {
@@ -212,7 +216,7 @@ fn void render_table(ast::TableBlock* table, int src_line, int term_width, bool 
     // Measure headers
     for (int c = 0; c < cols && c < (int)table.headers.len; c++)
     {
-        ast::Span[] hspans = table.headers[c];
+        Span[] hspans = table.headers[c];
         int w = 0;
         for (usz s = 0; s < hspans.len; s++)
         {
@@ -224,10 +228,10 @@ fn void render_table(ast::TableBlock* table, int src_line, int term_width, bool 
     // Measure body rows
     for (usz r = 0; r < table.rows.len; r++)
     {
-        ast::Span[][] row = table.rows[r];
+        Span[][] row = table.rows[r];
         for (int c = 0; c < cols && c < (int)row.len; c++)
         {
-            ast::Span[] cspans = row[c];
+            Span[] cspans = row[c];
             int w = 0;
             for (usz s = 0; s < cspans.len; s++)
             {

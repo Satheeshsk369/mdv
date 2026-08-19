@@ -2,7 +2,7 @@ module parser;
 
 import std::core::mem;
 import std::collections::list;
-import ast;
+import logic;
 import math;
 import strutils;
 import buffer;
@@ -12,7 +12,7 @@ fn bool is_alnum(char c)
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
 }
 
-fn Span[] list_to_arena_spans(ast::Arena* arena, List{Span}* l)
+fn Span[] list_to_arena_spans(logic::Arena* arena, List{Span}* l)
 {
     if (l.size == 0) return {};
     Span* buf = (Span*)arena.alloc((usz)l.size * Span::size);
@@ -23,7 +23,7 @@ fn Span[] list_to_arena_spans(ast::Arena* arena, List{Span}* l)
     return buf[:(usz)l.size];
 }
 
-fn void push_text_span(List{Span}* l, ast::Arena* arena, String text)
+fn void push_text_span(List{Span}* l, logic::Arena* arena, String text)
 {
     if (text.len == 0) return;
 
@@ -81,14 +81,14 @@ fn void push_text_span(List{Span}* l, ast::Arena* arena, String text)
 
     String final_str = decoded.to_arena_string(arena);
     Span span = {};
-    span.kind = ast::SpanKind.TEXT;
+    span.kind = SpanKind.TEXT;
     span.text = final_str;
     span.url = "";
     span.children = {};
     l.push(span);
 }
 
-fn Span[] parse_inline(ast::Arena* arena, String src)
+fn Span[] parse_inline(logic::Arena* arena, String src)
 {
     if (src.len == 0) return {};
 
@@ -125,7 +125,7 @@ fn Span[] parse_inline(ast::Arena* arena, String src)
                 }
                 String label = src[i + 2 : fn_end - (i + 2)];
                 Span span = {};
-                span.kind = ast::SpanKind.FOOTNOTE_REF;
+                span.kind = SpanKind.FOOTNOTE_REF;
                 span.text = arena.dup_string(label);
                 span.url = "";
                 span.children = {};
@@ -188,7 +188,7 @@ fn Span[] parse_inline(ast::Arena* arena, String src)
                     String url_text = src[url_start : url_end - url_start];
 
                     Span span = {};
-                    span.kind = ast::SpanKind.IMAGE;
+                    span.kind = SpanKind.IMAGE;
                     span.text = arena.dup_string(alt_text);
                     span.url = arena.dup_string(url_text);
                     span.children = {};
@@ -252,7 +252,7 @@ fn Span[] parse_inline(ast::Arena* arena, String src)
                     String url = src[url_start : url_end - url_start];
 
                     Span span = {};
-                    span.kind = ast::SpanKind.LINK;
+                    span.kind = SpanKind.LINK;
                     span.text = arena.dup_string(label);
                     span.url = arena.dup_string(url);
                     span.children = parse_inline(arena, label);
@@ -307,7 +307,7 @@ fn Span[] parse_inline(ast::Arena* arena, String src)
                     String transformed = math::transform_math(arena, raw_math);
 
                     Span span = {};
-                    span.kind = is_double ? ast::SpanKind.MATH_DISPLAY : ast::SpanKind.MATH_INLINE;
+                    span.kind = is_double ? SpanKind.MATH_DISPLAY : SpanKind.MATH_INLINE;
                     span.text = transformed;
                     span.url = "";
                     span.children = {};
@@ -343,7 +343,7 @@ fn Span[] parse_inline(ast::Arena* arena, String src)
                 }
                 String code_text = src[i + 1 : c_end - (i + 1)];
                 Span span = {};
-                span.kind = ast::SpanKind.CODE_INLINE;
+                span.kind = SpanKind.CODE_INLINE;
                 span.text = arena.dup_string(code_text);
                 span.url = "";
                 span.children = {};
@@ -392,7 +392,7 @@ fn Span[] parse_inline(ast::Arena* arena, String src)
                     }
                     String inner = src[i + 2 : b_end - (i + 2)];
                     Span span = {};
-                    span.kind = ast::SpanKind.BOLD;
+                    span.kind = SpanKind.BOLD;
                     span.text = arena.dup_string(inner);
                     span.url = "";
                     span.children = parse_inline(arena, inner);
@@ -428,7 +428,7 @@ fn Span[] parse_inline(ast::Arena* arena, String src)
                 }
                 String inner = src[i + 2 : s_end - (i + 2)];
                 Span span = {};
-                span.kind = ast::SpanKind.STRIKETHROUGH;
+                span.kind = SpanKind.STRIKETHROUGH;
                 span.text = arena.dup_string(inner);
                 span.url = "";
                 span.children = parse_inline(arena, inner);
@@ -480,7 +480,7 @@ fn Span[] parse_inline(ast::Arena* arena, String src)
                     }
                     String inner = src[i + 1 : it_end - (i + 1)];
                     Span span = {};
-                    span.kind = ast::SpanKind.ITALIC;
+                    span.kind = SpanKind.ITALIC;
                     span.text = arena.dup_string(inner);
                     span.url = "";
                     span.children = parse_inline(arena, inner);

@@ -1,11 +1,11 @@
 module math;
 
 import std::core::mem;
-import ast;
+import logic;
 import strutils;
 import buffer;
 
-fn String transform_math(ast::Arena* arena, String input)
+fn String transform_math(logic::Arena* arena, String input)
 {
     if (input.len == 0) return "";
 
@@ -128,7 +128,7 @@ fn String transform_math(ast::Arena* arena, String input)
 
             // ── Font Styles via Enum ─────────────────────────────────────────
             MathFontStyle fstyle;
-            if (lookup_font_style(cmd, &fstyle))
+            if (logic::lookup_font_style(cmd, &fstyle))
             {
                 i = cmd_end;
                 while (i < (usz)input.len && (input[i] == ' ' || input[i] == '*')) i++;
@@ -141,9 +141,9 @@ fn String transform_math(ast::Arena* arena, String input)
                         char* mapped = null;
                         switch (fstyle)
                         {
-                            case MATHBB: mapped = get_mathbb_char(ch);
-                            case MATHCAL: mapped = get_mathcal_char(ch);
-                            case MATHFRAK: mapped = get_mathfrak_char(ch);
+                            case MATHBB: mapped = logic::get_mathbb_char(ch);
+                            case MATHCAL: mapped = logic::get_mathcal_char(ch);
+                            case MATHFRAK: mapped = logic::get_mathfrak_char(ch);
                             default: mapped = null;
                         }
                         if (mapped != null)
@@ -184,9 +184,9 @@ fn String transform_math(ast::Arena* arena, String input)
 
             // ── Accents via Enum ─────────────────────────────────────────────
             MathAccent accent;
-            if (lookup_accent(cmd, &accent))
+            if (logic::lookup_accent(cmd, &accent))
             {
-                char* combining = get_accent_combining(accent);
+                char* combining = logic::get_accent_combining(accent);
                 i = cmd_end;
                 while (i < (usz)input.len && input[i] == ' ') i++;
                 if (i < (usz)input.len && input[i] == '{')
@@ -356,9 +356,10 @@ fn String transform_math(ast::Arena* arena, String input)
             }
 
             // ── Symbol Table Lookup via Modular Table ─────────────────────────
-            if (SymbolEntry* sym = lookup_symbol(cmd))
+            String sym_glyph;
+            if (logic::lookup_symbol(cmd, &sym_glyph))
             {
-                mb.append_slice(sym.glyph);
+                mb.append_slice(sym_glyph);
                 if (cmd_end < (usz)input.len && ((input[cmd_end] >= 'a' && input[cmd_end] <= 'z') || (input[cmd_end] >= 'A' && input[cmd_end] <= 'Z') || (input[cmd_end] >= '0' && input[cmd_end] <= '9')))
                 {
                     mb.append_char(' ');
@@ -392,6 +393,7 @@ fn String transform_math(ast::Arena* arena, String input)
                         usz s_end = s_start;
                         while (s_end < (usz)input.len && ((input[s_end] >= 'a' && input[s_end] <= 'z') || (input[s_end] >= 'A' && input[s_end] <= 'Z'))) s_end++;
                         String scmd = input[s_start : s_end - s_start];
+                        String sglyph;
                         if (scmd == "alpha") { mb.append_zstr("ᵅ"); }
                         else if (scmd == "beta") { mb.append_zstr("ᵝ"); }
                         else if (scmd == "gamma") { mb.append_zstr("ᵞ"); }
@@ -402,9 +404,9 @@ fn String transform_math(ast::Arena* arena, String input)
                         else if (scmd == "chi") { mb.append_zstr("ᵡ"); }
                         else if (scmd == "infty") { mb.append_zstr("∞"); }
                         else if (scmd == "to" || scmd == "rightarrow") { mb.append_zstr("→"); }
-                        else if (SymbolEntry* sym = lookup_symbol(scmd))
+                        else if (logic::lookup_symbol(scmd, &sglyph))
                         {
-                            mb.append_slice(sym.glyph);
+                            mb.append_slice(sglyph);
                         }
                         else
                         {
@@ -463,6 +465,7 @@ fn String transform_math(ast::Arena* arena, String input)
                         usz s_end = s_start;
                         while (s_end < (usz)input.len && ((input[s_end] >= 'a' && input[s_end] <= 'z') || (input[s_end] >= 'A' && input[s_end] <= 'Z'))) s_end++;
                         String scmd = input[s_start : s_end - s_start];
+                        String sglyph;
                         if (scmd == "beta") { mb.append_zstr("ᵦ"); }
                         else if (scmd == "gamma") { mb.append_zstr("ᵧ"); }
                         else if (scmd == "rho") { mb.append_zstr("ᵨ"); }
@@ -470,9 +473,9 @@ fn String transform_math(ast::Arena* arena, String input)
                         else if (scmd == "chi") { mb.append_zstr("ᵪ"); }
                         else if (scmd == "infty") { mb.append_zstr("∞"); }
                         else if (scmd == "to" || scmd == "rightarrow") { mb.append_zstr("→"); }
-                        else if (SymbolEntry* sym = lookup_symbol(scmd))
+                        else if (logic::lookup_symbol(scmd, &sglyph))
                         {
-                            mb.append_slice(sym.glyph);
+                            mb.append_slice(sglyph);
                         }
                         else
                         {

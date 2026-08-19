@@ -1,4 +1,6 @@
-module ast;
+module logic;
+
+import ansi;
 
 enum SpanKind {
     TEXT,
@@ -154,3 +156,66 @@ fn void Document.free(Document* doc)
     doc.arena.free();
     doc.blocks = {};
 }
+
+struct VisualLine {
+    String text;
+    int src_line;
+    int display_width;
+}
+
+struct VisualDocument {
+    VisualLine[] lines;
+    Arena arena;
+}
+
+fn void VisualDocument.init(VisualDocument* doc)
+{
+    doc.lines = {};
+    doc.arena.init(65536);
+}
+
+fn int VisualDocument.get_total_lines(VisualDocument* doc)
+{
+    return (int)doc.lines.len;
+}
+
+fn int VisualDocument.find_visual_line(VisualDocument* doc, int src_target)
+{
+    if (src_target < 0) return 0;
+    int total = (int)doc.lines.len;
+    for (int i = 0; i < total; i++)
+    {
+        if (doc.lines[i].src_line >= src_target)
+        {
+            return i;
+        }
+    }
+    if (total > 0) return total - 1;
+    return 0;
+}
+
+fn void VisualDocument.free(VisualDocument* doc)
+{
+    doc.arena.free();
+    doc.lines = {};
+}
+
+struct RenderConfig {
+    int width;
+    bool plain;
+    bool no_wrap;
+}
+
+struct CalloutTheme {
+    String icon;
+    String label;
+    char* color;
+}
+
+const CalloutTheme[5] CALLOUT_THEMES = {
+    { "ℹ", "NOTE", (char*)ansi::FG_CYAN },
+    { "", "TIP", (char*)ansi::FG_GREEN },
+    { "⚠", "WARNING", (char*)ansi::FG_ORANGE },
+    { "", "IMPORTANT", (char*)ansi::FG_PURPLE },
+    { "⛔", "CAUTION", (char*)ansi::FG_PINK }
+};

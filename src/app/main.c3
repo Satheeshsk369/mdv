@@ -4,9 +4,9 @@ import std::io;
 import std::core::mem;
 import std::core::string;
 import ansi;
+import logic;
 import terminal;
 import strutils;
-import ast;
 import parser;
 import render;
 import layout;
@@ -50,13 +50,13 @@ fn void render_file_stdout(char* filename, int width, bool no_wrap)
     }
     defer mem::free(content);
 
-    render::RenderConfig config;
+    RenderConfig config;
     config.width = width;
     config.plain = ansi::plain_mode;
     config.no_wrap = no_wrap;
 
     String content_str = (String)content[:strutils::str_len(content)];
-    ast::Document doc = parser::parse_document(content_str);
+    Document doc = parser::parse_document(content_str);
     defer doc.free();
 
     render::render_to_stdout(&doc, config);
@@ -80,13 +80,13 @@ fn void read_and_render_stdin(int width, bool no_wrap)
 
     if (total > 0)
     {
-        render::RenderConfig config;
+        RenderConfig config;
         config.width = width;
         config.plain = ansi::plain_mode;
         config.no_wrap = no_wrap;
 
         String content_str = (String)buf_slice[:total];
-        ast::Document doc = parser::parse_document(content_str);
+        Document doc = parser::parse_document(content_str);
         defer doc.free();
 
         render::render_to_stdout(&doc, config);
@@ -149,6 +149,20 @@ fn int main(String[] args)
     }
 
     int width = terminal::get_width();
+    int height = terminal::get_height();
+
+    logic::init_global_context(width, height);
+    defer logic::free_global_context();
+
+    logic::AppFlags flag_tty = { .is_tty };
+    logic::AppFlags flag_wrap = { .no_wrap };
+    logic::AppFlags flag_plain = { .plain_mode };
+    logic::AppFlags flag_stdout = { .stdout_mode };
+
+    logic::set_app_flag(terminal::is_tty(), flag_tty);
+    logic::set_app_flag(no_wrap, flag_wrap);
+    logic::set_app_flag(ansi::plain_mode, flag_plain);
+    logic::set_app_flag(force_stdout, flag_stdout);
 
     if (target_file != null && !strutils::str_eq(target_file, "-"))
     {

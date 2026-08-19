@@ -1,4 +1,4 @@
-module ast;
+module logic;
 
 import std::core::mem;
 import buffer;
@@ -8,6 +8,11 @@ struct ArenaBlock {
     usz capacity;
     usz used;
     char* data;
+}
+
+struct ArenaMark {
+    ArenaBlock* block;
+    usz used;
 }
 
 struct Arena {
@@ -82,10 +87,46 @@ fn String Arena.dup_zstring(Arena* a, char* src)
     return (String)buf[:len];
 }
 
-fn String ByteBuffer.to_arena_string(buffer::ByteBuffer* b, Arena* arena)
+fn ArenaMark Arena.mark(Arena* a)
 {
-    if (b.len == 0) return "";
-    return arena.dup_string(b.to_string());
+    ArenaMark m;
+    m.block = a.head;
+    m.used = a.head != null ? a.head.used : 0;
+    return m;
+}
+
+fn void Arena.reset_to(Arena* a, ArenaMark mark)
+{
+    if (mark.block == null)
+    {
+        a.reset();
+        return;
+    }
+
+    // Free blocks that were allocated after mark
+    ArenaBlock* curr = a.head;
+    while (curr != null && curr != mark.block)
+    {
+        ArenaBlock* next = curr.next;
+        char* raw_ptr = (char*)curr;
+        mem::free(raw_ptr);
+        curr = next;
+    }
+    a.head = mark.block;
+    if (a.head != null)
+    {
+        a.head.used = mark.used;
+    }
+}
+
+fn void Arena.reset(Arena* a)
+{
+    ArenaBlock* curr = a.head;
+    while (curr != null)
+    {
+        curr.used = 0;
+        curr = curr.next;
+    }
 }
 
 fn void Arena.free(Arena* a)
@@ -99,4 +140,10 @@ fn void Arena.free(Arena* a)
         curr = next;
     }
     a.head = null;
+}
+
+fn String ByteBuffer.to_arena_string(buffer::ByteBuffer* b, Arena* arena)
+{
+    if (b.len == 0) return "";
+    return arena.dup_string(b.to_string());
 }

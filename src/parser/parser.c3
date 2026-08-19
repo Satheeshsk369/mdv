@@ -2,7 +2,7 @@ module parser;
 
 import std::core::mem;
 import std::collections::list;
-import ast;
+import logic;
 import strutils;
 import buffer;
 
@@ -118,7 +118,7 @@ fn bool is_block_start(String line)
     return false;
 }
 
-fn Block[] list_to_arena_blocks(ast::Arena* arena, List{Block}* l)
+fn Block[] list_to_arena_blocks(logic::Arena* arena, List{Block}* l)
 {
     if (l.size == 0) return {};
     Block* buf = (Block*)arena.alloc((usz)l.size * Block::size);
@@ -129,7 +129,7 @@ fn Block[] list_to_arena_blocks(ast::Arena* arena, List{Block}* l)
     return buf[:(usz)l.size];
 }
 
-fn String[] list_to_arena_strings(ast::Arena* arena, List{String}* l)
+fn String[] list_to_arena_strings(logic::Arena* arena, List{String}* l)
 {
     if (l.size == 0) return {};
     String* buf = (String*)arena.alloc((usz)l.size * String::size);
@@ -140,7 +140,7 @@ fn String[] list_to_arena_strings(ast::Arena* arena, List{String}* l)
     return buf[:(usz)l.size];
 }
 
-fn Span[][] parse_table_row_cells(ast::Arena* arena, String line, usz* out_col_count)
+fn Span[][] parse_table_row_cells(logic::Arena* arena, String line, usz* out_col_count)
 {
     String trimmed = strutils::string_trim(line);
     usz len = (usz)trimmed.len;
@@ -175,14 +175,14 @@ fn Span[][] parse_table_row_cells(ast::Arena* arena, String line, usz* out_col_c
     return buf[:(usz)cell_list.size];
 }
 
-fn ast::Alignment[] parse_table_alignments(ast::Arena* arena, String sep_line, usz expected_cols)
+fn Alignment[] parse_table_alignments(logic::Arena* arena, String sep_line, usz expected_cols)
 {
     String trimmed = strutils::string_trim(sep_line);
     usz len = (usz)trimmed.len;
     usz i = 0;
     if (i < len && trimmed[i] == '|') i++;
 
-    List{ast::Alignment} align_list;
+    List{Alignment} align_list;
     align_list.init(mem, 8);
     defer align_list.free();
 
@@ -199,15 +199,15 @@ fn ast::Alignment[] parse_table_alignments(ast::Arena* arena, String sep_line, u
             bool right = (spec[spec.len - 1] == ':');
             if (left && right)
             {
-                align_list.push(ast::Alignment.CENTER);
+                align_list.push(Alignment.CENTER);
             }
             else if (right)
             {
-                align_list.push(ast::Alignment.RIGHT);
+                align_list.push(Alignment.RIGHT);
             }
             else
             {
-                align_list.push(ast::Alignment.LEFT);
+                align_list.push(Alignment.LEFT);
             }
         }
 
@@ -216,12 +216,12 @@ fn ast::Alignment[] parse_table_alignments(ast::Arena* arena, String sep_line, u
 
     while ((usz)align_list.size < expected_cols)
     {
-        align_list.push(ast::Alignment.LEFT);
+        align_list.push(Alignment.LEFT);
     }
 
     if (align_list.size == 0) return {};
 
-    ast::Alignment* buf = (ast::Alignment*)arena.alloc((usz)align_list.size * ast::Alignment::size);
+    Alignment* buf = (Alignment*)arena.alloc((usz)align_list.size * Alignment::size);
     for (sz c = 0; c < align_list.size; c++)
     {
         buf[c] = align_list.entries[c];
@@ -277,7 +277,7 @@ fn Document parse_document(String content)
             usz fm_start = line_idx;
             line_idx++;
 
-            List{ast::FrontmatterEntry} entries;
+            List{FrontmatterEntry} entries;
             entries.init(mem, 16);
             defer entries.free();
 
@@ -303,7 +303,7 @@ fn Document parse_document(String content)
                     {
                         v = v[1 : (usz)v.len - 2];
                     }
-                    ast::FrontmatterEntry entry;
+                    FrontmatterEntry entry;
                     entry.key = doc.arena.dup_string(k);
                     entry.value = doc.arena.dup_string(v);
                     entries.push(entry);
@@ -313,11 +313,11 @@ fn Document parse_document(String content)
 
             if (entries.size > 0)
             {
-                ast::FrontmatterEntry* e_buf = (ast::FrontmatterEntry*)doc.arena.alloc((usz)entries.size * ast::FrontmatterEntry::size);
+                FrontmatterEntry* e_buf = (FrontmatterEntry*)doc.arena.alloc((usz)entries.size * FrontmatterEntry::size);
                 for (sz e = 0; e < entries.size; e++) e_buf[e] = entries.entries[e];
 
                 Block b;
-                b.kind = ast::BlockKind.FRONTMATTER;
+                b.kind = BlockKind.FRONTMATTER;
                 b.src_line_start = (int)fm_start;
                 b.src_line_end = (int)line_idx;
                 b.frontmatter.entries = e_buf[:(usz)entries.size];
@@ -332,7 +332,7 @@ fn Document parse_document(String content)
         if (trimmed.len == 0)
         {
             Block b;
-            b.kind = ast::BlockKind.BLANK;
+            b.kind = BlockKind.BLANK;
             b.src_line_start = src_start;
             b.src_line_end = src_start;
             block_list.push(b);
@@ -390,7 +390,7 @@ fn Document parse_document(String content)
             }
 
             Block b;
-            b.kind = ast::BlockKind.CODE_BLOCK;
+            b.kind = BlockKind.CODE_BLOCK;
             b.src_line_start = src_start;
             b.src_line_end = (int)line_idx;
             b.code.language = doc.arena.dup_string(lang);
@@ -408,7 +408,7 @@ fn Document parse_document(String content)
             {
                 String math_content = strutils::string_trim(trimmed[2 : (usz)trimmed.len - 4]);
                 Block b;
-                b.kind = ast::BlockKind.MATH_BLOCK;
+                b.kind = BlockKind.MATH_BLOCK;
                 b.src_line_start = src_start;
                 b.src_line_end = src_start;
                 b.math_block.latex = doc.arena.dup_string(math_content);
@@ -474,7 +474,7 @@ fn Document parse_document(String content)
             }
 
             Block b;
-            b.kind = ast::BlockKind.MATH_BLOCK;
+            b.kind = BlockKind.MATH_BLOCK;
             b.src_line_start = src_start;
             b.src_line_end = (int)line_idx;
             b.math_block.latex = mb.to_arena_string(&doc.arena);
@@ -491,7 +491,7 @@ fn Document parse_document(String content)
             Span[][] header_row = parse_table_row_cells(&doc.arena, line, &header_cols);
 
             String sep_line = raw_lines.entries[line_idx + 1];
-            ast::Alignment[] alignments = parse_table_alignments(&doc.arena, sep_line, header_cols);
+            Alignment[] alignments = parse_table_alignments(&doc.arena, sep_line, header_cols);
 
             List{Span[][]} body_rows;
             body_rows.init(mem, 32);
@@ -521,7 +521,7 @@ fn Document parse_document(String content)
             }
 
             Block b;
-            b.kind = ast::BlockKind.TABLE;
+            b.kind = BlockKind.TABLE;
             b.src_line_start = src_start;
             b.src_line_end = (int)(line_idx - 1);
             b.table.col_count = (int)header_cols;
@@ -536,7 +536,7 @@ fn Document parse_document(String content)
         if (is_thematic_break(line))
         {
             Block b;
-            b.kind = ast::BlockKind.THEMATIC_BREAK;
+            b.kind = BlockKind.THEMATIC_BREAK;
             b.src_line_start = src_start;
             b.src_line_end = src_start;
             block_list.push(b);
@@ -553,7 +553,7 @@ fn Document parse_document(String content)
             String heading_text = strutils::string_trim(trimmed[text_offset..]);
 
             Block b;
-            b.kind = ast::BlockKind.HEADING;
+            b.kind = BlockKind.HEADING;
             b.src_line_start = src_start;
             b.src_line_end = src_start;
             b.heading.level = level;
@@ -566,32 +566,32 @@ fn Document parse_document(String content)
         // 7. Callouts / Admonitions: > [!NOTE], > [!TIP], > [!WARNING], > [!IMPORTANT], > [!CAUTION] (full multiline support)
         if (strutils::string_starts_with(trimmed, "> [!"))
         {
-            ast::CalloutKind kind = ast::CalloutKind.NOTE;
+            CalloutKind kind = CalloutKind.NOTE;
             String callout_title = "NOTE";
 
             if (strutils::string_starts_with(trimmed, "> [!NOTE]") || strutils::string_starts_with(trimmed, "> [!INFO]"))
             {
-                kind = ast::CalloutKind.NOTE;
+                kind = CalloutKind.NOTE;
                 callout_title = "NOTE";
             }
             else if (strutils::string_starts_with(trimmed, "> [!TIP]") || strutils::string_starts_with(trimmed, "> [!SUCCESS]"))
             {
-                kind = ast::CalloutKind.TIP;
+                kind = CalloutKind.TIP;
                 callout_title = "TIP";
             }
             else if (strutils::string_starts_with(trimmed, "> [!WARNING]"))
             {
-                kind = ast::CalloutKind.WARNING;
+                kind = CalloutKind.WARNING;
                 callout_title = "WARNING";
             }
             else if (strutils::string_starts_with(trimmed, "> [!IMPORTANT]"))
             {
-                kind = ast::CalloutKind.IMPORTANT;
+                kind = CalloutKind.IMPORTANT;
                 callout_title = "IMPORTANT";
             }
             else if (strutils::string_starts_with(trimmed, "> [!DANGER]") || strutils::string_starts_with(trimmed, "> [!CAUTION]") || strutils::string_starts_with(trimmed, "> [!ERROR]"))
             {
-                kind = ast::CalloutKind.CAUTION;
+                kind = CalloutKind.CAUTION;
                 callout_title = "CAUTION";
             }
 
@@ -622,7 +622,7 @@ fn Document parse_document(String content)
             }
 
             Block b;
-            b.kind = ast::BlockKind.CALLOUT;
+            b.kind = BlockKind.CALLOUT;
             b.src_line_start = src_start;
             b.src_line_end = last_callout_line;
             b.callout.kind = kind;
@@ -647,7 +647,7 @@ fn Document parse_document(String content)
                 String fn_body = strutils::string_trim(trimmed[col_pos + 2..]);
 
                 Block b;
-                b.kind = ast::BlockKind.FOOTNOTE_DEF;
+                b.kind = BlockKind.FOOTNOTE_DEF;
                 b.src_line_start = src_start;
                 b.src_line_end = src_start;
                 b.footnote_def.label = doc.arena.dup_string(fn_label);
@@ -687,7 +687,7 @@ fn Document parse_document(String content)
             }
 
             Block b;
-            b.kind = ast::BlockKind.BLOCKQUOTE;
+            b.kind = BlockKind.BLOCKQUOTE;
             b.src_line_start = src_start;
             b.src_line_end = last_q_line;
             b.blockquote.spans = parser::parse_inline(&doc.arena, quote_body.to_string());
@@ -706,10 +706,10 @@ fn Document parse_document(String content)
             {
                 String task_text = sub[6..];
                 Block b;
-                b.kind = ast::BlockKind.LIST_ITEM;
+                b.kind = BlockKind.LIST_ITEM;
                 b.src_line_start = src_start;
                 b.src_line_end = src_start;
-                b.list_item.kind = ast::ListKind.TASK_UNCHECKED;
+                b.list_item.kind = ListKind.TASK_UNCHECKED;
                 b.list_item.indent_level = (int)indent;
                 b.list_item.order_number = 0;
                 b.list_item.spans = parser::parse_inline(&doc.arena, task_text);
@@ -721,10 +721,10 @@ fn Document parse_document(String content)
             {
                 String task_text = sub[6..];
                 Block b;
-                b.kind = ast::BlockKind.LIST_ITEM;
+                b.kind = BlockKind.LIST_ITEM;
                 b.src_line_start = src_start;
                 b.src_line_end = src_start;
-                b.list_item.kind = ast::ListKind.TASK_CHECKED;
+                b.list_item.kind = ListKind.TASK_CHECKED;
                 b.list_item.indent_level = (int)indent;
                 b.list_item.order_number = 0;
                 b.list_item.spans = parser::parse_inline(&doc.arena, task_text);
@@ -739,10 +739,10 @@ fn Document parse_document(String content)
         {
             String item_text = line[indent + 2..];
             Block b;
-            b.kind = ast::BlockKind.LIST_ITEM;
+            b.kind = BlockKind.LIST_ITEM;
             b.src_line_start = src_start;
             b.src_line_end = src_start;
-            b.list_item.kind = ast::ListKind.BULLET;
+            b.list_item.kind = ListKind.BULLET;
             b.list_item.indent_level = (int)indent;
             b.list_item.order_number = 0;
             b.list_item.spans = parser::parse_inline(&doc.arena, item_text);
@@ -758,10 +758,10 @@ fn Document parse_document(String content)
         {
             String item_text = line[ord_prefix_len..];
             Block b;
-            b.kind = ast::BlockKind.LIST_ITEM;
+            b.kind = BlockKind.LIST_ITEM;
             b.src_line_start = src_start;
             b.src_line_end = src_start;
-            b.list_item.kind = ast::ListKind.ORDERED;
+            b.list_item.kind = ListKind.ORDERED;
             b.list_item.indent_level = (int)indent;
             b.list_item.order_number = ord_num;
             b.list_item.spans = parser::parse_inline(&doc.arena, item_text);
@@ -799,7 +799,7 @@ fn Document parse_document(String content)
         }
 
         Block b;
-        b.kind = ast::BlockKind.PARAGRAPH;
+        b.kind = BlockKind.PARAGRAPH;
         b.src_line_start = src_start;
         b.src_line_end = last_para_line;
         b.paragraph.spans = parser::parse_inline(&doc.arena, para_buf.to_string());

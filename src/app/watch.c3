@@ -3,7 +3,7 @@ module app;
 import std::io;
 import std::core::mem;
 import std::collections::list;
-import ast;
+import logic;
 import parser;
 import render;
 import layout;
@@ -30,14 +30,14 @@ struct TocItem {
     int visual_line;
 }
 
-fn void extract_toc(ast::Document* doc, layout::VisualDocument* vdoc, List{TocItem}* toc)
+fn void extract_toc(Document* doc, VisualDocument* vdoc, List{TocItem}* toc)
 {
     toc.clear();
     int total_lines = vdoc.get_total_lines();
     for (usz i = 0; i < doc.blocks.len; i++)
     {
-        ast::Block* b = &doc.blocks[i];
-        if (b.kind == ast::BlockKind.HEADING)
+        Block* b = &doc.blocks[i];
+        if (b.kind == BlockKind.HEADING)
         {
             // Build plain title
             buffer::ByteBuffer tbuf;
@@ -98,8 +98,9 @@ fn void copy_to_clipboard_osc52(char* text, int len)
     };
 
     int out_cap = ((len + 2) / 3) * 4 + 64;
-    char[] out = mem::alloc_array(char, (sz)out_cap);
-    defer mem::free(out);
+    logic::LocalScratchScope scope = logic::enter_scratch_scope(&logic::g_ctx.scratch_arena);
+    defer scope.exit();
+    char* out = (char*)logic::g_ctx.scratch_arena.alloc((usz)out_cap);
 
     int op = 0;
     out[op++] = '\x1b'; out[op++] = ']'; out[op++] = '5'; out[op++] = '2';
@@ -132,7 +133,7 @@ fn void copy_to_clipboard_osc52(char* text, int len)
     }
 
     out[op++] = '\x1b'; out[op++] = '\\';
-    write(1, (void*)out.ptr, (ulong)op);
+    write(1, (void*)out, (ulong)op);
 }
 
 fn bool char_eq_ignore_case(char a, char b)
@@ -302,7 +303,7 @@ fn void append_horizontal_slice(buffer::ByteBuffer* fb, String line, int scroll_
 
 fn void draw_viewport(
     buffer::ByteBuffer* fb,
-    layout::VisualDocument* vdoc,
+    VisualDocument* vdoc,
     int scroll_top,
     int scroll_left,
     int view_height,
@@ -754,14 +755,14 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
         return;
     }
 
-    render::RenderConfig config;
+    RenderConfig config;
     config.width = width;
     config.plain = ansi::plain_mode;
     config.no_wrap = no_wrap;
 
     String content_str = (String)content[:strutils::str_len(content)];
-    ast::Document doc = parser::parse_document(content_str);
-    layout::VisualDocument vdoc = render::render_document(&doc, config);
+    Document doc = parser::parse_document(content_str);
+    VisualDocument vdoc = render::render_document(&doc, config);
 
     List{TocItem} toc;
     toc.init(mem, 32);

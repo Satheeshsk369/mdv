@@ -1,7 +1,7 @@
 module math;
 
 import std::core::mem;
-import ast;
+import logic;
 import buffer;
 
 fn char* get_superscript_char(char c)
@@ -92,7 +92,7 @@ fn char* get_subscript_char(char c)
     }
 }
 
-fn String try_unicode_superscript(ast::Arena* arena, String s)
+fn String try_unicode_superscript(logic::Arena* arena, String s)
 {
     if (s.len == 0) return "";
     buffer::ByteBuffer mb;
@@ -108,7 +108,7 @@ fn String try_unicode_superscript(ast::Arena* arena, String s)
     return mb.to_arena_string(arena);
 }
 
-fn String try_unicode_subscript(ast::Arena* arena, String s)
+fn String try_unicode_subscript(logic::Arena* arena, String s)
 {
     if (s.len == 0) return "";
     buffer::ByteBuffer mb;

@@ -3,7 +3,7 @@ module render;
 import std::core::mem;
 import ansi;
 import strutils;
-import ast;
+import logic;
 import buffer;
 
 fn bool is_keyword_token(String s)

@@ -1,18 +1,11 @@
 module math;
 
 import std::core::mem;
-import ast;
+import logic;
 import strutils;
 import buffer;
 
-struct MathBox {
-    int width;
-    int height;
-    int baseline;
-    String[] rows;
-}
-
-fn MathBox box_empty(ast::Arena* arena)
+fn MathBox box_empty(logic::Arena* arena)
 {
     MathBox box;
     box.width = 0;
@@ -24,7 +17,7 @@ fn MathBox box_empty(ast::Arena* arena)
     return box;
 }
 
-fn MathBox box_from_string(ast::Arena* arena, String text)
+fn MathBox box_from_string(logic::Arena* arena, String text)
 {
     MathBox box;
     box.width = strutils::string_display_width(text);
@@ -36,7 +29,7 @@ fn MathBox box_from_string(ast::Arena* arena, String text)
     return box;
 }
 
-fn MathBox box_from_zstr(ast::Arena* arena, char* text)
+fn MathBox box_from_zstr(logic::Arena* arena, char* text)
 {
     if (text == null || text[0] == 0) return box_empty(arena);
     int len = strutils::str_len(text);
@@ -44,7 +37,7 @@ fn MathBox box_from_zstr(ast::Arena* arena, char* text)
     return box_from_string(arena, s);
 }
 
-fn MathBox box_spaces(ast::Arena* arena, int count)
+fn MathBox box_spaces(logic::Arena* arena, int count)
 {
     if (count <= 0) return box_empty(arena);
     buffer::ByteBuffer mb;
@@ -62,7 +55,7 @@ fn MathBox box_spaces(ast::Arena* arena, int count)
     return box;
 }
 
-fn MathBox box_hconcat(ast::Arena* arena, MathBox left, MathBox right, int gap = 0)
+fn MathBox box_hconcat(logic::Arena* arena, MathBox left, MathBox right, int gap = 0)
 {
     if (left.width == 0 && left.height == 1 && left.rows[0].len == 0) return right;
     if (right.width == 0 && right.height == 1 && right.rows[0].len == 0) return left;
@@ -128,7 +121,7 @@ fn MathBox box_hconcat(ast::Arena* arena, MathBox left, MathBox right, int gap =
     return res;
 }
 
-fn MathBox box_fraction(ast::Arena* arena, MathBox num, MathBox den)
+fn MathBox box_fraction(logic::Arena* arena, MathBox num, MathBox den)
 {
     int max_w = num.width > den.width ? num.width : den.width;
     int w = max_w + 2;
@@ -183,7 +176,7 @@ fn MathBox box_fraction(ast::Arena* arena, MathBox num, MathBox den)
     return res;
 }
 
-fn MathBox box_sqrt(ast::Arena* arena, MathBox inner, MathBox degree)
+fn MathBox box_sqrt(logic::Arena* arena, MathBox inner, MathBox degree)
 {
     int deg_w = degree.width;
     int left_w = (deg_w > 0 ? deg_w + 1 : 1);
@@ -243,7 +236,7 @@ fn MathBox box_sqrt(ast::Arena* arena, MathBox inner, MathBox degree)
     return res;
 }
 
-fn MathBox box_summation_op(ast::Arena* arena, MathBox sub, MathBox sup)
+fn MathBox box_summation_op(logic::Arena* arena, MathBox sub, MathBox sup)
 {
     int sym_w = 5;
     int max_w = sym_w;
@@ -312,7 +305,7 @@ fn MathBox box_summation_op(ast::Arena* arena, MathBox sub, MathBox sup)
     return res;
 }
 
-fn MathBox box_product_op(ast::Arena* arena, MathBox sub, MathBox sup)
+fn MathBox box_product_op(logic::Arena* arena, MathBox sub, MathBox sup)
 {
     int sym_w = 5;
     int max_w = sym_w;
@@ -381,7 +374,7 @@ fn MathBox box_product_op(ast::Arena* arena, MathBox sub, MathBox sup)
     return res;
 }
 
-fn MathBox box_big_union_op(ast::Arena* arena, MathBox sub, MathBox sup, bool is_intersection = false)
+fn MathBox box_big_union_op(logic::Arena* arena, MathBox sub, MathBox sup, bool is_intersection = false)
 {
     int sym_w = 5;
     int max_w = sym_w;
@@ -447,7 +440,7 @@ fn MathBox box_big_union_op(ast::Arena* arena, MathBox sub, MathBox sup, bool is
     return res;
 }
 
-fn MathBox box_integral_op(ast::Arena* arena, MathBox sub, MathBox sup, int int_order = 1)
+fn MathBox box_integral_op(logic::Arena* arena, MathBox sub, MathBox sup, int int_order = 1)
 {
     int h = 3;
     int sym_w = int_order == 1 ? 3 : (int_order == 2 ? 4 : 5);
@@ -532,7 +525,7 @@ fn MathBox box_integral_op(ast::Arena* arena, MathBox sub, MathBox sup, int int_
     return res;
 }
 
-fn MathBox box_limits_op(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup)
+fn MathBox box_limits_op(logic::Arena* arena, MathBox op, MathBox sub, MathBox sup)
 {
     int max_w = op.width;
     if (sub.width > max_w) max_w = sub.width;
@@ -600,7 +593,7 @@ fn MathBox box_limits_op(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup
     return res;
 }
 
-fn MathBox box_supsub(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
+fn MathBox box_supsub(logic::Arena* arena, MathBox base, MathBox sup, MathBox sub)
 {
     if (sup.width == 0 && sub.width == 0) return base;
 
@@ -685,7 +678,7 @@ fn MathBox box_supsub(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
     return res;
 }
 
-fn MathBox box_xarrow(ast::Arena* arena, MathBox sup, MathBox sub, char arrow_dir = 'R')
+fn MathBox box_xarrow(logic::Arena* arena, MathBox sup, MathBox sub, char arrow_dir = 'R')
 {
     int max_w = sup.width > sub.width ? sup.width : sub.width;
     int arrow_w = max_w + 4;
@@ -761,7 +754,7 @@ fn MathBox box_xarrow(ast::Arena* arena, MathBox sup, MathBox sub, char arrow_di
     return res;
 }
 
-fn MathBox box_underline(ast::Arena* arena, MathBox inner)
+fn MathBox box_underline(logic::Arena* arena, MathBox inner)
 {
     if (inner.width == 0) return inner;
     int w = inner.width;
@@ -790,7 +783,7 @@ fn MathBox box_underline(ast::Arena* arena, MathBox inner)
     return res;
 }
 
-fn MathBox box_overarrow(ast::Arena* arena, MathBox inner, bool right_dir = true)
+fn MathBox box_overarrow(logic::Arena* arena, MathBox inner, bool right_dir = true)
 {
     if (inner.width == 0) return inner;
     int w = inner.width;
@@ -828,14 +821,14 @@ fn MathBox box_overarrow(ast::Arena* arena, MathBox inner, bool right_dir = true
     return res;
 }
 
-fn MathBox box_with_tag(ast::Arena* arena, MathBox eq, String tag_str)
+fn MathBox box_with_tag(logic::Arena* arena, MathBox eq, String tag_str)
 {
     if (tag_str.len == 0) return eq;
     MathBox tag_box = box_from_string(arena, tag_str);
     return box_hconcat(arena, eq, tag_box, 6);
 }
 
-fn MathBox box_cancel(ast::Arena* arena, MathBox inner)
+fn MathBox box_cancel(logic::Arena* arena, MathBox inner)
 {
     if (inner.height == 0) return inner;
     String* r_buf = (String*)arena.alloc((usz)inner.height * String::size);
@@ -866,7 +859,7 @@ fn MathBox box_cancel(ast::Arena* arena, MathBox inner)
     return res;
 }
 
-fn MathBox box_colorize(ast::Arena* arena, MathBox inner, char* ansi_color)
+fn MathBox box_colorize(logic::Arena* arena, MathBox inner, char* ansi_color)
 {
     if (inner.height == 0 || ansi_color == null) return inner;
     String* r_buf = (String*)arena.alloc((usz)inner.height * String::size);
@@ -891,7 +884,7 @@ fn MathBox box_colorize(ast::Arena* arena, MathBox inner, char* ansi_color)
     return res;
 }
 
-fn MathBox box_delimiters(ast::Arena* arena, MathBox inner, char open_ch, char close_ch)
+fn MathBox box_delimiters(logic::Arena* arena, MathBox inner, char open_ch, char close_ch)
 {
     if (inner.height <= 1)
     {
@@ -1037,7 +1030,7 @@ fn MathBox box_delimiters(ast::Arena* arena, MathBox inner, char open_ch, char c
     return res;
 }
 
-fn MathBox box_vconcat_list(ast::Arena* arena, MathBox[] list)
+fn MathBox box_vconcat_list(logic::Arena* arena, MathBox[] list)
 {
     if (list.len == 0) return box_empty(arena);
     if (list.len == 1) return list[0];
@@ -1078,7 +1071,7 @@ fn MathBox box_vconcat_list(ast::Arena* arena, MathBox[] list)
     return res;
 }
 
-fn MathBox box_boxed(ast::Arena* arena, MathBox inner)
+fn MathBox box_boxed(logic::Arena* arena, MathBox inner)
 {
     int w = inner.width + 4;
     int new_h = inner.height + 2;
@@ -1124,7 +1117,7 @@ fn MathBox box_boxed(ast::Arena* arena, MathBox inner)
     return res;
 }
 
-fn MathBox box_overline(ast::Arena* arena, MathBox inner)
+fn MathBox box_overline(logic::Arena* arena, MathBox inner)
 {
     if (inner.width == 0) return inner;
     int w = inner.width;
@@ -1153,7 +1146,7 @@ fn MathBox box_overline(ast::Arena* arena, MathBox inner)
     return res;
 }
 
-fn MathBox box_overbrace(ast::Arena* arena, MathBox inner, MathBox label)
+fn MathBox box_overbrace(logic::Arena* arena, MathBox inner, MathBox label)
 {
     int max_w = inner.width > label.width ? inner.width : label.width;
     int lab_h = label.width > 0 ? label.height : 0;
@@ -1210,7 +1203,7 @@ fn MathBox box_overbrace(ast::Arena* arena, MathBox inner, MathBox label)
     return res;
 }
 
-fn MathBox box_underbrace(ast::Arena* arena, MathBox inner, MathBox label)
+fn MathBox box_underbrace(logic::Arena* arena, MathBox inner, MathBox label)
 {
     int max_w = inner.width > label.width ? inner.width : label.width;
     int lab_h = label.width > 0 ? label.height : 0;
@@ -1267,12 +1260,11 @@ fn MathBox box_underbrace(ast::Arena* arena, MathBox inner, MathBox label)
     return res;
 }
 
-fn MathBox box_grid_layout(ast::Arena* arena, MathBox[] grid, int num_rows, int num_cols, char align_mode, int col_gap = 2)
+fn MathBox box_grid_layout(logic::Arena* arena, MathBox[] grid, int num_rows, int num_cols, char align_mode, int col_gap = 2)
 {
     if (num_rows <= 0 || num_cols <= 0 || grid.len < (usz)(num_rows * num_cols)) return box_empty(arena);
 
-    int[] col_w = mem::alloc_array(int, (sz)num_cols);
-    defer mem::free(col_w);
+    int* col_w = (int*)arena.alloc((usz)num_cols * int::size);
 
     for (int c = 0; c < num_cols; c++)
     {
@@ -1285,12 +1277,9 @@ fn MathBox box_grid_layout(ast::Arena* arena, MathBox[] grid, int num_rows, int 
         col_w[c] = max_cw;
     }
 
-    int[] row_above = mem::alloc_array(int, (sz)num_rows);
-    defer mem::free(row_above);
-    int[] row_below = mem::alloc_array(int, (sz)num_rows);
-    defer mem::free(row_below);
-    int[] row_h = mem::alloc_array(int, (sz)num_rows);
-    defer mem::free(row_h);
+    int* row_above = (int*)arena.alloc((usz)num_rows * int::size);
+    int* row_below = (int*)arena.alloc((usz)num_rows * int::size);
+    int* row_h = (int*)arena.alloc((usz)num_rows * int::size);
 
     int total_h = 0;
 

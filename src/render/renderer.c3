@@ -3,48 +3,28 @@ module render;
 import std::io;
 import std::core::mem;
 import std::collections::list;
-import ast;
+import logic;
 import ansi;
 import layout;
 import math;
 import strutils;
 import buffer;
 
-struct RenderConfig {
-    int width;
-    bool plain;
-    bool no_wrap;
-}
-
-struct CalloutTheme {
-    String icon;
-    String label;
-    char* color;
-}
-
-const CalloutTheme[5] CALLOUT_THEMES = {
-    { "ℹ", "NOTE", (char*)ansi::FG_CYAN },
-    { "💡", "TIP", (char*)ansi::FG_GREEN },
-    { "⚠", "WARNING", (char*)ansi::FG_ORANGE },
-    { "📌", "IMPORTANT", (char*)ansi::FG_PURPLE },
-    { "⛔", "CAUTION", (char*)ansi::FG_PINK }
-};
-
 struct DocRenderContext {
-    layout::VisualDocument* vdoc;
-    ast::Arena* arena;
+    VisualDocument* vdoc;
+    logic::Arena* arena;
     RenderConfig config;
-    List{layout::VisualLine} list;
+    List{VisualLine} list;
 }
 
-fn void render_span(buffer::ByteBuffer* b, ast::Span span, bool plain)
+fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
 {
     switch (span.kind)
     {
-        case ast::SpanKind.TEXT:
+        case SpanKind.TEXT:
             b.append_slice(span.text);
 
-        case ast::SpanKind.BOLD:
+        case SpanKind.BOLD:
             if (!plain) b.append_zstr((char*)ansi::BOLD);
             if (span.children.len > 0)
             {
@@ -59,7 +39,7 @@ fn void render_span(buffer::ByteBuffer* b, ast::Span span, bool plain)
             }
             if (!plain) b.append_zstr((char*)ansi::RESET);
 
-        case ast::SpanKind.ITALIC:
+        case SpanKind.ITALIC:
             if (!plain) b.append_zstr((char*)ansi::ITALIC);
             if (span.children.len > 0)
             {
@@ -74,7 +54,7 @@ fn void render_span(buffer::ByteBuffer* b, ast::Span span, bool plain)
             }
             if (!plain) b.append_zstr((char*)ansi::RESET);
 
-        case ast::SpanKind.STRIKETHROUGH:
+        case SpanKind.STRIKETHROUGH:
             if (!plain)
             {
                 b.append_zstr((char*)ansi::STRIKE);
@@ -93,20 +73,20 @@ fn void render_span(buffer::ByteBuffer* b, ast::Span span, bool plain)
             }
             if (!plain) b.append_zstr((char*)ansi::RESET);
 
-        case ast::SpanKind.CODE_INLINE:
+        case SpanKind.CODE_INLINE:
             if (!plain) b.append_zstr((char*)ansi::CODE_INLINE);
             if (!plain) b.append_char(' ');
             b.append_slice(span.text);
             if (!plain) b.append_char(' ');
             if (!plain) b.append_zstr((char*)ansi::RESET);
 
-        case ast::SpanKind.MATH_INLINE:
-        case ast::SpanKind.MATH_DISPLAY:
+        case SpanKind.MATH_INLINE:
+        case SpanKind.MATH_DISPLAY:
             if (!plain) b.append_zstr((char*)ansi::FG_MATH);
             b.append_slice(span.text);
             if (!plain) b.append_zstr((char*)ansi::RESET);
 
-        case ast::SpanKind.FOOTNOTE_REF:
+        case SpanKind.FOOTNOTE_REF:
             if (!plain)
             {
                 b.append_zstr((char*)ansi::FG_CYAN);
@@ -117,7 +97,7 @@ fn void render_span(buffer::ByteBuffer* b, ast::Span span, bool plain)
             b.append_char(']');
             if (!plain) b.append_zstr((char*)ansi::RESET);
 
-        case ast::SpanKind.LINK:
+        case SpanKind.LINK:
             if (!plain)
             {
                 b.append_zstr((char*)ansi::FG_CYAN);
@@ -146,7 +126,7 @@ fn void render_span(buffer::ByteBuffer* b, ast::Span span, bool plain)
                 if (!plain) b.append_zstr((char*)ansi::RESET);
             }
 
-        case ast::SpanKind.IMAGE:
+        case SpanKind.IMAGE:
             if (!plain)
             {
                 b.append_zstr((char*)ansi::FG_CYAN);
@@ -168,7 +148,7 @@ fn void render_span(buffer::ByteBuffer* b, ast::Span span, bool plain)
     }
 }
 
-fn void render_spans(buffer::ByteBuffer* b, ast::Span[] spans, bool plain)
+fn void render_spans(buffer::ByteBuffer* b, Span[] spans, bool plain)
 {
     for (usz i = 0; i < spans.len; i++)
     {
@@ -179,9 +159,8 @@ fn void render_spans(buffer::ByteBuffer* b, ast::Span[] spans, bool plain)
 fn void emit_rendered_line(DocRenderContext* ctx, buffer::ByteBuffer* lb, int src_line)
 {
     String s = lb.to_string();
-    layout::VisualLine vl;
+    VisualLine vl;
     vl.text = ctx.arena.dup_string(s);
-    vl.src_line = src_line;
     vl.display_width = strutils::string_display_width(s);
     ctx.list.push(vl);
     lb.reset();
@@ -190,7 +169,7 @@ fn void emit_rendered_line(DocRenderContext* ctx, buffer::ByteBuffer* lb, int sr
 fn void emit_table_line_cb(void* ctx_ptr, String text, int src_line)
 {
     DocRenderContext* ctx = (DocRenderContext*)ctx_ptr;
-    layout::VisualLine vl;
+    VisualLine vl;
     vl.text = ctx.arena.dup_string(text);
     vl.src_line = src_line;
     vl.display_width = strutils::string_display_width(text);
@@ -199,7 +178,7 @@ fn void emit_table_line_cb(void* ctx_ptr, String text, int src_line)
 
 fn void render_wrapped_spans(
     DocRenderContext* ctx,
-    ast::Span[] spans,
+    Span[] spans,
     int src_line,
     int max_w,
     String prefix_str,
@@ -248,7 +227,7 @@ fn void render_wrapped_spans(
 
     for (usz s_idx = 0; s_idx < spans.len; s_idx++)
     {
-        ast::Span sp = spans[s_idx];
+        Span sp = spans[s_idx];
 
         char* style_start = "";
         char* style_end = "";
@@ -256,13 +235,13 @@ fn void render_wrapped_spans(
         {
             switch (sp.kind)
             {
-                case ast::SpanKind.BOLD: style_start = (char*)ansi::BOLD; style_end = (char*)ansi::RESET;
-                case ast::SpanKind.ITALIC: style_start = (char*)ansi::ITALIC; style_end = (char*)ansi::RESET;
-                case ast::SpanKind.STRIKETHROUGH: style_start = (char*)ansi::STRIKE; style_end = (char*)ansi::RESET;
-                case ast::SpanKind.CODE_INLINE: style_start = (char*)ansi::CODE_INLINE; style_end = (char*)ansi::RESET;
-                case ast::SpanKind.MATH_INLINE: style_start = (char*)ansi::FG_MATH; style_end = (char*)ansi::RESET;
-                case ast::SpanKind.FOOTNOTE_REF: style_start = (char*)ansi::FG_CYAN; style_end = (char*)ansi::RESET;
-                case ast::SpanKind.LINK: style_start = (char*)ansi::FG_CYAN; style_end = (char*)ansi::RESET;
+                case SpanKind.BOLD: style_start = (char*)ansi::BOLD; style_end = (char*)ansi::RESET;
+                case SpanKind.ITALIC: style_start = (char*)ansi::ITALIC; style_end = (char*)ansi::RESET;
+                case SpanKind.STRIKETHROUGH: style_start = (char*)ansi::STRIKE; style_end = (char*)ansi::RESET;
+                case SpanKind.CODE_INLINE: style_start = (char*)ansi::CODE_INLINE; style_end = (char*)ansi::RESET;
+                case SpanKind.MATH_INLINE: style_start = (char*)ansi::FG_MATH; style_end = (char*)ansi::RESET;
+                case SpanKind.FOOTNOTE_REF: style_start = (char*)ansi::FG_CYAN; style_end = (char*)ansi::RESET;
+                case SpanKind.LINK: style_start = (char*)ansi::FG_CYAN; style_end = (char*)ansi::RESET;
                 default: style_start = ""; style_end = "";
             }
         }
@@ -312,7 +291,7 @@ fn void render_wrapped_spans(
             cur_w += word_w;
         }
 
-        if (sp.kind == ast::SpanKind.LINK && sp.url.len > 0)
+        if (sp.kind == SpanKind.LINK && sp.url.len > 0)
         {
             int url_w = strutils::string_display_width(sp.url) + 3;
             if (cur_w + url_w > max_w && cur_w > cont_prefix_w)
@@ -348,9 +327,9 @@ fn void render_wrapped_spans(
     }
 }
 
-fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig config)
+fn VisualDocument render_document(Document* doc, RenderConfig config)
 {
-    layout::VisualDocument vdoc;
+    VisualDocument vdoc;
     vdoc.init();
 
     DocRenderContext ctx;
@@ -369,11 +348,11 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
 
     for (usz b_idx = 0; b_idx < doc.blocks.len; b_idx++)
     {
-        ast::Block* b = &doc.blocks[b_idx];
+        Block* b = &doc.blocks[b_idx];
 
         switch (b.kind)
         {
-            case ast::BlockKind.FRONTMATTER:
+            case BlockKind.FRONTMATTER:
                 // Top border ╭── Document Info ──────────────────────────╮
                 if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
                 lb.append_zstr("╭── ");
@@ -409,7 +388,7 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 // Frontmatter entries with word wrapping
                 for (usz e = 0; e < b.frontmatter.entries.len; e++)
                 {
-                    ast::FrontmatterEntry entry = b.frontmatter.entries[e];
+                    FrontmatterEntry entry = b.frontmatter.entries[e];
                     int key_len = (int)entry.key.len;
                     int pad_spaces = max_klen - key_len;
                     if (pad_spaces < 0) pad_spaces = 0;
@@ -492,7 +471,7 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 if (!plain) lb.append_zstr((char*)ansi::RESET);
                 emit_rendered_line(&ctx, &lb, b.src_line_end);
 
-            case ast::BlockKind.FOOTNOTE_DEF:
+            case BlockKind.FOOTNOTE_DEF:
                 buffer::ByteBuffer fn_pfx;
                 fn_pfx.init(64);
                 defer fn_pfx.free();
@@ -509,10 +488,10 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
 
                 render_wrapped_spans(&ctx, b.footnote_def.spans, b.src_line_start, width - 4, fn_cont.to_string(), fn_pfx.to_string(), plain, config.no_wrap);
 
-            case ast::BlockKind.BLANK:
+            case BlockKind.BLANK:
                 emit_rendered_line(&ctx, &lb, b.src_line_start);
 
-            case ast::BlockKind.THEMATIC_BREAK:
+            case BlockKind.THEMATIC_BREAK:
                 if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
                 int bar_len = width - 4;
                 if (bar_len < 10) bar_len = 10;
@@ -520,7 +499,7 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 if (!plain) lb.append_zstr((char*)ansi::RESET);
                 emit_rendered_line(&ctx, &lb, b.src_line_start);
 
-            case ast::BlockKind.HEADING:
+            case BlockKind.HEADING:
                 if (b_idx > 0)
                 {
                     lb.reset();
@@ -549,7 +528,7 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 if (!plain) lb.append_zstr((char*)ansi::RESET);
                 emit_rendered_line(&ctx, &lb, b.src_line_start);
 
-            case ast::BlockKind.CODE_BLOCK:
+            case BlockKind.CODE_BLOCK:
                 // Top border ╭── lang ───────────────────╮
                 if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
                 lb.append_zstr("╭── ");
@@ -596,11 +575,11 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 if (!plain) lb.append_zstr((char*)ansi::RESET);
                 emit_rendered_line(&ctx, &lb, b.src_line_end);
 
-            case ast::BlockKind.CALLOUT:
+            case BlockKind.CALLOUT:
                 // Title line
                 if (!plain)
                 {
-                    CalloutTheme theme = CALLOUT_THEMES[(int)b.callout.kind];
+                    logic::CalloutTheme theme = logic::CALLOUT_THEMES[(int)b.callout.kind];
                     lb.append_zstr(theme.color);
                     lb.append_zstr((char*)ansi::BOLD);
                     lb.append_zstr("│ ");
@@ -623,10 +602,10 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                     render_wrapped_spans(&ctx, b.callout.spans, b.src_line_end, width - 6, "│ ", "│ ", plain, config.no_wrap);
                 }
 
-            case ast::BlockKind.BLOCKQUOTE:
+            case BlockKind.BLOCKQUOTE:
                 render_wrapped_spans(&ctx, b.blockquote.spans, b.src_line_start, width - 6, "│ ", "│ ", plain, config.no_wrap);
 
-            case ast::BlockKind.LIST_ITEM:
+            case BlockKind.LIST_ITEM:
                 buffer::ByteBuffer pfx_indent;
                 pfx_indent.init(32);
                 defer pfx_indent.free();
@@ -644,21 +623,21 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
 
                 switch (b.list_item.kind)
                 {
-                    case ast::ListKind.TASK_UNCHECKED:
+                    case ListKind.TASK_UNCHECKED:
                         first_full.append_zstr("☐  ");
                         cont_full.append_zstr("   ");
 
-                    case ast::ListKind.TASK_CHECKED:
+                    case ListKind.TASK_CHECKED:
                         first_full.append_zstr("✔  ");
                         cont_full.append_zstr("   ");
 
-                    case ast::ListKind.ORDERED:
+                    case ListKind.ORDERED:
                         first_full.append_int(b.list_item.order_number);
                         first_full.append_zstr(". ");
                         int ord_w = strutils::string_display_width(first_full.to_string()) - b.list_item.indent_level;
                         cont_full.append_spaces(ord_w);
 
-                    case ast::ListKind.BULLET:
+                    case ListKind.BULLET:
                         char* b_glyph = "• ";
                         if (b.list_item.indent_level >= 4)
                         {
@@ -678,11 +657,11 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
 
                 render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, cont_full.to_string(), first_full.to_string(), plain, config.no_wrap);
 
-            case ast::BlockKind.TABLE:
+            case BlockKind.TABLE:
                 layout::render_table(&b.table, b.src_line_start, width, plain, (void*)&ctx, &emit_table_line_cb);
 
-            case ast::BlockKind.MATH_BLOCK:
-                math::MathBox mbox = math::render_latex_to_box(ctx.arena, b.math_block.latex);
+            case BlockKind.MATH_BLOCK:
+                MathBox mbox = math::render_latex_to_box(ctx.arena, b.math_block.latex);
                 int pad_left = 4;
 
                 lb.reset();
@@ -707,7 +686,7 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 lb.reset();
                 emit_rendered_line(&ctx, &lb, b.src_line_end);
 
-            case ast::BlockKind.IMAGE_BLOCK:
+            case BlockKind.IMAGE_BLOCK:
                 if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
                 lb.append_zstr("╭── ");
                 if (!plain)
@@ -754,14 +733,14 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 if (!plain) lb.append_zstr((char*)ansi::RESET);
                 emit_rendered_line(&ctx, &lb, b.src_line_end);
 
-            case ast::BlockKind.PARAGRAPH:
+            case BlockKind.PARAGRAPH:
                 render_wrapped_spans(&ctx, b.paragraph.spans, b.src_line_start, width - 2, "", "", plain, config.no_wrap);
         }
     }
 
     if (ctx.list.size > 0)
     {
-        layout::VisualLine* v_buf = (layout::VisualLine*)vdoc.arena.alloc((usz)ctx.list.size * layout::VisualLine::size);
+        VisualLine* v_buf = (VisualLine*)vdoc.arena.alloc((usz)ctx.list.size * VisualLine::size);
         for (sz i = 0; i < ctx.list.size; i++)
         {
             v_buf[i] = ctx.list.entries[i];
@@ -777,9 +756,9 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
     return vdoc;
 }
 
-fn void render_to_stdout(ast::Document* doc, RenderConfig config)
+fn void render_to_stdout(Document* doc, RenderConfig config)
 {
-    layout::VisualDocument vdoc = render_document(doc, config);
+    VisualDocument vdoc = render_document(doc, config);
     defer vdoc.free();
 
     for (usz i = 0; i < vdoc.lines.len; i++)
