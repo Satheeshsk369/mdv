@@ -310,9 +310,18 @@ fn void append_horizontal_slice(FrameBuffer* fb, String line, int scroll_left, i
         // Measure UTF-8 character length & width
         char c = line[p];
         usz char_bytes = 1;
-        if ((c & 0xE0) == 0xC0) char_bytes = 2;
-        else if ((c & 0xF0) == 0xE0) char_bytes = 3;
-        else if ((c & 0xF8) == 0xF0) char_bytes = 4;
+        if ((c & 0xE0) == 0xC0)
+        {
+            char_bytes = 2;
+        }
+        else if ((c & 0xF0) == 0xE0)
+        {
+            char_bytes = 3;
+        }
+        else if ((c & 0xF8) == 0xF0)
+        {
+            char_bytes = 4;
+        }
 
         if (p + char_bytes > len) char_bytes = len - p;
 
@@ -349,8 +358,8 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
         for (int k = 0; k < term_width - 2 && k < 120; k++) fb.append_str("─");
         fb.append_str("\x1b[0m\x1b[K\n");
 
-        char*[16] help_rows = {
-            "\x1b[38;2;102;217;239m\x1b[1mNavigation:\x1b[0m",
+        char*[18] help_rows = {
+            "\x1b[38;2;102;217;239m\x1b[1mVertical Navigation:\x1b[0m",
             "  \x1b[38;2;230;219;116mj / ↓\x1b[0m                 Scroll down 1 line",
             "  \x1b[38;2;230;219;116mk / ↑\x1b[0m                 Scroll up 1 line",
             "  \x1b[38;2;230;219;116md / Ctrl+D\x1b[0m            Half page down",
@@ -358,19 +367,21 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
             "  \x1b[38;2;230;219;116mSpace / Ctrl+F\x1b[0m        Full page down",
             "  \x1b[38;2;230;219;116mCtrl+B\x1b[0m                Full page up",
             "  \x1b[38;2;230;219;116mg / G\x1b[0m                 Jump to Top / Bottom",
-            "  \x1b[38;2;230;219;116mMouse Wheel\x1b[0m           Smooth line scrolling",
+            "",
+            "\x1b[38;2;102;217;239m\x1b[1mHorizontal & Layout:\x1b[0m",
+            "  \x1b[38;2;230;219;116mw\x1b[0m                     Toggle Wrap / No-Wrap mode",
+            "  \x1b[38;2;230;219;116mh / l / ← / →\x1b[0m         Horizontal scroll in no-wrap mode",
             "",
             "\x1b[38;2;102;217;239m\x1b[1mFeatures & Actions:\x1b[0m",
             "  \x1b[38;2;166;226;46mTab / t\x1b[0m               Document Outline (Table of Contents)",
             "  \x1b[38;2;166;226;46m/\x1b[0m                     In-document search (n next, N prev)",
             "  \x1b[38;2;166;226;46my\x1b[0m                     Copy document to clipboard (OSC 52)",
-            "  \x1b[38;2;166;226;46m?\x1b[0m                     Show / hide this help screen",
-            "  \x1b[38;2;249;38;114mq / Ctrl+C\x1b[0m            Exit viewer"
+            "  \x1b[38;2;166;226;46m?\x1b[0m                     Show / hide this help screen"
         };
 
         for (int r = 0; r < view_height; r++)
         {
-            if (r < 16)
+            if (r < 18)
             {
                 fb.append_str("  ");
                 fb.append_str(help_rows[r]);
@@ -530,9 +541,13 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
         fb.append_str(status_msg);
         fb.append_str(" \x1b[0m\x1b[K");
     }
+    else if (no_wrap)
+    {
+        fb.append_str("\x1b[38;2;117;113;94m[? help | w wrap | ←/→ scroll | / search | Tab outline | q quit]\x1b[0m\x1b[K");
+    }
     else
     {
-        fb.append_str("\x1b[38;2;117;113;94m[? help | / search | Tab outline | y copy | q quit]\x1b[0m\x1b[K");
+        fb.append_str("\x1b[38;2;117;113;94m[? help | w no-wrap | / search | Tab outline | y copy | q quit]\x1b[0m\x1b[K");
     }
 
     fb.flush();

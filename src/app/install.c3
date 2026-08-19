@@ -9,14 +9,14 @@ extern fn char* getenv(char* name);
 
 fn int main(String[] args)
 {
-    io::print(ansi::fg_cyan);
+    io::print(ansi::FG_CYAN);
     io::printn("==> Building mdview target…");
     io::print(ansi::RESET);
 
     int res = system("c3c build mdview");
     if (res != 0)
     {
-        io::print(ansi::fg_pink);
+        io::print(ansi::FG_PINK);
         io::printn("Error: Failed to build mdview target");
         io::print(ansi::RESET);
         return 1;
@@ -25,7 +25,7 @@ fn int main(String[] args)
     char* home = getenv("HOME");
     if (home == null || home[0] == 0)
     {
-        io::print(ansi::fg_pink);
+        io::print(ansi::FG_PINK);
         io::printn("Error: HOME environment variable is not set");
         io::print(ansi::RESET);
         return 1;
@@ -45,17 +45,17 @@ fn int main(String[] args)
     int copy_res = system(&cmd[0]);
     if (copy_res != 0)
     {
-        io::print(ansi::fg_pink);
+        io::print(ansi::FG_PINK);
         io::printn("Error: Failed to copy binary to ~/.local/bin/mdview");
         io::print(ansi::RESET);
         return 1;
     }
 
-    io::print(ansi::fg_green);
+    io::print(ansi::FG_GREEN);
     io::print(ansi::BOLD);
     io::print("✔ Successfully installed mdview to ");
     io::print(ansi::RESET);
-    io::print(ansi::fg_cyan);
+    io::print(ansi::FG_CYAN);
     io::printfn("%s/.local/bin/mdview", (ZString)home);
     io::print(ansi::RESET);
     return 0;

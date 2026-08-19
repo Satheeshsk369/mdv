@@ -30,21 +30,21 @@ fn void print_help()
     io::printn("    cat file.md | mdview");
     io::printn("");
     io::printn("Options:");
+    io::printn("    -nw, --no-wrap           Disable column & word wrapping (scroll with ← / →)");
     io::printn("    -p, --pager              Open in pager (less -R -S)");
     io::printn("    -s, --stdout             Print rendered text directly to stdout");
     io::printn("    -P, --plain              Print plain text without ANSI colors");
-    io::printn("    -t, --theme <theme>      Color theme (monokai, catppuccin, nord, tokyonight, dracula, gruvbox)");
     io::printn("    -h, --help               Show help");
     io::printn("    -v, --version            Show version");
     io::printn("");
 }
 
-fn void render_file_stdout(char* filename, int width)
+fn void render_file_stdout(char* filename, int width, bool no_wrap)
 {
     char* content = strutils::load_file_string(filename);
     if (content == null)
     {
-        if (!ansi::plain_mode) io::print(ansi::fg_pink);
+        if (!ansi::plain_mode) io::print(ansi::FG_PINK);
         io::printfn("Error: Could not open file '%s'", (ZString)filename);
         if (!ansi::plain_mode) io::print(ansi::RESET);
         return;
@@ -54,6 +54,7 @@ fn void render_file_stdout(char* filename, int width)
     render::RenderConfig config;
     config.width = width;
     config.plain = ansi::plain_mode;
+    config.no_wrap = no_wrap;
 
     String content_str = (String)content[:strutils::str_len(content)];
     ast::Document doc = parser::parse_document(content_str);
@@ -62,7 +63,7 @@ fn void render_file_stdout(char* filename, int width)
     render::render_to_stdout(&doc, config);
 }
 
-fn void render_file_pager(char* filename, int target_line, int width)
+fn void render_file_pager(char* filename, int target_line, int width, bool no_wrap)
 {
     int v_line = target_line;
     if (target_line > 0)
@@ -73,6 +74,7 @@ fn void render_file_pager(char* filename, int target_line, int width)
             render::RenderConfig config;
             config.width = width;
             config.plain = ansi::plain_mode;
+            config.no_wrap = no_wrap;
 
             String content_str = (String)content[:strutils::str_len(content)];
             ast::Document doc = parser::parse_document(content_str);
@@ -86,7 +88,14 @@ fn void render_file_pager(char* filename, int target_line, int width)
     }
 
     char[1024] cmd;
-    strutils::copy_str(&cmd[0], "mdview --stdout '", 1024);
+    if (no_wrap)
+    {
+        strutils::copy_str(&cmd[0], "mdview -nw --stdout '", 1024);
+    }
+    else
+    {
+        strutils::copy_str(&cmd[0], "mdview --stdout '", 1024);
+    }
     strutils::append_str(&cmd[0], filename, 1024);
     strutils::append_str(&cmd[0], "' | less -R -S", 1024);
 
@@ -111,7 +120,7 @@ fn void render_file_pager(char* filename, int target_line, int width)
     system(&cmd[0]);
 }
 
-fn void read_and_render_stdin(int width)
+fn void read_and_render_stdin(int width, bool no_wrap)
 {
     const usz MAX_TOTAL = 4 * 1024 * 1024; // 4MB
     char[] buf_slice = mem::alloc_array(char, (sz)MAX_TOTAL);
@@ -132,6 +141,7 @@ fn void read_and_render_stdin(int width)
         render::RenderConfig config;
         config.width = width;
         config.plain = ansi::plain_mode;
+        config.no_wrap = no_wrap;
 
         String content_str = (String)buf_slice[:total];
         ast::Document doc = parser::parse_document(content_str);
@@ -145,6 +155,7 @@ fn int main(String[] args)
 {
     bool force_stdout = false;
     bool pager_mode = false;
+    bool no_wrap = false;
     char* target_file = null;
     int target_line = 0;
 
@@ -161,13 +172,9 @@ fn int main(String[] args)
             print_version();
             return 0;
         }
-        if (strutils::str_eq(arg, "-t") || strutils::str_eq(arg, "--theme"))
+        if (strutils::str_eq(arg, "-nw") || strutils::str_eq(arg, "--no-wrap"))
         {
-            if ((usz)(i + 1) < args.len)
-            {
-                i++;
-                ansi::set_theme((char*)args[i].ptr);
-            }
+            no_wrap = true;
             continue;
         }
         if (strutils::str_eq(arg, "-w") || strutils::str_eq(arg, "--watch"))
@@ -225,26 +232,26 @@ fn int main(String[] args)
         // 1. One-shot static pager
         if (pager_mode)
         {
-            render_file_pager(target_file, target_line, width);
+            render_file_pager(target_file, target_line, width, no_wrap);
             return 0;
         }
 
         // 2. Direct stdout stream
         if (force_stdout || !terminal::is_tty())
         {
-            render_file_stdout(target_file, width);
+            render_file_stdout(target_file, width, no_wrap);
             return 0;
         }
 
         // 3. Default: Live watch viewer with auto line sync & full colors
-        app::run_watch(target_file, target_line);
+        app::run_watch(target_file, target_line, no_wrap);
         return 0;
     }
 
     // If stdin is piped or '-' specified
     if (strutils::str_eq(target_file, "-") || isatty(0) == 0)
     {
-        read_and_render_stdin(width);
+        read_and_render_stdin(width, no_wrap);
         return 0;
     }
 

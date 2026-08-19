@@ -398,8 +398,15 @@ fn void render_wrapped_spans(
             if (cur_w + url_w > max_w && cur_w > cont_prefix_w)
             {
                 emit_rendered_line(ctx, &cur_line, src_line);
-                if (prefix_str != null) { cur_line.append_zstr(prefix_str); cur_w = cont_prefix_w; }
-                else cur_w = 0;
+                if (prefix_str != null)
+                {
+                    cur_line.append_zstr(prefix_str);
+                    cur_w = cont_prefix_w;
+                }
+                else
+                {
+                    cur_w = 0;
+                }
             }
             else
             {
@@ -682,8 +689,14 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                         render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, &pfx_cont[0], "✔  ", plain, config.no_wrap);
                     case ast::ListKind.BULLET:
                         char* b_glyph = "• ";
-                        if (b.list_item.indent_level >= 4) b_glyph = "▪ ";
-                        else if (b.list_item.indent_level >= 2) b_glyph = "◦ ";
+                        if (b.list_item.indent_level >= 4)
+                        {
+                            b_glyph = "▪ ";
+                        }
+                        else if (b.list_item.indent_level >= 2)
+                        {
+                            b_glyph = "◦ ";
+                        }
 
                         pfx_first[pf_p] = 0;
                         pfx_cont[pc_p++] = ' '; pfx_cont[pc_p++] = ' ';
