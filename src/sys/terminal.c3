@@ -64,7 +64,8 @@ bool raw_mode_active = false;
 fn int get_width()
 {
     WinSize ws;
-    if (ioctl(1, 0x5413, &ws) == 0 && ws.ws_col > 0)
+    // Try Linux TIOCGWINSZ (0x5413) and macOS / BSD TIOCGWINSZ (0x40087468)
+    if ((ioctl(1, 0x5413, &ws) == 0 || ioctl(1, 0x40087468, &ws) == 0) && ws.ws_col > 0)
     {
         return (int)ws.ws_col;
     }
@@ -86,9 +87,21 @@ fn int get_width()
 fn int get_height()
 {
     WinSize ws;
-    if (ioctl(1, 0x5413, &ws) == 0 && ws.ws_row > 0)
+    if ((ioctl(1, 0x5413, &ws) == 0 || ioctl(1, 0x40087468, &ws) == 0) && ws.ws_row > 0)
     {
         return (int)ws.ws_row;
+    }
+    char* env_row = getenv("LINES");
+    if (env_row != null && env_row[0] != 0)
+    {
+        int val = 0;
+        int i = 0;
+        while (env_row[i] >= '0' && env_row[i] <= '9')
+        {
+            val = val * 10 + (int)(env_row[i] - '0');
+            i++;
+        }
+        if (val > 0) return val;
     }
     return 24;
 }
