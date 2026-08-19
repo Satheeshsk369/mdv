@@ -963,10 +963,21 @@ fn String transform_math(ast::Arena* arena, String input)
                         else if (strutils::string_eq(scmd, "theta")) { mb.append_str("ᶿ"); }
                         else if (strutils::string_eq(scmd, "phi")) { mb.append_str("ᵠ"); }
                         else if (strutils::string_eq(scmd, "chi")) { mb.append_str("ᵡ"); }
-                        else if (strutils::string_eq(scmd, "infty")) { mb.append_str("᪲"); }
+                        else if (strutils::string_eq(scmd, "infty")) { mb.append_str("∞"); }
+                        else if (strutils::string_eq(scmd, "to") || strutils::string_eq(scmd, "rightarrow")) { mb.append_str("→"); }
                         else
                         {
-                            mb.append_slice(scmd);
+                            bool found = false;
+                            for (usz s = 0; s < SYMBOLS.len; s++)
+                            {
+                                if (strutils::string_eq(scmd, SYMBOLS[s].name))
+                                {
+                                    mb.append_slice(SYMBOLS[s].glyph);
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) mb.append_slice(scmd);
                         }
                         i = s_end;
                         continue;
@@ -1026,9 +1037,21 @@ fn String transform_math(ast::Arena* arena, String input)
                         else if (strutils::string_eq(scmd, "rho")) { mb.append_str("ᵨ"); }
                         else if (strutils::string_eq(scmd, "phi")) { mb.append_str("ᵩ"); }
                         else if (strutils::string_eq(scmd, "chi")) { mb.append_str("ᵪ"); }
+                        else if (strutils::string_eq(scmd, "infty")) { mb.append_str("∞"); }
+                        else if (strutils::string_eq(scmd, "to") || strutils::string_eq(scmd, "rightarrow")) { mb.append_str("→"); }
                         else
                         {
-                            mb.append_slice(scmd);
+                            bool found = false;
+                            for (usz s = 0; s < SYMBOLS.len; s++)
+                            {
+                                if (strutils::string_eq(scmd, SYMBOLS[s].name))
+                                {
+                                    mb.append_slice(SYMBOLS[s].glyph);
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) mb.append_slice(scmd);
                         }
                         i = s_end;
                         continue;

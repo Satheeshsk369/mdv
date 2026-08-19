@@ -30,6 +30,16 @@ $$ x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} $$
 
 $$ \lim_{x \to 0} \frac{\sin(x)}{x} = 1 $$
 
+$$ (x + y)^n = \sum_{k=0}^n \binom{n}{k} x^{n-k} y^k $$
+
+$$ \mathcal{F}\{f(t)\} = \int_{-\infty}^{\infty} f(t) e^{-i \omega t} dt $$
+
+$$ x = \frac{1}{1 + \frac{1}{1 + \frac{1}{x}}} $$
+
+$$ \det(A) = \begin{vmatrix} a & b \\ c & d \end{vmatrix} = ad - bc $$
+
+$$ \operatorname{sgn}(x) = \begin{cases} 1 & \text{if } x > 0 \\ 0 & \text{if } x = 0 \\ -1 & \text{if } x < 0 \end{cases} $$
+
 $$ A = \begin{pmatrix} 1 & 0 & 0 \\ 0 & 1 & 0 \\ 0 & 0 & 1 \end{pmatrix} $$
 
 $$ f(x) = \begin{cases} \frac{x^2 - 1}{x - 1} & \text{if } x \neq 1 \\ 2 & \text{if } x = 1 \end{cases} $$

@@ -612,9 +612,63 @@ fn MathBox box_limits_op(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup
     return res;
 }
 
+fn String try_unicode_superscript(ast::Arena* arena, String s)
+{
+    if (s.len == 0) return "";
+    MathRowBuilder mb;
+    mb.init((usz)(s.len * 4 + 8));
+    defer mb.free();
+
+    for (usz i = 0; i < (usz)s.len; i++)
+    {
+        char* sup = get_superscript_char(s[i]);
+        if (sup == null) return "";
+        mb.append_zstr(sup);
+    }
+    return mb.to_arena_string(arena);
+}
+
+fn String try_unicode_subscript(ast::Arena* arena, String s)
+{
+    if (s.len == 0) return "";
+    MathRowBuilder mb;
+    mb.init((usz)(s.len * 4 + 8));
+    defer mb.free();
+
+    for (usz i = 0; i < (usz)s.len; i++)
+    {
+        char* sub = get_subscript_char(s[i]);
+        if (sub == null) return "";
+        mb.append_zstr(sub);
+    }
+    return mb.to_arena_string(arena);
+}
+
 fn MathBox box_supsub(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
 {
     if (sup.width == 0 && sub.width == 0) return base;
+
+    // Compact single-line Unicode superscripts & subscripts for simple base
+    if (base.height == 1 && (sup.height <= 1) && (sub.height <= 1))
+    {
+        String sup_txt = (sup.width > 0) ? sup.rows[0] : "";
+        String sub_txt = (sub.width > 0) ? sub.rows[0] : "";
+
+        String u_sup = (sup.width > 0) ? try_unicode_superscript(arena, sup_txt) : "";
+        String u_sub = (sub.width > 0) ? try_unicode_subscript(arena, sub_txt) : "";
+
+        if ((sup.width == 0 || u_sup.len > 0) && (sub.width == 0 || u_sub.len > 0))
+        {
+            MathRowBuilder mb;
+            mb.init(128);
+            defer mb.free();
+            mb.append_slice(base.rows[0]);
+            if (u_sub.len > 0) mb.append_slice(u_sub);
+            if (u_sup.len > 0) mb.append_slice(u_sup);
+
+            return box_from_string(arena, mb.to_arena_string(arena));
+        }
+    }
 
     int script_w = sup.width > sub.width ? sup.width : sub.width;
     int sup_h = sup.width > 0 ? sup.height : 0;
@@ -921,6 +975,42 @@ fn MathBox parse_math_term(Math2DParser* p)
             MathBox num = parse_math_group(p);
             MathBox den = parse_math_group(p);
             return box_fraction(p.arena, num, den);
+        }
+
+        // ── Binomial: \binom{n}{k} ───────────────────────────────────────────
+        if (strutils::string_eq(cmd, "binom") || strutils::string_eq(cmd, "dbinom") || strutils::string_eq(cmd, "tbinom"))
+        {
+            MathBox top_b = parse_math_group(p);
+            MathBox bot_b = parse_math_group(p);
+            MathBox[2] stack;
+            stack[0] = top_b;
+            stack[1] = bot_b;
+            MathBox inner = box_vconcat_list(p.arena, stack[0:2]);
+            return box_delimiters(p.arena, inner, '(', ')');
+        }
+
+        // ── Overset & Underset: \overset{top}{base}, \underset{bot}{base} ────
+        if (strutils::string_eq(cmd, "overset") || strutils::string_eq(cmd, "stackrel"))
+        {
+            MathBox top_b = parse_math_group(p);
+            MathBox base_b = parse_math_group(p);
+            return box_limits_op(p.arena, base_b, box_empty(p.arena), top_b);
+        }
+        if (strutils::string_eq(cmd, "underset"))
+        {
+            MathBox bot_b = parse_math_group(p);
+            MathBox base_b = parse_math_group(p);
+            return box_limits_op(p.arena, base_b, bot_b, box_empty(p.arena));
+        }
+
+        // ── Modulo: \pmod{m} ─────────────────────────────────────────────────
+        if (strutils::string_eq(cmd, "pmod"))
+        {
+            MathBox inner = parse_math_group(p);
+            MathBox mod_txt = box_from_zstr(p.arena, " (mod ");
+            MathBox r_paren = box_from_zstr(p.arena, ")");
+            MathBox mid = box_hconcat(p.arena, mod_txt, inner, 0);
+            return box_hconcat(p.arena, mid, r_paren, 0);
         }
 
         // ── Square Root: \sqrt[deg]{inner} ───────────────────────────────────
@@ -1280,13 +1370,14 @@ fn MathBox parse_math_term(Math2DParser* p)
         return box_from_string(p.arena, num_str);
     }
 
-    // 4. Multi-character operators
-    if (c == '+' || c == '-' || c == '=' || c == '<' || c == '>' || c == '*' || c == '/')
-    {
-        p.get();
-        char[2] ch; ch[0] = c; ch[1] = 0;
-        return box_from_zstr(p.arena, &ch[0]);
-    }
+    // 4. Multi-character operators and relations
+    if (c == '=') { p.get(); return box_from_zstr(p.arena, " = "); }
+    if (c == '+') { p.get(); return box_from_zstr(p.arena, " + "); }
+    if (c == '-') { p.get(); return box_from_zstr(p.arena, " - "); }
+    if (c == '<') { p.get(); return box_from_zstr(p.arena, " < "); }
+    if (c == '>') { p.get(); return box_from_zstr(p.arena, " > "); }
+    if (c == '*') { p.get(); return box_from_zstr(p.arena, " * "); }
+    if (c == ',') { p.get(); return box_from_zstr(p.arena, ", "); }
 
     // 5. Normal character
     p.get();
@@ -1376,12 +1467,7 @@ fn MathBox parse_math_expression(Math2DParser* p, bool stop_at_amp = false, bool
         }
 
         // Concatenate with existing expression
-        int gap = 0;
-        if (res.width > 0)
-        {
-            gap = 0;
-        }
-        res = box_hconcat(p.arena, res, term, gap);
+        res = box_hconcat(p.arena, res, term, 0);
     }
 
     return res;
