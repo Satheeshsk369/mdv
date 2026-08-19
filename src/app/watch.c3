@@ -339,7 +339,7 @@ fn void append_horizontal_slice(FrameBuffer* fb, String line, int scroll_left, i
     }
 }
 
-fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_top, int scroll_left, int view_height, char* filename, int changed_src_line, int term_width, char* status_msg, bool search_active, char* search_query, int match_count, int cur_match_idx, int cur_match_line, bool show_toc, TocList* toc, int toc_cursor, bool show_help, bool no_wrap)
+fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_top, int scroll_left, int view_height, char* filename, int changed_src_line, int term_width, char* status_msg, bool search_active, char* search_query, int match_count, int cur_match_idx, int cur_match_line, bool show_toc, TocList* toc, int toc_cursor, bool show_help, bool no_wrap, bool goto_active = false, char* goto_query = null)
 {
     fb.len = 0;
 
@@ -358,15 +358,15 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
         for (int k = 0; k < term_width - 2 && k < 120; k++) fb.append_str("─");
         fb.append_str("\x1b[0m\x1b[K\n");
 
-        char*[18] help_rows = {
+        char*[19] help_rows = {
             "\x1b[38;2;102;217;239m\x1b[1mVertical Navigation:\x1b[0m",
             "  \x1b[38;2;230;219;116mj / ↓\x1b[0m                 Scroll down 1 line",
             "  \x1b[38;2;230;219;116mk / ↑\x1b[0m                 Scroll up 1 line",
             "  \x1b[38;2;230;219;116md / Ctrl+D\x1b[0m            Half page down",
             "  \x1b[38;2;230;219;116mu / Ctrl+U\x1b[0m            Half page up",
             "  \x1b[38;2;230;219;116mSpace / Ctrl+F\x1b[0m        Full page down",
-            "  \x1b[38;2;230;219;116mCtrl+B\x1b[0m                Full page up",
             "  \x1b[38;2;230;219;116mg / G\x1b[0m                 Jump to Top / Bottom",
+            "  \x1b[38;2;230;219;116m: <line>\x1b[0m              Goto line number (e.g. :42)",
             "",
             "\x1b[38;2;102;217;239m\x1b[1mHorizontal & Layout:\x1b[0m",
             "  \x1b[38;2;230;219;116mw\x1b[0m                     Toggle Wrap / No-Wrap mode",
@@ -375,13 +375,14 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
             "\x1b[38;2;102;217;239m\x1b[1mFeatures & Actions:\x1b[0m",
             "  \x1b[38;2;166;226;46mTab / t\x1b[0m               Document Outline (Table of Contents)",
             "  \x1b[38;2;166;226;46m/\x1b[0m                     In-document search (n next, N prev)",
+            "  \x1b[38;2;166;226;46me\x1b[0m                     Open $EDITOR at current line",
             "  \x1b[38;2;166;226;46my\x1b[0m                     Copy document to clipboard (OSC 52)",
             "  \x1b[38;2;166;226;46m?\x1b[0m                     Show / hide this help screen"
         };
 
         for (int r = 0; r < view_height; r++)
         {
-            if (r < 18)
+            if (r < 19)
             {
                 fb.append_str("  ");
                 fb.append_str(help_rows[r]);
@@ -521,7 +522,13 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
     }
 
     // Bottom Status / Search Bar
-    if (search_active)
+    if (goto_active)
+    {
+        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;253;151;31m\x1b[1m : \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m ");
+        if (goto_query != null) fb.append_str(goto_query);
+        fb.append_str(" \x1b[0m\x1b[38;2;117;113;94m (Enter: Goto line, Esc: Cancel)\x1b[0m\x1b[K");
+    }
+    else if (search_active)
     {
         fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;253;151;31m\x1b[1m / \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m ");
         fb.append_str(search_query);
@@ -618,6 +625,11 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     int search_len = 0;
     search_buf[0] = 0;
 
+    bool goto_mode = false;
+    char[32] goto_buf;
+    int goto_len = 0;
+    goto_buf[0] = 0;
+
     int[128] match_lines;
     int match_count = 0;
     int cur_match_idx = 0;
@@ -627,7 +639,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     int status_ticks = 0;
 
     int cur_match_line = (match_count > 0 && cur_match_idx < match_count) ? match_lines[cur_match_idx] : -1;
-    draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, filename, last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, cur_match_line, show_toc, &toc, toc_cursor, show_help, no_wrap);
+    draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, filename, last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, cur_match_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0]);
     prev_content = content;
     terminal::get_file_state(filename, &prev_state);
 
@@ -717,6 +729,57 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 {
                     search_buf[search_len++] = (char)key;
                     search_buf[search_len] = 0;
+                    need_redraw = true;
+                }
+                continue;
+            }
+
+            // ── Goto Line Mode ───────────────────────────────────────────
+            if (goto_mode)
+            {
+                if (key == 27) // Esc
+                {
+                    goto_mode = false;
+                    goto_len = 0;
+                    goto_buf[0] = 0;
+                    need_redraw = true;
+                }
+                else if (key == 10 || key == 13) // Enter -> Jump to line
+                {
+                    goto_mode = false;
+                    int target_line = strutils::parse_int(&goto_buf[0]);
+                    goto_len = 0;
+                    goto_buf[0] = 0;
+                    if (target_line > 0)
+                    {
+                        int v_line = vdoc.find_visual_line(target_line - 1);
+                        scroll_top = v_line;
+                        if (scroll_top > max_scroll) scroll_top = max_scroll;
+                        if (scroll_top < 0) scroll_top = 0;
+
+                        char[64] msg;
+                        strutils::copy_str(&msg[0], "✔ Jumped to Line ", 64);
+                        char[16] num_str;
+                        strutils::int_to_str(target_line, &num_str[0], 16);
+                        strutils::append_str(&msg[0], &num_str[0], 64);
+                        strutils::copy_str(&status_msg_buf[0], &msg[0], 128);
+                        status_ticks = 40;
+                    }
+                    need_redraw = true;
+                }
+                else if (key == 127 || key == 0x08) // Backspace
+                {
+                    if (goto_len > 0)
+                    {
+                        goto_len--;
+                        goto_buf[goto_len] = 0;
+                        need_redraw = true;
+                    }
+                }
+                else if (key >= '0' && key <= '9' && goto_len < 20)
+                {
+                    goto_buf[goto_len++] = (char)key;
+                    goto_buf[goto_len] = 0;
                     need_redraw = true;
                 }
                 continue;
@@ -895,6 +958,45 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                     need_redraw = true;
                 }
             }
+            else if (key == ':') // Goto line
+            {
+                goto_mode = true;
+                goto_len = 0;
+                goto_buf[0] = 0;
+                need_redraw = true;
+            }
+            else if (key == 'e' || key == 'E') // Open editor at current line
+            {
+                int cur_src = 1;
+                if (scroll_top < (int)vdoc.lines.len && vdoc.lines[scroll_top].src_line >= 0)
+                {
+                    cur_src = vdoc.lines[scroll_top].src_line + 1;
+                }
+                terminal::open_editor_at_line(filename, cur_src);
+
+                char* new_c = strutils::load_file_string(filename);
+                if (new_c != null)
+                {
+                    if (prev_content != null) mem::free(prev_content);
+                    prev_content = new_c;
+                    doc.free();
+                    vdoc.free();
+                    content_str = (String)new_c[:strutils::str_len(new_c)];
+                    doc = parser::parse_document(content_str);
+                    vdoc = render::render_document(&doc, config);
+                    extract_toc(&doc, &vdoc, &toc);
+                    total_lines = vdoc.get_total_lines();
+                    max_scroll = total_lines > 0 ? total_lines - 1 : 0;
+                    scroll_top = vdoc.find_visual_line(cur_src - 1);
+                    if (scroll_top > max_scroll) scroll_top = max_scroll;
+                    if (scroll_top < 0) scroll_top = 0;
+                    terminal::get_file_state(filename, &prev_state);
+                }
+
+                strutils::copy_str(&status_msg_buf[0], "✔ Resumed from Editor", 128);
+                status_ticks = 40;
+                need_redraw = true;
+            }
             else if (key == 'y' || key == 'Y') // Copy document to clipboard
             {
                 if (prev_content != null)
@@ -970,7 +1072,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
         if (need_redraw)
         {
             int active_line = (match_count > 0 && cur_match_idx < match_count) ? match_lines[cur_match_idx] : -1;
-            draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, filename, last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, active_line, show_toc, &toc, toc_cursor, show_help, no_wrap);
+            draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, filename, last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, active_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0]);
         }
 
         terminal::sleep_ms(12);

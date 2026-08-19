@@ -36,6 +36,46 @@ fn void append_str(char* dest, char* src, int max_len)
     dest[d] = 0;
 }
 
+fn void int_to_str(int val, char* out_buf, int max_len)
+{
+    if (out_buf == null || max_len < 2) return;
+    if (val == 0)
+    {
+        out_buf[0] = '0';
+        out_buf[1] = 0;
+        return;
+    }
+
+    char[32] temp;
+    int t_pos = 0;
+    int n = val;
+    bool neg = false;
+    if (n < 0)
+    {
+        neg = true;
+        n = -n;
+    }
+
+    while (n > 0 && t_pos < 30)
+    {
+        temp[t_pos++] = (char)('0' + (n % 10));
+        n /= 10;
+    }
+
+    int o_pos = 0;
+    if (neg && o_pos < max_len - 1)
+    {
+        out_buf[o_pos++] = '-';
+    }
+
+    while (t_pos > 0 && o_pos < max_len - 1)
+    {
+        t_pos--;
+        out_buf[o_pos++] = temp[t_pos];
+    }
+    out_buf[o_pos] = 0;
+}
+
 fn bool str_starts_with(char* str, char* prefix)
 {
     if (str == null || prefix == null) return false;
@@ -311,7 +351,8 @@ fn int parse_int(char* s)
 {
     if (s == null) return 0;
     int i = 0;
-    if (s[0] == '+') i = 1;
+    while (s[i] == ' ' || s[i] == '\t' || s[i] == ':') i++;
+    if (s[i] == '+') i++;
     int val = 0;
     while (s[i] >= '0' && s[i] <= '9')
     {

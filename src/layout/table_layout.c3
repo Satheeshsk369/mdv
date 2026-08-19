@@ -107,8 +107,6 @@ fn void render_single_row(
         {
             dw += strutils::string_display_width(cspans[s].text);
         }
-        int pad = w - dw;
-        if (pad < 0) pad = 0;
 
         ast::Alignment align = (c < (int)table.alignments.len) ? table.alignments[c] : ast::Alignment.LEFT;
 
@@ -126,23 +124,72 @@ fn void render_single_row(
             }
         }
 
-        if (align == ast::Alignment.CENTER)
+        if (dw > w && w >= 3)
         {
-            int lpad = pad / 2;
-            int rpad = pad - lpad;
-            tb.append_spaces(lpad);
-            for (usz s = 0; s < cspans.len; s++) tb.append_slice(cspans[s].text);
-            tb.append_spaces(rpad);
+            // Truncate cell text to fit within column width with an ellipsis
+            int acc_w = 0;
+            for (usz s = 0; s < cspans.len; s++)
+            {
+                String stxt = cspans[s].text;
+                usz cp = 0;
+                while (cp < (usz)stxt.len)
+                {
+                    char ch = stxt[cp];
+                    usz cb = 1;
+                    if ((ch & 0xE0) == 0xC0)
+                    {
+                        cb = 2;
+                    }
+                    else if ((ch & 0xF0) == 0xE0)
+                    {
+                        cb = 3;
+                    }
+                    else if ((ch & 0xF8) == 0xF0)
+                    {
+                        cb = 4;
+                    }
+                    if (cp + cb > (usz)stxt.len)
+                    {
+                        cb = (usz)stxt.len - cp;
+                    }
+
+                    if (acc_w + 1 > w - 1)
+                    {
+                        tb.append_str("…");
+                        acc_w++;
+                        break;
+                    }
+                    for (usz k = 0; k < cb; k++) tb.append_char(stxt[cp + k]);
+                    acc_w++;
+                    cp += cb;
+                }
+                if (acc_w >= w) break;
+            }
+            if (w > acc_w) tb.append_spaces(w - acc_w);
         }
-        else if (align == ast::Alignment.RIGHT)
+        else
         {
-            tb.append_spaces(pad);
-            for (usz s = 0; s < cspans.len; s++) tb.append_slice(cspans[s].text);
-        }
-        else // Left
-        {
-            for (usz s = 0; s < cspans.len; s++) tb.append_slice(cspans[s].text);
-            tb.append_spaces(pad);
+            int pad = w - dw;
+            if (pad < 0) pad = 0;
+
+            if (align == ast::Alignment.CENTER)
+            {
+                int lpad = pad / 2;
+                int rpad = pad - lpad;
+                tb.append_spaces(lpad);
+                for (usz s = 0; s < cspans.len; s++) tb.append_slice(cspans[s].text);
+                tb.append_spaces(rpad);
+            }
+            else if (align == ast::Alignment.RIGHT)
+            {
+                tb.append_spaces(pad);
+                for (usz s = 0; s < cspans.len; s++) tb.append_slice(cspans[s].text);
+            }
+            else // Left
+            {
+                for (usz s = 0; s < cspans.len; s++) tb.append_slice(cspans[s].text);
+                tb.append_spaces(pad);
+            }
         }
 
         if (!plain) tb.append_str((char*)ansi::RESET);
@@ -198,29 +245,42 @@ fn void render_table(ast::TableBlock* table, int src_line, int term_width, bool 
     }
 
     // Adjust for terminal width
-    int total_w = 1;
+    int total_nat = 1;
+    int sum_col_w = 0;
     for (int c = 0; c < cols; c++)
     {
-        total_w += col_widths[c] + 3;
+        sum_col_w += col_widths[c];
+        total_nat += col_widths[c] + 3;
     }
 
-    if (total_w > term_width - 2 && term_width > 20)
+    int max_avail_table = term_width - 2;
+    if (max_avail_table < 20) max_avail_table = 20;
+
+    if (total_nat > max_avail_table)
     {
-        int available = term_width - 2 - (cols * 3 + 1);
-        if (available > cols * 4)
+        int avail_text_budget = max_avail_table - (cols * 3 + 1);
+        if (avail_text_budget < cols * 3) avail_text_budget = cols * 3;
+
+        int distributed = 0;
+        for (int c = 0; c < cols; c++)
         {
-            int fixed_w = 0;
-            for (int c = 0; c < cols - 1; c++)
+            if (sum_col_w > 0)
             {
-                if (col_widths[c] > 20) col_widths[c] = 20;
-                fixed_w += col_widths[c];
+                col_widths[c] = (col_widths[c] * avail_text_budget) / sum_col_w;
             }
-            int last_col = cols - 1;
-            int rem = available - fixed_w;
-            if (rem >= 6)
+            else
             {
-                col_widths[last_col] = rem;
+                col_widths[c] = avail_text_budget / cols;
             }
+            if (col_widths[c] < 3) col_widths[c] = 3;
+            distributed += col_widths[c];
+        }
+
+        // Fix rounding drift on the last column
+        int diff = avail_text_budget - distributed;
+        if (cols > 0 && col_widths[cols - 1] + diff >= 3)
+        {
+            col_widths[cols - 1] += diff;
         }
     }
 

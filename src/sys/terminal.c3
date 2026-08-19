@@ -58,6 +58,7 @@ extern fn int tcgetattr(int fd, Termios* termios_p);
 extern fn int tcsetattr(int fd, int optional_actions, Termios* termios_p);
 extern fn int read(int fd, void* buf, ulong count);
 extern fn int write(int fd, void* buf, ulong count);
+extern fn int system(char* command);
 
 Termios orig_termios;
 bool raw_mode_active = false;
@@ -147,6 +148,41 @@ fn void hide_cursor()
 fn void show_cursor()
 {
     write_direct("\x1b[?25h");
+}
+
+fn void open_editor_at_line(char* filename, int src_line)
+{
+    if (filename == null || filename[0] == 0) return;
+
+    disable_raw_mode();
+    leave_alt_screen();
+
+    char* editor = getenv("EDITOR");
+    if (editor == null || editor[0] == 0)
+    {
+        editor = getenv("VISUAL");
+    }
+    if (editor == null || editor[0] == 0)
+    {
+        editor = "nano";
+    }
+
+    char[1024] cmd_buf;
+    strutils::copy_str(&cmd_buf[0], editor, 1024);
+    strutils::append_str(&cmd_buf[0], " +", 1024);
+
+    char[16] line_str;
+    strutils::int_to_str(src_line, &line_str[0], 16);
+    strutils::append_str(&cmd_buf[0], &line_str[0], 1024);
+
+    strutils::append_str(&cmd_buf[0], " \"", 1024);
+    strutils::append_str(&cmd_buf[0], filename, 1024);
+    strutils::append_str(&cmd_buf[0], "\"", 1024);
+
+    system(&cmd_buf[0]);
+
+    enable_raw_mode();
+    enter_alt_screen();
 }
 
 fn void sleep_ms(uint ms)
