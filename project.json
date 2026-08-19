@@ -30,6 +30,6 @@
       ]
     }
   },
-  "cpu": "generic",
+  "cpu": "native",
   "opt": "O5"
 }

@@ -80,6 +80,89 @@ fn void TableRowBuffer.free(TableRowBuffer* b)
     }
 }
 
+struct WrappedCellLine {
+    char[256] text;
+    int len;
+    int display_width;
+}
+
+struct WrappedCell {
+    WrappedCellLine[12] lines;
+    int count;
+}
+
+fn void wrap_cell(ast::Span[] spans, int max_w, WrappedCell* out_cell)
+{
+    out_cell.count = 0;
+    if (spans.len == 0 || max_w <= 0)
+    {
+        out_cell.count = 1;
+        out_cell.lines[0].text[0] = 0;
+        out_cell.lines[0].len = 0;
+        out_cell.lines[0].display_width = 0;
+        return;
+    }
+
+    int cur_line = 0;
+    out_cell.lines[0].len = 0;
+    out_cell.lines[0].display_width = 0;
+    out_cell.lines[0].text[0] = 0;
+
+    for (usz s = 0; s < spans.len; s++)
+    {
+        String txt = spans[s].text;
+        usz p = 0;
+        usz tlen = (usz)txt.len;
+
+        while (p < tlen)
+        {
+            while (p < tlen && (txt[p] == ' ' || txt[p] == '\t'))
+            {
+                p++;
+            }
+            if (p >= tlen) break;
+
+            usz w_start = p;
+            while (p < tlen && txt[p] != ' ' && txt[p] != '\t' && txt[p] != '\n')
+            {
+                p++;
+            }
+            String word = txt[w_start : p - w_start];
+            int word_w = strutils::string_display_width(word);
+
+            WrappedCellLine* cl = &out_cell.lines[cur_line];
+
+            if (cl.display_width > 0 && cl.display_width + 1 + word_w > max_w && cur_line < 11)
+            {
+                cl.text[cl.len] = 0;
+                cur_line++;
+                cl = &out_cell.lines[cur_line];
+                cl.len = 0;
+                cl.display_width = 0;
+                cl.text[0] = 0;
+            }
+            else if (cl.display_width > 0)
+            {
+                if (cl.len < 250)
+                {
+                    cl.text[cl.len++] = ' ';
+                }
+                cl.display_width++;
+            }
+
+            for (usz k = 0; k < (usz)word.len && cl.len < 250; k++)
+            {
+                cl.text[cl.len++] = word[k];
+            }
+            cl.text[cl.len] = 0;
+            cl.display_width += word_w;
+        }
+    }
+
+    out_cell.lines[cur_line].text[out_cell.lines[cur_line].len] = 0;
+    out_cell.count = cur_line + 1;
+}
+
 fn void render_single_row(
     TableRowBuffer* tb,
     ast::TableBlock* table,
@@ -93,113 +176,88 @@ fn void render_single_row(
     EmitLineFn emit_fn
 )
 {
-    if (!plain) tb.append_str((char*)ansi::FG_MUTED);
-    tb.append_str("│");
-    if (!plain) tb.append_str((char*)ansi::RESET);
+    WrappedCell[16] wrapped;
+    int max_lines = 1;
 
-    for (int c = 0; c < cols; c++)
+    for (int c = 0; c < cols && c < 16; c++)
     {
         int w = (*col_widths)[c];
         ast::Span[] cspans = (c < (int)cells.len) ? cells[c] : {};
-
-        int dw = 0;
-        for (usz s = 0; s < cspans.len; s++)
+        wrap_cell(cspans, w, &wrapped[c]);
+        if (wrapped[c].count > max_lines)
         {
-            dw += strutils::string_display_width(cspans[s].text);
+            max_lines = wrapped[c].count;
         }
+    }
 
-        ast::Alignment align = (c < (int)table.alignments.len) ? table.alignments[c] : ast::Alignment.LEFT;
-
-        tb.append_str(" ");
-        if (!plain)
-        {
-            if (is_header)
-            {
-                tb.append_str((char*)ansi::FG_CYAN);
-                tb.append_str((char*)ansi::BOLD);
-            }
-            else
-            {
-                tb.append_str((char*)ansi::FG_TEXT);
-            }
-        }
-
-        if (dw > w && w >= 3)
-        {
-            // Truncate cell text to fit within column width with an ellipsis
-            int acc_w = 0;
-            for (usz s = 0; s < cspans.len; s++)
-            {
-                String stxt = cspans[s].text;
-                usz cp = 0;
-                while (cp < (usz)stxt.len)
-                {
-                    char ch = stxt[cp];
-                    usz cb = 1;
-                    if ((ch & 0xE0) == 0xC0)
-                    {
-                        cb = 2;
-                    }
-                    else if ((ch & 0xF0) == 0xE0)
-                    {
-                        cb = 3;
-                    }
-                    else if ((ch & 0xF8) == 0xF0)
-                    {
-                        cb = 4;
-                    }
-                    if (cp + cb > (usz)stxt.len)
-                    {
-                        cb = (usz)stxt.len - cp;
-                    }
-
-                    if (acc_w + 1 > w - 1)
-                    {
-                        tb.append_str("…");
-                        acc_w++;
-                        break;
-                    }
-                    for (usz k = 0; k < cb; k++) tb.append_char(stxt[cp + k]);
-                    acc_w++;
-                    cp += cb;
-                }
-                if (acc_w >= w) break;
-            }
-            if (w > acc_w) tb.append_spaces(w - acc_w);
-        }
-        else
-        {
-            int pad = w - dw;
-            if (pad < 0) pad = 0;
-
-            if (align == ast::Alignment.CENTER)
-            {
-                int lpad = pad / 2;
-                int rpad = pad - lpad;
-                tb.append_spaces(lpad);
-                for (usz s = 0; s < cspans.len; s++) tb.append_slice(cspans[s].text);
-                tb.append_spaces(rpad);
-            }
-            else if (align == ast::Alignment.RIGHT)
-            {
-                tb.append_spaces(pad);
-                for (usz s = 0; s < cspans.len; s++) tb.append_slice(cspans[s].text);
-            }
-            else // Left
-            {
-                for (usz s = 0; s < cspans.len; s++) tb.append_slice(cspans[s].text);
-                tb.append_spaces(pad);
-            }
-        }
-
-        if (!plain) tb.append_str((char*)ansi::RESET);
-        tb.append_str(" ");
-
+    for (int line_idx = 0; line_idx < max_lines; line_idx++)
+    {
         if (!plain) tb.append_str((char*)ansi::FG_MUTED);
         tb.append_str("│");
         if (!plain) tb.append_str((char*)ansi::RESET);
+
+        for (int c = 0; c < cols && c < 16; c++)
+        {
+            int w = (*col_widths)[c];
+            ast::Alignment align = (c < (int)table.alignments.len) ? table.alignments[c] : ast::Alignment.LEFT;
+
+            tb.append_str(" ");
+            if (!plain)
+            {
+                if (is_header)
+                {
+                    tb.append_str((char*)ansi::FG_CYAN);
+                    tb.append_str((char*)ansi::BOLD);
+                }
+                else
+                {
+                    tb.append_str((char*)ansi::FG_TEXT);
+                }
+            }
+
+            if (line_idx < wrapped[c].count)
+            {
+                WrappedCellLine* cl = &wrapped[c].lines[line_idx];
+                int dw = cl.display_width;
+                int pad = w - dw;
+                if (pad < 0) pad = 0;
+
+                String cell_text = (String)cl.text[:cl.len];
+
+                if (align == ast::Alignment.CENTER)
+                {
+                    int lpad = pad / 2;
+                    int rpad = pad - lpad;
+                    tb.append_spaces(lpad);
+                    tb.append_slice(cell_text);
+                    tb.append_spaces(rpad);
+                }
+                else if (align == ast::Alignment.RIGHT)
+                {
+                    tb.append_spaces(pad);
+                    tb.append_slice(cell_text);
+                }
+                else // Left
+                {
+                    tb.append_slice(cell_text);
+                    tb.append_spaces(pad);
+                }
+            }
+            else
+            {
+                tb.append_spaces(w);
+            }
+
+            if (!plain) tb.append_str((char*)ansi::RESET);
+            tb.append_str(" ");
+
+            if (!plain) tb.append_str((char*)ansi::FG_MUTED);
+            tb.append_str("│");
+            if (!plain) tb.append_str((char*)ansi::RESET);
+        }
+
+        tb.flush(ctx, src_line, emit_fn);
     }
-    tb.flush(ctx, src_line, emit_fn);
 }
 
 fn void render_table(ast::TableBlock* table, int src_line, int term_width, bool plain, void* ctx, EmitLineFn emit_fn)
@@ -319,6 +377,19 @@ fn void render_table(ast::TableBlock* table, int src_line, int term_width, bool 
     for (usz r = 0; r < table.rows.len; r++)
     {
         render_single_row(&tb, table, table.rows[r], &col_widths, cols, false, plain, src_line, ctx, emit_fn);
+        if (r + 1 < table.rows.len)
+        {
+            if (!plain) tb.append_str((char*)ansi::FG_MUTED);
+            tb.append_str("├");
+            for (int c = 0; c < cols; c++)
+            {
+                tb.append_repeat("─", col_widths[c] + 2);
+                if (c < cols - 1) tb.append_str("┼");
+            }
+            tb.append_str("┤");
+            if (!plain) tb.append_str((char*)ansi::RESET);
+            tb.flush(ctx, src_line, emit_fn);
+        }
     }
 
     // Bottom border: └──────┴──────┘
