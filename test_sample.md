@@ -4,6 +4,8 @@ Welcome to **mdview**! This document tests and demonstrates the full suite of in
 
 ---
 
+$$ \Gamma(x) = \int_0^\infty e^x x^{n-1} dt$$
+
 ## 1. Typography & Formatting
 
 - **Bold tex** with `**bold**` or `__bold__`
