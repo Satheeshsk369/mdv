@@ -184,30 +184,32 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
             }
         }
 
-        // ── B. Accents via Enum ─────────────────────────────────────────────
+        // ── B. Accents via Lookup ──────────────────────────────────────────
         MathAccent accent;
-        if (lookup_accent(cmd, &accent))
+        String combining;
+        bool is_overline;
+        bool is_underline;
+        if (lookup_accent(cmd, &accent, &combining, &is_overline, &is_underline))
         {
             MathBox inner = parse_math_group(p);
-            if (accent == MathAccent.OVERLINE)
+            if (is_overline)
             {
                 *prev_atom = MathAtomKind.INNER;
                 return box_overline(p.arena, inner);
             }
-            if (accent == MathAccent.UNDERLINE)
+            if (is_underline)
             {
                 *prev_atom = MathAtomKind.INNER;
                 return box_underline(p.arena, inner);
             }
 
-            char* combining = get_accent_combining(accent);
             buffer::ByteBuffer mb;
             mb.init(64);
             defer mb.free();
             if (inner.height > 0)
             {
                 mb.append_slice(inner.rows[0]);
-                mb.append_zstr(combining);
+                mb.append_slice(combining);
             }
             *prev_atom = MathAtomKind.ORD;
             return box_from_string(p.arena, mb.to_arena_string(p.arena));

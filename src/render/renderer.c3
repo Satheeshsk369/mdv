@@ -16,6 +16,20 @@ struct RenderConfig {
     bool no_wrap;
 }
 
+struct CalloutTheme {
+    String icon;
+    String label;
+    char* color;
+}
+
+const CalloutTheme[5] CALLOUT_THEMES = {
+    { "ℹ", "NOTE", (char*)ansi::FG_CYAN },
+    { "💡", "TIP", (char*)ansi::FG_GREEN },
+    { "⚠", "WARNING", (char*)ansi::FG_ORANGE },
+    { "📌", "IMPORTANT", (char*)ansi::FG_PURPLE },
+    { "⛔", "CAUTION", (char*)ansi::FG_PINK }
+};
+
 struct DocRenderContext {
     layout::VisualDocument* vdoc;
     ast::Arena* arena;
@@ -586,29 +600,13 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 // Title line
                 if (!plain)
                 {
-                    switch (b.callout.kind)
-                    {
-                        case ast::CalloutKind.NOTE:
-                            lb.append_zstr((char*)ansi::FG_CYAN);
-                            lb.append_zstr((char*)ansi::BOLD);
-                            lb.append_zstr("│ ℹ  NOTE");
-                        case ast::CalloutKind.TIP:
-                            lb.append_zstr((char*)ansi::FG_GREEN);
-                            lb.append_zstr((char*)ansi::BOLD);
-                            lb.append_zstr("│ 💡 TIP");
-                        case ast::CalloutKind.WARNING:
-                            lb.append_zstr((char*)ansi::FG_ORANGE);
-                            lb.append_zstr((char*)ansi::BOLD);
-                            lb.append_zstr("│ ⚠  WARNING");
-                        case ast::CalloutKind.IMPORTANT:
-                            lb.append_zstr((char*)ansi::FG_PURPLE);
-                            lb.append_zstr((char*)ansi::BOLD);
-                            lb.append_zstr("│ 📢 IMPORTANT");
-                        case ast::CalloutKind.CAUTION:
-                            lb.append_zstr((char*)ansi::FG_PINK);
-                            lb.append_zstr((char*)ansi::BOLD);
-                            lb.append_zstr("│ ⛔ CAUTION");
-                    }
+                    CalloutTheme theme = CALLOUT_THEMES[(int)b.callout.kind];
+                    lb.append_zstr(theme.color);
+                    lb.append_zstr((char*)ansi::BOLD);
+                    lb.append_zstr("│ ");
+                    lb.append_slice(theme.icon);
+                    lb.append_spaces(1);
+                    lb.append_slice(theme.label);
                     lb.append_zstr((char*)ansi::RESET);
                 }
                 else

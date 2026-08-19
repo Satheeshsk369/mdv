@@ -12,16 +12,46 @@ enum MathFontStyle {
     BOLDSYMBOL
 }
 
-fn bool lookup_font_style(String name, MathFontStyle* out_style)
+bitstruct MathFontFlags : char {
+    bool blackboard : 0;
+    bool script     : 1;
+    bool fraktur    : 2;
+    bool bold       : 3;
+    bool roman      : 4;
+}
+
+struct FontDef {
+    String name;
+    MathFontStyle style;
+    MathFontFlags flags;
+}
+
+const FontDef[] FONTS = {
+    { "mathbb",     MathFontStyle.MATHBB,     { .blackboard } },
+    { "mathcal",    MathFontStyle.MATHCAL,    { .script } },
+    { "mathscr",    MathFontStyle.MATHCAL,    { .script } },
+    { "mathfrak",   MathFontStyle.MATHFRAK,   { .fraktur } },
+    { "frak",       MathFontStyle.MATHFRAK,   { .fraktur } },
+    { "mathbf",     MathFontStyle.MATHBF,     { .bold } },
+    { "boldsymbol", MathFontStyle.BOLDSYMBOL, { .bold } },
+    { "bm",         MathFontStyle.BOLDSYMBOL, { .bold } },
+    { "mathrm",     MathFontStyle.MATHRM,     { .roman } },
+    { "mathit",     MathFontStyle.MATHIT,     {} },
+    { "mathsf",     MathFontStyle.MATHSF,     {} },
+    { "mathtt",     MathFontStyle.MATHTT,     {} }
+};
+
+fn bool lookup_font_style(String name, MathFontStyle* out_style, MathFontFlags* out_flags = null)
 {
-    if (name == "mathbb") { *out_style = MathFontStyle.MATHBB; return true; }
-    if (name == "mathcal" || name == "mathscr") { *out_style = MathFontStyle.MATHCAL; return true; }
-    if (name == "mathfrak" || name == "frak") { *out_style = MathFontStyle.MATHFRAK; return true; }
-    if (name == "mathbf" || name == "boldsymbol" || name == "bm") { *out_style = MathFontStyle.MATHBF; return true; }
-    if (name == "mathrm") { *out_style = MathFontStyle.MATHRM; return true; }
-    if (name == "mathit") { *out_style = MathFontStyle.MATHIT; return true; }
-    if (name == "mathsf") { *out_style = MathFontStyle.MATHSF; return true; }
-    if (name == "mathtt") { *out_style = MathFontStyle.MATHTT; return true; }
+    for (usz i = 0; i < FONTS.len; i++)
+    {
+        if (name == FONTS[i].name)
+        {
+            *out_style = FONTS[i].style;
+            if (out_flags != null) *out_flags = FONTS[i].flags;
+            return true;
+        }
+    }
     return false;
 }
 

@@ -15,38 +15,53 @@ enum MathAccent {
     UNDERLINE
 }
 
-fn bool lookup_accent(String name, MathAccent* out_accent)
+struct AccentDef {
+    String name;
+    MathAccent accent;
+    String combining;
+    bool overline;
+    bool underline;
+}
+
+const AccentDef[] ACCENTS = {
+    { "vec",       MathAccent.VEC,       "⃗", false, false },
+    { "hat",       MathAccent.HAT,       "̂", false, false },
+    { "bar",       MathAccent.BAR,       "̄", false, false },
+    { "dot",       MathAccent.DOT,       "̇", false, false },
+    { "ddot",      MathAccent.DDOT,      "̈", false, false },
+    { "dddot",     MathAccent.DDDOT,     "⃛", false, false },
+    { "ddddot",    MathAccent.DDDDOT,    "⃜", false, false },
+    { "tilde",     MathAccent.TILDE,     "̃", false, false },
+    { "acute",     MathAccent.ACUTE,     "́", false, false },
+    { "grave",     MathAccent.GRAVE,     "̀", false, false },
+    { "overline",  MathAccent.OVERLINE,  "̄", true,  false },
+    { "underline", MathAccent.UNDERLINE, "̄", false, true }
+};
+
+fn bool lookup_accent(String name, MathAccent* out_accent, String* out_combining = null, bool* out_overline = null, bool* out_underline = null)
 {
-    if (name == "vec") { *out_accent = MathAccent.VEC; return true; }
-    if (name == "hat") { *out_accent = MathAccent.HAT; return true; }
-    if (name == "bar") { *out_accent = MathAccent.BAR; return true; }
-    if (name == "dot") { *out_accent = MathAccent.DOT; return true; }
-    if (name == "ddot") { *out_accent = MathAccent.DDOT; return true; }
-    if (name == "dddot") { *out_accent = MathAccent.DDDOT; return true; }
-    if (name == "ddddot") { *out_accent = MathAccent.DDDDOT; return true; }
-    if (name == "tilde") { *out_accent = MathAccent.TILDE; return true; }
-    if (name == "acute") { *out_accent = MathAccent.ACUTE; return true; }
-    if (name == "grave") { *out_accent = MathAccent.GRAVE; return true; }
-    if (name == "overline") { *out_accent = MathAccent.OVERLINE; return true; }
-    if (name == "underline") { *out_accent = MathAccent.UNDERLINE; return true; }
+    for (usz i = 0; i < ACCENTS.len; i++)
+    {
+        if (name == ACCENTS[i].name)
+        {
+            *out_accent = ACCENTS[i].accent;
+            if (out_combining != null) *out_combining = ACCENTS[i].combining;
+            if (out_overline != null) *out_overline = ACCENTS[i].overline;
+            if (out_underline != null) *out_underline = ACCENTS[i].underline;
+            return true;
+        }
+    }
     return false;
 }
 
 fn char* get_accent_combining(MathAccent accent)
 {
-    switch (accent)
+    for (usz i = 0; i < ACCENTS.len; i++)
     {
-        case VEC: return "⃗";
-        case HAT: return "̂";
-        case BAR:
-        case OVERLINE:
-        case UNDERLINE: return "̄";
-        case DOT: return "̇";
-        case DDOT: return "̈";
-        case DDDOT: return "⃛";
-        case DDDDOT: return "⃜";
-        case TILDE: return "̃";
-        case ACUTE: return "́";
-        case GRAVE: return "̀";
+        if (ACCENTS[i].accent == accent)
+        {
+            return ACCENTS[i].combining.ptr;
+        }
     }
+    return "̄";
 }
