@@ -203,6 +203,22 @@ fn void test_latex_2d_fractions_and_matrices() @test
     test::eq(mat.rows[1], "⎝ 0  1 ⎠");
 }
 
+fn void test_bracket_expressions() @test
+{
+    ast::Arena arena;
+    arena.init(8192);
+    defer arena.free();
+
+    // Functional bracket expression like action in physics: S[q] = \int L dt
+    math::MathBox act = math::render_latex_to_box(&arena, "S[q] = \\int L(q, \\dot{q}, t) dt");
+    test::gt(act.width, 10);
+    test::gt(act.height, 0);
+
+    // Matrix index or interval: f(x) \in [a, b]
+    math::MathBox iv = math::render_latex_to_box(&arena, "x \\in [0, 1]");
+    test::gt(iv.width, 5);
+}
+
 fn void test_extensible_arrows() @test
 {
     ast::Arena arena;

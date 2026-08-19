@@ -247,7 +247,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                     if (p.peek() == '[')
                     {
                         p.get();
-                        xsub = parse_math_expression(p, false, false);
+                        xsub = parse_math_expression(p, false, false, true);
                         p.skip_spaces();
                         if (p.peek() == ']') p.get();
                     }
@@ -402,7 +402,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                     if (p.peek() == '[')
                     {
                         p.get();
-                        deg = parse_math_expression(p, false, false);
+                        deg = parse_math_expression(p, false, false, true);
                         p.skip_spaces();
                         if (p.peek() == ']') p.get();
                     }
@@ -883,7 +883,7 @@ fn MathBox parse_math_group(Math2DParser* p)
     return parse_math_term(p, &atom);
 }
 
-fn MathBox parse_math_expression(Math2DParser* p, bool stop_at_amp = false, bool stop_at_bslash = false)
+fn MathBox parse_math_expression(Math2DParser* p, bool stop_at_amp = false, bool stop_at_bslash = false, bool stop_at_rbracket = false)
 {
     MathBox res = box_empty(p.arena);
     MathAtomKind prev_atom = MathAtomKind.OPEN; // Start of expression
@@ -894,7 +894,8 @@ fn MathBox parse_math_expression(Math2DParser* p, bool stop_at_amp = false, bool
         if (p.eof()) break;
 
         char c = p.peek();
-        if (c == '}' || c == ']') break;
+        if (c == '}') break;
+        if (stop_at_rbracket && c == ']') break;
         if (stop_at_amp && c == '&') break;
         if (stop_at_bslash && c == '\\' && p.pos + 1 < (usz)p.src.len && p.src[p.pos + 1] == '\\') break;
 
