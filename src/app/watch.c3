@@ -339,7 +339,7 @@ fn void append_horizontal_slice(FrameBuffer* fb, String line, int scroll_left, i
     }
 }
 
-fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_top, int scroll_left, int view_height, char* filename, int changed_src_line, int term_width, char* status_msg, bool search_active, char* search_query, int match_count, int cur_match_idx, int cur_match_line, bool show_toc, TocList* toc, int toc_cursor, bool show_help, bool no_wrap, bool goto_active = false, char* goto_query = null)
+fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_top, int scroll_left, int view_height, char* filename, int changed_src_line, int term_width, char* status_msg, bool search_active, char* search_query, int match_count, int cur_match_idx, int cur_match_line, bool show_toc, TocList* toc, int toc_cursor, bool show_help, bool no_wrap, bool goto_active = false, char* goto_query = null, int cursor_line = 0)
 {
     fb.len = 0;
 
@@ -473,6 +473,9 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
     int end_idx = scroll_top + view_height;
     if (end_idx > total) end_idx = total;
 
+    int cur_src = (cursor_line >= 0 && cursor_line < total && vdoc.lines[cursor_line].src_line >= 0) ? vdoc.lines[cursor_line].src_line + 1 : 1;
+    int pct = total > 0 ? ((cursor_line + 1) * 100) / total : 0;
+
     fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
     fb.append_str(filename);
     fb.append_str(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m ");
@@ -484,13 +487,15 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
         fb.append_str("\x1b[0m \x1b[38;2;117;113;94m│\x1b[0m ");
     }
 
-    fb.append_str("\x1b[38;2;117;113;94mLines ");
-    fb.append_int(scroll_top + 1);
-    fb.append_str("-");
-    fb.append_int(end_idx);
-    fb.append_str(" of ");
+    fb.append_str("\x1b[38;2;166;226;46m\x1b[1mLn ");
+    fb.append_int(cur_src);
+    fb.append_str("\x1b[0m \x1b[38;2;117;113;94m(");
+    fb.append_int(cursor_line + 1);
+    fb.append_str("/");
     fb.append_int(total);
-    fb.append_str("\x1b[0m\x1b[K\n");
+    fb.append_str(" · ");
+    fb.append_int(pct);
+    fb.append_str("%)\x1b[0m\x1b[K\n");
 
     // Separator line
     fb.append_str("\x1b[38;2;117;113;94m");
@@ -504,20 +509,31 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
     {
         if (i < total)
         {
+            bool is_cursor = (i == cursor_line);
             bool is_cur_line = (i == cur_match_line);
+
+            if (is_cursor)
+            {
+                fb.append_str("\x1b[38;2;102;217;239m\x1b[1m▌\x1b[0m");
+            }
+            else
+            {
+                fb.append_str(" ");
+            }
+
             if (q_str.len > 0 && (search_active || match_count > 0))
             {
                 append_with_search_highlight(fb, vdoc.lines[i].text, q_str, is_cur_line);
             }
             else
             {
-                append_horizontal_slice(fb, vdoc.lines[i].text, scroll_left, term_width);
+                append_horizontal_slice(fb, vdoc.lines[i].text, scroll_left, term_width - 1);
             }
             fb.append_str("\x1b[K\n");
         }
         else
         {
-            fb.append_str("\x1b[38;2;60;60;50m~\x1b[0m\x1b[K\n");
+            fb.append_str(" \x1b[38;2;60;60;50m~\x1b[0m\x1b[K\n");
         }
     }
 
@@ -550,7 +566,9 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
     }
     else
     {
-        fb.append_str("\x1b[38;2;117;113;94m[? Help │ q Quit]\x1b[0m\x1b[K");
+        fb.append_str("\x1b[38;2;117;113;94m[? Help │ \x1b[38;2;166;226;46me Edit (Ln ");
+        fb.append_int(cur_src);
+        fb.append_str(")\x1b[38;2;117;113;94m │ q Quit]\x1b[0m\x1b[K");
     }
 
     fb.flush();
@@ -576,6 +594,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     terminal::FileState prev_state;
     char* prev_content = null;
     int scroll_top = 0;
+    int cursor_line = 0;
     int last_changed_line = initial_line > 0 ? initial_line - 1 : -1;
 
     FrameBuffer fb;
@@ -608,6 +627,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     if (initial_line > 0)
     {
         int v_line = vdoc.find_visual_line(initial_line - 1);
+        cursor_line = v_line;
         int context_offset = view_height / 3;
         if (context_offset < 5) context_offset = 5;
         scroll_top = v_line - context_offset;
@@ -639,7 +659,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     int status_ticks = 0;
 
     int cur_match_line = (match_count > 0 && cur_match_idx < match_count) ? match_lines[cur_match_idx] : -1;
-    draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, filename, last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, cur_match_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0]);
+    draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, filename, last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, cur_match_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line);
     prev_content = content;
     terminal::get_file_state(filename, &prev_state);
 
@@ -753,7 +773,8 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                     if (target_line > 0)
                     {
                         int v_line = vdoc.find_visual_line(target_line - 1);
-                        scroll_top = v_line;
+                        cursor_line = v_line;
+                        scroll_top = v_line - view_height / 3;
                         if (scroll_top > max_scroll) scroll_top = max_scroll;
                         if (scroll_top < 0) scroll_top = 0;
 
@@ -805,7 +826,8 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 {
                     if (toc_cursor < (int)toc.count)
                     {
-                        scroll_top = toc.items[toc_cursor].visual_line;
+                        cursor_line = toc.items[toc_cursor].visual_line;
+                        scroll_top = cursor_line;
                         if (scroll_top > max_scroll) scroll_top = max_scroll;
                         if (scroll_top < 0) scroll_top = 0;
                     }
@@ -837,27 +859,47 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             }
             else if (key == 'j' || key == 1000) // Down
             {
-                if (scroll_top < max_scroll) { scroll_top++; need_redraw = true; }
+                if (cursor_line + 1 < total_lines)
+                {
+                    cursor_line++;
+                    if (cursor_line >= scroll_top + view_height)
+                    {
+                        scroll_top = cursor_line - view_height + 1;
+                    }
+                    need_redraw = true;
+                }
             }
             else if (key == 'k' || key == 1001) // Up
             {
-                if (scroll_top > 0) { scroll_top--; need_redraw = true; }
+                if (cursor_line > 0)
+                {
+                    cursor_line--;
+                    if (cursor_line < scroll_top)
+                    {
+                        scroll_top = cursor_line;
+                    }
+                    need_redraw = true;
+                }
             }
             else if (key == 1012) // Mouse Wheel Up
             {
                 scroll_top -= 3;
                 if (scroll_top < 0) scroll_top = 0;
+                cursor_line -= 3;
+                if (cursor_line < 0) cursor_line = 0;
                 need_redraw = true;
             }
             else if (key == 1013) // Mouse Wheel Down
             {
                 scroll_top += 3;
                 if (scroll_top > max_scroll) scroll_top = max_scroll;
+                cursor_line += 3;
+                if (cursor_line >= total_lines) cursor_line = total_lines > 0 ? total_lines - 1 : 0;
                 need_redraw = true;
             }
             else if (key == 1006 || key == 'h' || key == 'H') // Left arrow
             {
-                if (scroll_left > 0)
+                if (no_wrap && scroll_left > 0)
                 {
                     scroll_left -= 4;
                     if (scroll_left < 0) scroll_left = 0;
@@ -866,8 +908,11 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             }
             else if (key == 1007 || key == 'l' || key == 'L') // Right arrow
             {
-                scroll_left += 4;
-                need_redraw = true;
+                if (no_wrap)
+                {
+                    scroll_left += 4;
+                    need_redraw = true;
+                }
             }
             else if (key == 'w' || key == 'W') // Toggle wrap / no-wrap
             {
@@ -887,35 +932,45 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             }
             else if (key == 'd' || key == 1004) // Half page down
             {
+                cursor_line += view_height / 2;
+                if (cursor_line >= total_lines) cursor_line = total_lines > 0 ? total_lines - 1 : 0;
                 scroll_top += view_height / 2;
                 if (scroll_top > max_scroll) scroll_top = max_scroll;
                 need_redraw = true;
             }
             else if (key == 'u' || key == 1005) // Half page up
             {
+                cursor_line -= view_height / 2;
+                if (cursor_line < 0) cursor_line = 0;
                 scroll_top -= view_height / 2;
                 if (scroll_top < 0) scroll_top = 0;
                 need_redraw = true;
             }
             else if (key == 1002 || key == ' ') // Full page down (Space / PgDn / Ctrl+F)
             {
+                cursor_line += view_height - 2;
+                if (cursor_line >= total_lines) cursor_line = total_lines > 0 ? total_lines - 1 : 0;
                 scroll_top += view_height - 2;
                 if (scroll_top > max_scroll) scroll_top = max_scroll;
                 need_redraw = true;
             }
             else if (key == 1003) // Full page up (PgUp / Ctrl+B)
             {
+                cursor_line -= view_height - 2;
+                if (cursor_line < 0) cursor_line = 0;
                 scroll_top -= view_height - 2;
                 if (scroll_top < 0) scroll_top = 0;
                 need_redraw = true;
             }
             else if (key == 'g' || key == 1008) // Top
             {
+                cursor_line = 0;
                 scroll_top = 0;
                 need_redraw = true;
             }
             else if (key == 'G' || key == 1009) // Bottom
             {
+                cursor_line = total_lines > 0 ? total_lines - 1 : 0;
                 scroll_top = max_scroll;
                 need_redraw = true;
             }
@@ -941,7 +996,8 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 if (match_count > 0)
                 {
                     cur_match_idx = (cur_match_idx + 1) % match_count;
-                    scroll_top = match_lines[cur_match_idx] - view_height / 3;
+                    cursor_line = match_lines[cur_match_idx];
+                    scroll_top = cursor_line - view_height / 3;
                     if (scroll_top < 0) scroll_top = 0;
                     if (scroll_top > max_scroll) scroll_top = max_scroll;
                     need_redraw = true;
@@ -952,7 +1008,8 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 if (match_count > 0)
                 {
                     cur_match_idx = (cur_match_idx - 1 + match_count) % match_count;
-                    scroll_top = match_lines[cur_match_idx] - view_height / 3;
+                    cursor_line = match_lines[cur_match_idx];
+                    scroll_top = cursor_line - view_height / 3;
                     if (scroll_top < 0) scroll_top = 0;
                     if (scroll_top > max_scroll) scroll_top = max_scroll;
                     need_redraw = true;
@@ -967,11 +1024,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             }
             else if (key == 'e' || key == 'E') // Open editor at current line
             {
-                int cur_src = 1;
-                if (scroll_top < (int)vdoc.lines.len && vdoc.lines[scroll_top].src_line >= 0)
-                {
-                    cur_src = vdoc.lines[scroll_top].src_line + 1;
-                }
+                int cur_src = (cursor_line >= 0 && cursor_line < (int)vdoc.lines.len && vdoc.lines[cursor_line].src_line >= 0) ? vdoc.lines[cursor_line].src_line + 1 : 1;
                 terminal::open_editor_at_line(filename, cur_src);
 
                 char* new_c = strutils::load_file_string(filename);
@@ -987,7 +1040,8 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                     extract_toc(&doc, &vdoc, &toc);
                     total_lines = vdoc.get_total_lines();
                     max_scroll = total_lines > 0 ? total_lines - 1 : 0;
-                    scroll_top = vdoc.find_visual_line(cur_src - 1);
+                    cursor_line = vdoc.find_visual_line(cur_src - 1);
+                    scroll_top = cursor_line - view_height / 3;
                     if (scroll_top > max_scroll) scroll_top = max_scroll;
                     if (scroll_top < 0) scroll_top = 0;
                     terminal::get_file_state(filename, &prev_state);
@@ -1072,7 +1126,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
         if (need_redraw)
         {
             int active_line = (match_count > 0 && cur_match_idx < match_count) ? match_lines[cur_match_idx] : -1;
-            draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, filename, last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, active_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0]);
+            draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, filename, last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, active_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line);
         }
 
         terminal::sleep_ms(12);
