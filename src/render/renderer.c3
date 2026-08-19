@@ -665,28 +665,31 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 render_wrapped_spans(&ctx, b.blockquote.spans, b.src_line_start, width - 6, "│ ", "│ ", plain, config.no_wrap);
 
             case ast::BlockKind.LIST_ITEM:
-                char[64] pfx_first;
-                char[64] pfx_cont;
-                int pf_p = 0;
-                int pc_p = 0;
-                for (int spc = 0; spc < b.list_item.indent_level && pf_p < 30; spc++)
+                char[64] pfx_indent;
+                int p_len = 0;
+                for (int spc = 0; spc < b.list_item.indent_level && p_len < 30; spc++)
                 {
-                    pfx_first[pf_p++] = ' ';
-                    pfx_cont[pc_p++] = ' ';
+                    pfx_indent[p_len++] = ' ';
                 }
+                pfx_indent[p_len] = 0;
+
+                char[64] first_full;
+                char[64] cont_full;
+                strutils::copy_str(&first_full[0], &pfx_indent[0], 64);
+                strutils::copy_str(&cont_full[0], &pfx_indent[0], 64);
 
                 switch (b.list_item.kind)
                 {
                     case ast::ListKind.TASK_UNCHECKED:
-                        pfx_first[pf_p++] = ' '; pfx_first[pf_p++] = ' ';
-                        pfx_cont[pc_p++] = ' '; pfx_cont[pc_p++] = ' ';
-                        pfx_first[pf_p] = 0; pfx_cont[pc_p] = 0;
-                        render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, &pfx_cont[0], "☐  ", plain, config.no_wrap);
+                        strutils::append_str(&first_full[0], "☐  ", 64);
+                        strutils::append_str(&cont_full[0], "   ", 64);
+                        render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, &cont_full[0], &first_full[0], plain, config.no_wrap);
+
                     case ast::ListKind.TASK_CHECKED:
-                        pfx_first[pf_p++] = ' '; pfx_first[pf_p++] = ' ';
-                        pfx_cont[pc_p++] = ' '; pfx_cont[pc_p++] = ' ';
-                        pfx_first[pf_p] = 0; pfx_cont[pc_p] = 0;
-                        render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, &pfx_cont[0], "✔  ", plain, config.no_wrap);
+                        strutils::append_str(&first_full[0], "✔  ", 64);
+                        strutils::append_str(&cont_full[0], "   ", 64);
+                        render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, &cont_full[0], &first_full[0], plain, config.no_wrap);
+
                     case ast::ListKind.BULLET:
                         char* b_glyph = "• ";
                         if (b.list_item.indent_level >= 4)
@@ -697,18 +700,14 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                         {
                             b_glyph = "◦ ";
                         }
-
-                        pfx_first[pf_p] = 0;
-                        pfx_cont[pc_p++] = ' '; pfx_cont[pc_p++] = ' ';
-                        pfx_cont[pc_p] = 0;
-
-                        char[64] first_full;
-                        strutils::copy_str(&first_full[0], &pfx_first[0], 64);
                         strutils::append_str(&first_full[0], b_glyph, 64);
+                        strutils::append_str(&cont_full[0], "  ", 64);
+                        render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, &cont_full[0], &first_full[0], plain, config.no_wrap);
 
-                        render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, &pfx_cont[0], &first_full[0], plain, config.no_wrap);
                     default:
-                        render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, "  ", "• ", plain, config.no_wrap);
+                        strutils::append_str(&first_full[0], "• ", 64);
+                        strutils::append_str(&cont_full[0], "  ", 64);
+                        render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, &cont_full[0], &first_full[0], plain, config.no_wrap);
                 }
 
             case ast::BlockKind.TABLE:

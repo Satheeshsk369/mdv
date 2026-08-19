@@ -1,6 +1,7 @@
 module terminal;
 
 import std::io;
+import strutils;
 
 struct WinSize {
     ushort ws_row;
@@ -111,31 +112,41 @@ fn bool is_tty()
     return isatty(1) != 0;
 }
 
+fn void write_direct(char* s)
+{
+    if (s == null) return;
+    int len = strutils::str_len(s);
+    if (len > 0)
+    {
+        write(1, (void*)s, (ulong)len);
+    }
+}
+
 fn void enter_alt_screen()
 {
     // Enable alternate screen + disable autowrap (\x1b[?7l) + mouse tracking + clear + hide cursor
-    io::print("\x1b[?1049h\x1b[?7l\x1b[?1000h\x1b[?1002h\x1b[?1006h\x1b[2J\x1b[3J\x1b[H\x1b[?25l");
+    write_direct("\x1b[?1049h\x1b[?7l\x1b[?1000h\x1b[?1002h\x1b[?1006h\x1b[2J\x1b[3J\x1b[H\x1b[?25l");
 }
 
 fn void leave_alt_screen()
 {
     // Disable mouse tracking + enable autowrap (\x1b[?7h) + leave alternate screen + show cursor
-    io::print("\x1b[?7h\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[?1049l\x1b[?25h\x1b[0m");
+    write_direct("\x1b[?7h\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[?1049l\x1b[?25h\x1b[0m");
 }
 
 fn void clear_screen()
 {
-    io::print("\x1b[2J\x1b[3J\x1b[H");
+    write_direct("\x1b[2J\x1b[3J\x1b[H");
 }
 
 fn void hide_cursor()
 {
-    io::print("\x1b[?25l");
+    write_direct("\x1b[?25l");
 }
 
 fn void show_cursor()
 {
-    io::print("\x1b[?25h");
+    write_direct("\x1b[?25h");
 }
 
 fn void sleep_ms(uint ms)
