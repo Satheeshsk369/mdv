@@ -338,6 +338,96 @@ fn Document parse_document(String content)
             continue;
         }
 
+        // 3. Display Math Block ($$ ... $$ or \begin{equation} ... \end{equation})
+        if (strutils::string_starts_with(trimmed, "$$") || strutils::string_starts_with(trimmed, "\\begin{equation}") || strutils::string_starts_with(trimmed, "\\begin{align}") || strutils::string_starts_with(trimmed, "\\begin{gather}") || strutils::string_starts_with(trimmed, "\\begin{aligned}"))
+        {
+            if (strutils::string_starts_with(trimmed, "$$") && trimmed.len >= 4 && strutils::string_ends_with(trimmed, "$$") && trimmed.len > 4)
+            {
+                String math_content = strutils::string_trim(trimmed[2 : (usz)trimmed.len - 4]);
+                Block b;
+                b.kind = ast::BlockKind.MATH_BLOCK;
+                b.src_line_start = src_start;
+                b.src_line_end = src_start;
+                b.math_block.latex = doc.arena.dup_string(math_content);
+                block_list.push(b);
+                line_idx++;
+                continue;
+            }
+
+            bool is_dollar = strutils::string_starts_with(trimmed, "$$");
+            String end_marker = is_dollar ? "$$" : "\\end{";
+
+            LineList math_lines;
+            math_lines.init(16);
+            defer math_lines.free();
+
+            if (is_dollar && trimmed.len > 2)
+            {
+                math_lines.push(trimmed[2..]);
+            }
+            else if (!is_dollar)
+            {
+                math_lines.push(line);
+            }
+
+            line_idx++;
+            while (line_idx < line_count)
+            {
+                String cur_line = raw_lines.items[line_idx];
+                String cur_trimmed = strutils::string_trim(cur_line);
+
+                if (is_dollar)
+                {
+                    if (strutils::string_ends_with(cur_trimmed, "$$") || strutils::string_starts_with(cur_trimmed, "$$"))
+                    {
+                        if (cur_trimmed.len > 2 && !strutils::string_starts_with(cur_trimmed, "$$"))
+                        {
+                            math_lines.push(cur_trimmed[0 : (usz)cur_trimmed.len - 2]);
+                        }
+                        break;
+                    }
+                }
+                else
+                {
+                    if (strutils::string_starts_with(cur_trimmed, end_marker))
+                    {
+                        math_lines.push(cur_line);
+                        break;
+                    }
+                }
+
+                math_lines.push(cur_line);
+                line_idx++;
+            }
+
+            usz total_math_len = 0;
+            for (usz m = 0; m < math_lines.count; m++)
+            {
+                total_math_len += (usz)math_lines.items[m].len + 1;
+            }
+
+            char* math_buf = (char*)doc.arena.alloc(total_math_len + 1, 1);
+            usz cur_p = 0;
+            for (usz m = 0; m < math_lines.count; m++)
+            {
+                String ml = math_lines.items[m];
+                for (usz k = 0; k < (usz)ml.len; k++) math_buf[cur_p++] = ml[k];
+                math_buf[cur_p++] = ' ';
+            }
+            if (cur_p > 0) cur_p--;
+            math_buf[cur_p] = 0;
+
+            Block b;
+            b.kind = ast::BlockKind.MATH_BLOCK;
+            b.src_line_start = src_start;
+            b.src_line_end = (int)line_idx;
+            b.math_block.latex = (String)math_buf[:cur_p];
+            block_list.push(b);
+
+            line_idx++;
+            continue;
+        }
+
         // 3. Table: starts with | or contains |
         if (strutils::string_starts_with(trimmed, "|") && line_idx + 1 < line_count && is_table_sep_row(raw_lines.items[line_idx + 1]))
         {

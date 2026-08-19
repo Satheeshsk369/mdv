@@ -871,9 +871,6 @@ fn void Math2DParser.skip_spaces(Math2DParser* p)
     }
 }
 
-fn MathBox parse_math_group(Math2DParser* p);
-fn MathBox parse_math_expression(Math2DParser* p, bool stop_at_amp = false, bool stop_at_bslash = false);
-
 fn MathBox parse_math_term(Math2DParser* p)
 {
     p.skip_spaces();
@@ -1001,9 +998,15 @@ fn MathBox parse_math_term(Math2DParser* p)
         }
 
         // ── Limits: \lim, \max, \min, \sup, \inf ─────────────────────────────
-        if (strutils::string_eq(cmd, "lim") || strutils::string_eq(cmd, "max") || strutils::string_eq(cmd, "min") || strutils::string_eq(cmd, "sup") || strutils::string_eq(cmd, "inf"))
+        if (strutils::string_eq(cmd, "lim") || strutils::string_eq(cmd, "liminf") || strutils::string_eq(cmd, "limsup") || strutils::string_eq(cmd, "max") || strutils::string_eq(cmd, "min") || strutils::string_eq(cmd, "sup") || strutils::string_eq(cmd, "inf") || strutils::string_eq(cmd, "argmax") || strutils::string_eq(cmd, "argmin"))
         {
-            MathBox op_box = box_from_string(p.arena, cmd);
+            String op_name = cmd;
+            if (strutils::string_eq(cmd, "liminf")) { op_name = "lim inf"; }
+            else if (strutils::string_eq(cmd, "limsup")) { op_name = "lim sup"; }
+            else if (strutils::string_eq(cmd, "argmax")) { op_name = "arg max"; }
+            else if (strutils::string_eq(cmd, "argmin")) { op_name = "arg min"; }
+
+            MathBox op_box = box_from_string(p.arena, op_name);
             MathBox sub = box_empty(p.arena);
             MathBox sup = box_empty(p.arena);
             for (int k = 0; k < 2; k++)
@@ -1174,9 +1177,11 @@ fn MathBox parse_math_term(Math2DParser* p)
             return box_delimiters(p.arena, inner, open_b, close_b);
         }
 
-        // ── Text / Style Wrappers: \mathbf, \mathbb, \text, etc. ─────────────
-        if (strutils::string_eq(cmd, "mathbf") || strutils::string_eq(cmd, "mathrm") || strutils::string_eq(cmd, "text") || strutils::string_eq(cmd, "operatorname"))
+        // ── Text / Style Wrappers: \mathbf, \mathbb, \text, \operatorname ───
+        if (strutils::string_eq(cmd, "mathbf") || strutils::string_eq(cmd, "mathrm") || strutils::string_eq(cmd, "text") || strutils::string_eq(cmd, "operatorname") || strutils::string_eq(cmd, "mathit") || strutils::string_eq(cmd, "mathsf") || strutils::string_eq(cmd, "mathtt"))
         {
+            p.skip_spaces();
+            if (p.peek() == '*') p.get();
             p.skip_spaces();
             if (p.peek() == '{')
             {
@@ -1250,13 +1255,6 @@ fn MathBox parse_math_term(Math2DParser* p)
         // ── Spacing: \quad, \qquad ───────────────────────────────────────────
         if (strutils::string_eq(cmd, "quad")) return box_spaces(p.arena, 4);
         if (strutils::string_eq(cmd, "qquad")) return box_spaces(p.arena, 8);
-
-        // ── Standard Functions: \sin, \cos, \tan, etc. ───────────────────────
-        if (strutils::string_eq(cmd, "sin") || strutils::string_eq(cmd, "cos") || strutils::string_eq(cmd, "tan") || strutils::string_eq(cmd, "cot") || strutils::string_eq(cmd, "sec") || strutils::string_eq(cmd, "csc") || strutils::string_eq(cmd, "ln") || strutils::string_eq(cmd, "log") || strutils::string_eq(cmd, "exp") || strutils::string_eq(cmd, "arcsin") || strutils::string_eq(cmd, "arccos") || strutils::string_eq(cmd, "arctan") || strutils::string_eq(cmd, "sinh") || strutils::string_eq(cmd, "cosh") || strutils::string_eq(cmd, "tanh"))
-        {
-            p.skip_spaces();
-            return box_from_string(p.arena, cmd);
-        }
 
         // ── Symbol Table Lookup ──────────────────────────────────────────────
         for (usz s = 0; s < SYMBOLS.len; s++)

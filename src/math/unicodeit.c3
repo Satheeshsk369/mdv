@@ -56,6 +56,22 @@ const SymbolEntry[] SYMBOLS = {
     { "Psi", "Ψ" },
     { "Omega", "Ω" },
 
+    // ── Hebrew & Special Letters ─────────────────────────────────────────────
+    { "aleph", "ℵ" },
+    { "beth", "ℶ" },
+    { "gimel", "ℷ" },
+    { "daleth", "ℸ" },
+    { "hbar", "ℏ" },
+    { "ell", "ℓ" },
+    { "wp", "℘" },
+    { "Re", "ℜ" },
+    { "Im", "ℑ" },
+    { "partial", "∂" },
+    { "nabla", "∇" },
+    { "infty", "∞" },
+    { "prime", "′" },
+    { "backprime", "‵" },
+
     // ── Operators & Arithmetic ───────────────────────────────────────────────
     { "pm", "±" },
     { "mp", "∓" },
@@ -71,6 +87,7 @@ const SymbolEntry[] SYMBOLS = {
     { "otimes", "⊗" },
     { "oslash", "⊘" },
     { "odot", "⊙" },
+    { "circledast", "⊛" },
     { "circledcirc", "⊚" },
     { "circleddash", "⊝" },
     { "boxplus", "⊞" },
@@ -81,6 +98,7 @@ const SymbolEntry[] SYMBOLS = {
     { "ddagger", "‡" },
     { "amalg", "⨿" },
     { "wr", "≀" },
+    { "diff", "d" },
 
     // ── Relations & Comparisons ──────────────────────────────────────────────
     { "leq", "≤" },
@@ -90,10 +108,13 @@ const SymbolEntry[] SYMBOLS = {
     { "neq", "≠" },
     { "ne", "≠" },
     { "approx", "≈" },
+    { "approxeq", "≊" },
     { "equiv", "≡" },
     { "sim", "∼" },
+    { "nsim", "≁" },
     { "simeq", "≃" },
     { "cong", "≅" },
+    { "ncong", "≇" },
     { "asymp", "≍" },
     { "doteq", "≐" },
     { "propto", "∝" },
@@ -103,10 +124,16 @@ const SymbolEntry[] SYMBOLS = {
     { "succ", "≻" },
     { "preceq", "≼" },
     { "succeq", "≽" },
+    { "nleq", "≰" },
+    { "ngeq", "≱" },
+    { "nless", "≮" },
+    { "ngtr", "≯" },
     { "subset", "⊂" },
     { "supset", "⊃" },
     { "subseteq", "⊆" },
     { "supseteq", "⊇" },
+    { "subsetneq", "⊊" },
+    { "supsetneq", "⊋" },
     { "sqsubset", "⊏" },
     { "sqsupset", "⊐" },
     { "sqsubseteq", "⊑" },
@@ -114,18 +141,22 @@ const SymbolEntry[] SYMBOLS = {
     { "in", "∈" },
     { "notin", "∉" },
     { "ni", "∋" },
+    { "owns", "∋" },
     { "models", "⊨" },
     { "vdash", "⊢" },
     { "dashv", "⊣" },
     { "perp", "⊥" },
     { "mid", "∣" },
+    { "nmid", "∤" },
     { "parallel", "∥" },
+    { "nparallel", "∦" },
 
-    // ── Sets, Logic & Calculus ───────────────────────────────────────────────
+    // ── Sets, Logic & Geometry ───────────────────────────────────────────────
     { "forall", "∀" },
     { "exists", "∃" },
     { "nexists", "∄" },
     { "neg", "¬" },
+    { "lnot", "¬" },
     { "land", "∧" },
     { "lor", "∨" },
     { "wedge", "∧" },
@@ -138,8 +169,16 @@ const SymbolEntry[] SYMBOLS = {
     { "sqcap", "⊓" },
     { "sqcup", "⊔" },
     { "setminus", "∖" },
+    { "smallsetminus", "∖" },
     { "emptyset", "∅" },
     { "varnothing", "∅" },
+    { "therefore", "∴" },
+    { "because", "∵" },
+    { "angle", "∠" },
+    { "measuredangle", "∡" },
+    { "sphericalangle", "∢" },
+
+    // ── Big Operators ────────────────────────────────────────────────────────
     { "int", "∫" },
     { "iint", "∬" },
     { "iiint", "∭" },
@@ -147,24 +186,15 @@ const SymbolEntry[] SYMBOLS = {
     { "sum", "∑" },
     { "prod", "∏" },
     { "coprod", "∐" },
-    { "nabla", "∇" },
-    { "partial", "∂" },
-    { "infty", "∞" },
-    { "hbar", "ℏ" },
-    { "ell", "ℓ" },
-    { "Re", "ℜ" },
-    { "Im", "ℑ" },
-    { "wp", "℘" },
-    { "aleph", "ℵ" },
-    { "beth", "ℶ" },
-    { "angle", "∠" },
-    { "measuredangle", "∡" },
-    { "sphericalangle", "∢" },
-    { "prime", "′" },
-    { "backprime", "‵" },
+    { "bigcup", "⋃" },
+    { "bigcap", "⋂" },
+    { "bigoplus", "⨁" },
+    { "bigotimes", "⨂" },
+    { "bigsqcup", "⨆" },
+    { "bigvee", "⋁" },
+    { "bigwedge", "⋀" },
 
-    // ── Standard Functions ───────────────────────────────────────────────────
-    { "lim", "lim" },
+    // ── Trigonometric & Hyperbolic ───────────────────────────────────────────
     { "sin", "sin" },
     { "cos", "cos" },
     { "tan", "tan" },
@@ -174,24 +204,77 @@ const SymbolEntry[] SYMBOLS = {
     { "arcsin", "arcsin" },
     { "arccos", "arccos" },
     { "arctan", "arctan" },
+    { "arccot", "arccot" },
+    { "arcsec", "arcsec" },
+    { "arccsc", "arccsc" },
+    { "asin", "asin" },
+    { "acos", "acos" },
+    { "atan", "atan" },
+    { "acot", "acot" },
+    { "asec", "asec" },
+    { "acsc", "acsc" },
     { "sinh", "sinh" },
     { "cosh", "cosh" },
     { "tanh", "tanh" },
     { "coth", "coth" },
+    { "sech", "sech" },
+    { "csch", "csch" },
+    { "arsinh", "arsinh" },
+    { "arcosh", "arcosh" },
+    { "artanh", "artanh" },
+    { "arcoth", "arcoth" },
+    { "asinh", "asinh" },
+    { "acosh", "acosh" },
+    { "atanh", "atanh" },
+
+    // ── Exponential, Logarithmic, Analysis ───────────────────────────────────
     { "ln", "ln" },
     { "log", "log" },
+    { "lg", "lg" },
+    { "lb", "lb" },
     { "exp", "exp" },
-    { "det", "det" },
-    { "dim", "dim" },
-    { "gcd", "gcd" },
-    { "hom", "hom" },
-    { "ker", "ker" },
-    { "deg", "deg" },
-    { "arg", "arg" },
+    { "lim", "lim" },
+    { "liminf", "lim inf" },
+    { "limsup", "lim sup" },
+    { "injlim", "inj lim" },
+    { "projlim", "proj lim" },
     { "max", "max" },
     { "min", "min" },
     { "sup", "sup" },
     { "inf", "inf" },
+    { "argmax", "arg max" },
+    { "argmin", "arg min" },
+    { "arg", "arg" },
+    { "deg", "deg" },
+    { "det", "det" },
+    { "dim", "dim" },
+    { "gcd", "gcd" },
+    { "lcm", "lcm" },
+    { "hom", "hom" },
+    { "ker", "ker" },
+    { "coker", "coker" },
+    { "im", "im" },
+    { "image", "image" },
+    { "tr", "tr" },
+    { "trace", "trace" },
+    { "rank", "rank" },
+    { "diag", "diag" },
+    { "span", "span" },
+    { "sgn", "sgn" },
+    { "sign", "sign" },
+    { "sinc", "sinc" },
+    { "erf", "erf" },
+    { "erfc", "erfc" },
+    { "cov", "cov" },
+    { "var", "var" },
+    { "corr", "corr" },
+    { "grad", "grad" },
+    { "curl", "curl" },
+    { "rot", "rot" },
+    { "Pr", "Pr" },
+    { "mod", "mod" },
+    { "bmod", "mod" },
+    { "pmod", "mod" },
 
     // ── Arrows ───────────────────────────────────────────────────────────────
     { "to", "→" },
@@ -222,8 +305,28 @@ const SymbolEntry[] SYMBOLS = {
     { "leftharpoondown", "↽" },
     { "rightleftharpoons", "⇌" },
     { "leftrightharpoons", "⇋" },
+    { "longrightarrow", "⟶" },
+    { "longleftarrow", "⟵" },
+    { "longleftrightarrow", "⟷" },
+    { "Longrightarrow", "⟹" },
+    { "Longleftarrow", "⟺" },
+    { "Longleftrightarrow", "⟺" },
+    { "longmapsto", "⟼" },
 
-    // ── Ellipses ─────────────────────────────────────────────────────────────
+    // ── Delimiters & Brackets ────────────────────────────────────────────────
+    { "langle", "⟨" },
+    { "rangle", "⟩" },
+    { "lfloor", "⌊" },
+    { "rfloor", "⌋" },
+    { "lceil", "⌈" },
+    { "rceil", "⌉" },
+    { "lbrace", "{" },
+    { "rbrace", "}" },
+    { "vert", "|" },
+    { "Vert", "║" },
+    { "backslash", "\\" },
+
+    // ── Ellipses & Dots ──────────────────────────────────────────────────────
     { "dots", "…" },
     { "ldots", "…" },
     { "cdots", "⋯" },
@@ -457,7 +560,6 @@ fn String transform_math(ast::Arena* arena, String input)
         // ── 1. LaTeX Math Backslash Commands & Spaces ────────────────────────
         if (c == '\\')
         {
-            // Mathematical spacing & escaped symbols
             if (i + 1 < (usz)input.len)
             {
                 char next_c = input[i + 1];
@@ -467,30 +569,30 @@ fn String transform_math(ast::Arena* arena, String input)
                     i += 2;
                     continue;
                 }
-                if (next_c == ',') // Thin space (U+2009)
+                if (next_c == ',')
                 {
                     mb.append_str(" ");
                     i += 2;
                     continue;
                 }
-                if (next_c == ':') // Medium math space (U+205F)
+                if (next_c == ':')
                 {
                     mb.append_str(" ");
                     i += 2;
                     continue;
                 }
-                if (next_c == ';') // Thick space (U+2005)
+                if (next_c == ';')
                 {
                     mb.append_str(" ");
                     i += 2;
                     continue;
                 }
-                if (next_c == '!') // Negative thin space
+                if (next_c == '!')
                 {
                     i += 2;
                     continue;
                 }
-                if (next_c == ' ') // Escaped space
+                if (next_c == ' ')
                 {
                     mb.append_char(' ');
                     i += 2;
@@ -534,11 +636,11 @@ fn String transform_math(ast::Arena* arena, String input)
                 continue;
             }
 
-            // ── Text / Style Wrappers: \text{...}, \mathrm{...}, etc. ─────────
-            if (strutils::string_eq(cmd, "text") || strutils::string_eq(cmd, "mathbf") || strutils::string_eq(cmd, "mathrm") || strutils::string_eq(cmd, "mathit") || strutils::string_eq(cmd, "mathsf") || strutils::string_eq(cmd, "operatorname") || strutils::string_eq(cmd, "hspace") || strutils::string_eq(cmd, "vspace"))
+            // ── Operatorname / Text / Style Wrappers ─────────────────────────
+            if (strutils::string_eq(cmd, "operatorname") || strutils::string_eq(cmd, "text") || strutils::string_eq(cmd, "mathbf") || strutils::string_eq(cmd, "mathrm") || strutils::string_eq(cmd, "mathit") || strutils::string_eq(cmd, "mathsf") || strutils::string_eq(cmd, "hspace") || strutils::string_eq(cmd, "vspace"))
             {
                 i = cmd_end;
-                while (i < (usz)input.len && input[i] == ' ') i++;
+                while (i < (usz)input.len && (input[i] == ' ' || input[i] == '*')) i++;
                 if (i < (usz)input.len && input[i] == '{')
                 {
                     i++;
@@ -552,6 +654,7 @@ fn String transform_math(ast::Arena* arena, String input)
                     }
                     if (i < (usz)input.len && input[i] == '}') i++;
                 }
+                if (strutils::string_eq(cmd, "operatorname")) mb.append_char(' ');
                 continue;
             }
 
@@ -808,18 +911,6 @@ fn String transform_math(ast::Arena* arena, String input)
                 continue;
             }
 
-            // ── Standard Functions: \sin, \cos, \tan, etc. ───────────────────────
-            if (strutils::string_eq(cmd, "sin") || strutils::string_eq(cmd, "cos") || strutils::string_eq(cmd, "tan") || strutils::string_eq(cmd, "cot") || strutils::string_eq(cmd, "sec") || strutils::string_eq(cmd, "csc") || strutils::string_eq(cmd, "ln") || strutils::string_eq(cmd, "log") || strutils::string_eq(cmd, "exp") || strutils::string_eq(cmd, "lim") || strutils::string_eq(cmd, "arcsin") || strutils::string_eq(cmd, "arccos") || strutils::string_eq(cmd, "arctan") || strutils::string_eq(cmd, "sinh") || strutils::string_eq(cmd, "cosh") || strutils::string_eq(cmd, "tanh"))
-            {
-                mb.append_slice(cmd);
-                if (cmd_end < (usz)input.len && input[cmd_end] != '(' && input[cmd_end] != '_' && input[cmd_end] != '^' && input[cmd_end] != ' ')
-                {
-                    mb.append_char(' ');
-                }
-                i = cmd_end;
-                continue;
-            }
-
             // ── Symbol Table Lookup ──────────────────────────────────────────
             bool found_sym = false;
             for (usz s = 0; s < SYMBOLS.len; s++)
@@ -827,6 +918,11 @@ fn String transform_math(ast::Arena* arena, String input)
                 if (strutils::string_eq(cmd, SYMBOLS[s].name))
                 {
                     mb.append_slice(SYMBOLS[s].glyph);
+                    // If followed by an alphanumeric character, add a space
+                    if (cmd_end < (usz)input.len && ((input[cmd_end] >= 'a' && input[cmd_end] <= 'z') || (input[cmd_end] >= 'A' && input[cmd_end] <= 'Z') || (input[cmd_end] >= '0' && input[cmd_end] <= '9')))
+                    {
+                        mb.append_char(' ');
+                    }
                     found_sym = true;
                     i = cmd_end;
                     break;
@@ -834,8 +930,12 @@ fn String transform_math(ast::Arena* arena, String input)
             }
             if (found_sym) continue;
 
-            // If unknown command, emit clean command name
+            // If unknown command, emit clean command name with space
             mb.append_slice(cmd);
+            if (cmd_end < (usz)input.len && ((input[cmd_end] >= 'a' && input[cmd_end] <= 'z') || (input[cmd_end] >= 'A' && input[cmd_end] <= 'Z') || (input[cmd_end] >= '0' && input[cmd_end] <= '9')))
+            {
+                mb.append_char(' ');
+            }
             i = cmd_end;
             continue;
         }
@@ -851,47 +951,19 @@ fn String transform_math(ast::Arena* arena, String input)
                 {
                     if (input[i] == '\\')
                     {
-                        // Parse command inside superscript
                         usz s_start = i + 1;
                         usz s_end = s_start;
                         while (s_end < (usz)input.len && ((input[s_end] >= 'a' && input[s_end] <= 'z') || (input[s_end] >= 'A' && input[s_end] <= 'Z'))) s_end++;
                         String scmd = input[s_start : s_end - s_start];
-                        if (strutils::string_eq(scmd, "alpha"))
-                        {
-                            mb.append_str("ᵅ");
-                        }
-                        else if (strutils::string_eq(scmd, "beta"))
-                        {
-                            mb.append_str("ᵝ");
-                        }
-                        else if (strutils::string_eq(scmd, "gamma"))
-                        {
-                            mb.append_str("ᵞ");
-                        }
-                        else if (strutils::string_eq(scmd, "delta"))
-                        {
-                            mb.append_str("ᵟ");
-                        }
-                        else if (strutils::string_eq(scmd, "epsilon"))
-                        {
-                            mb.append_str("ᵋ");
-                        }
-                        else if (strutils::string_eq(scmd, "theta"))
-                        {
-                            mb.append_str("ᶿ");
-                        }
-                        else if (strutils::string_eq(scmd, "phi"))
-                        {
-                            mb.append_str("ᵠ");
-                        }
-                        else if (strutils::string_eq(scmd, "chi"))
-                        {
-                            mb.append_str("ᵡ");
-                        }
-                        else if (strutils::string_eq(scmd, "infty"))
-                        {
-                            mb.append_str("᪲");
-                        }
+                        if (strutils::string_eq(scmd, "alpha")) { mb.append_str("ᵅ"); }
+                        else if (strutils::string_eq(scmd, "beta")) { mb.append_str("ᵝ"); }
+                        else if (strutils::string_eq(scmd, "gamma")) { mb.append_str("ᵞ"); }
+                        else if (strutils::string_eq(scmd, "delta")) { mb.append_str("ᵟ"); }
+                        else if (strutils::string_eq(scmd, "epsilon")) { mb.append_str("ᵋ"); }
+                        else if (strutils::string_eq(scmd, "theta")) { mb.append_str("ᶿ"); }
+                        else if (strutils::string_eq(scmd, "phi")) { mb.append_str("ᵠ"); }
+                        else if (strutils::string_eq(scmd, "chi")) { mb.append_str("ᵡ"); }
+                        else if (strutils::string_eq(scmd, "infty")) { mb.append_str("᪲"); }
                         else
                         {
                             mb.append_slice(scmd);
@@ -945,31 +1017,15 @@ fn String transform_math(ast::Arena* arena, String input)
                 {
                     if (input[i] == '\\')
                     {
-                        // Parse command inside subscript
                         usz s_start = i + 1;
                         usz s_end = s_start;
                         while (s_end < (usz)input.len && ((input[s_end] >= 'a' && input[s_end] <= 'z') || (input[s_end] >= 'A' && input[s_end] <= 'Z'))) s_end++;
                         String scmd = input[s_start : s_end - s_start];
-                        if (strutils::string_eq(scmd, "beta"))
-                        {
-                            mb.append_str("ᵦ");
-                        }
-                        else if (strutils::string_eq(scmd, "gamma"))
-                        {
-                            mb.append_str("ᵧ");
-                        }
-                        else if (strutils::string_eq(scmd, "rho"))
-                        {
-                            mb.append_str("ᵨ");
-                        }
-                        else if (strutils::string_eq(scmd, "phi"))
-                        {
-                            mb.append_str("ᵩ");
-                        }
-                        else if (strutils::string_eq(scmd, "chi"))
-                        {
-                            mb.append_str("ᵪ");
-                        }
+                        if (strutils::string_eq(scmd, "beta")) { mb.append_str("ᵦ"); }
+                        else if (strutils::string_eq(scmd, "gamma")) { mb.append_str("ᵧ"); }
+                        else if (strutils::string_eq(scmd, "rho")) { mb.append_str("ᵨ"); }
+                        else if (strutils::string_eq(scmd, "phi")) { mb.append_str("ᵩ"); }
+                        else if (strutils::string_eq(scmd, "chi")) { mb.append_str("ᵪ"); }
                         else
                         {
                             mb.append_slice(scmd);

@@ -5,6 +5,7 @@ import std::core::mem;
 import ast;
 import ansi;
 import layout;
+import math;
 import strutils;
 
 struct RenderConfig {
@@ -498,6 +499,32 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
 
             case ast::BlockKind.TABLE:
                 layout::render_table(&b.table, b.src_line_start, width, plain, (void*)&ctx, &emit_table_line_cb);
+
+            case ast::BlockKind.MATH_BLOCK:
+                math::MathBox mbox = math::render_latex_to_box(ctx.arena, b.math_block.latex);
+                int pad_left = 4;
+
+                lb.reset();
+                emit_rendered_line(&ctx, &lb, b.src_line_start);
+
+                for (int r = 0; r < mbox.height; r++)
+                {
+                    lb.reset();
+                    lb.append_spaces(pad_left);
+                    if (!plain)
+                    {
+                        lb.append_zstr((char*)ansi::FG_MATH);
+                    }
+                    lb.append_slice(mbox.rows[r]);
+                    if (!plain)
+                    {
+                        lb.append_zstr((char*)ansi::RESET);
+                    }
+                    emit_rendered_line(&ctx, &lb, b.src_line_start);
+                }
+
+                lb.reset();
+                emit_rendered_line(&ctx, &lb, b.src_line_end);
 
             case ast::BlockKind.PARAGRAPH:
                 render_spans(&lb, b.paragraph.spans, plain);

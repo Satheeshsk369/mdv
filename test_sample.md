@@ -22,7 +22,17 @@ Welcome to **mdview**! This document tests and demonstrates the full suite of in
 - Greek letters and roots: $\alpha + \beta^2 = \sqrt{\gamma} \cdot \theta$
 - Limits & Calculus: $\lim_{x \to 0} \frac{\sin(x)}{x} = 1$ and $\frac{d}{dx}(e^x) = e^x$
 
-$$ e^x = \sum_0^{\infty} \frac{x^n}{n!}  $$
+$$ e^x = \sum_{n=0}^{\infty} \frac{x^n}{n!} $$
+
+$$ \int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi} $$
+
+$$ x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} $$
+
+$$ \lim_{x \to 0} \frac{\sin(x)}{x} = 1 $$
+
+$$ A = \begin{pmatrix} 1 & 0 & 0 \\ 0 & 1 & 0 \\ 0 & 0 & 1 \end{pmatrix} $$
+
+$$ f(x) = \begin{cases} \frac{x^2 - 1}{x - 1} & \text{if } x \neq 1 \\ 2 & \text{if } x = 1 \end{cases} $$
 
 ### Complex Equations
 - Gaussian integral: $\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}$
