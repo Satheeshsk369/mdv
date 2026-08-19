@@ -1034,6 +1034,16 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 {
                     if (toc_cursor > 0) { toc_cursor--; need_redraw = true; }
                 }
+                else if (key == 'g' || key == 1008) // Top
+                {
+                    toc_cursor = 0;
+                    need_redraw = true;
+                }
+                else if (key == 'G' || key == 1009) // Bottom
+                {
+                    toc_cursor = (int)toc.count > 0 ? (int)toc.count - 1 : 0;
+                    need_redraw = true;
+                }
                 else if (key == 10) // Enter -> Jump to heading
                 {
                     if (toc_cursor < (int)toc.count)
@@ -1089,6 +1099,16 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 else if (key == 'k' || key == 1001) // Up
                 {
                     if (file_cursor > 0) { file_cursor--; need_redraw = true; }
+                }
+                else if (key == 'g' || key == 1008) // Top of tree
+                {
+                    file_cursor = 0;
+                    need_redraw = true;
+                }
+                else if (key == 'G' || key == 1009) // Bottom of tree
+                {
+                    file_cursor = vis_count > 0 ? vis_count - 1 : 0;
+                    need_redraw = true;
                 }
                 else if (key == 'a' || key == 'A') // Toggle all folders
                 {
