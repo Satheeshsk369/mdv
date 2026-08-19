@@ -20,6 +20,9 @@ A standalone, high-performance Markdown and 2D LaTeX math terminal viewer writte
   - Boxed formulas (`\boxed{...}`), horizontal braces (`\overbrace`, `\underbrace`), multi-character vectors (`\overrightarrow{AB}`), and cancellations (`\cancel{x}`).
   - Greek letters, calculus operators, logic, set theory, blackboard bold ($\mathbb{R}$), and calligraphic ($\mathcal{L}$) scripts.
   - Compact single-line Unicode math for inline `$ ... $` equations.
+- **Column & Word Wrapping by Default:**
+  - Paragraphs, callouts, blockquotes, and lists wrap cleanly at word boundaries to fit the terminal width.
+  - Optional `-nw` / `--no-wrap` flag with horizontal scrolling (`←` / `→` or `h` / `l`).
 - **YAML Frontmatter Cards:**
   - Metadata headers (`title:`, `author:`, `date:`, `version:`) automatically format into clean header cards.
 - **Footnotes & References:**
@@ -32,12 +35,12 @@ A standalone, high-performance Markdown and 2D LaTeX math terminal viewer writte
 - **Interactive TUI Controls in Watch Mode:**
   - `Tab` / `t`: Interactive Document Outline (TOC popup) with instant heading jumping.
   - `/`: In-document interactive search with `n` (next) and `N` (previous) match navigation.
+  - `w`: Toggle between Wrap mode and No-Wrap mode.
+  - `h` / `l` / `←` / `→`: Horizontal scroll in no-wrap mode.
   - `?`: Toggle in-viewer interactive keybindings help screen.
   - `Esc`: Dismiss search highlights or close modal dialogs (does not quit).
   - `y`: Instant document copying to system clipboard via ANSI OSC 52 sequences.
   - `q` / `Ctrl+C`: Exit viewer.
-- **Customizable Color Themes:**
-  - Selectable Truecolor palettes: `monokai` (Default), `catppuccin`, `nord`, `tokyonight`, `dracula`, `gruvbox`.
 
 ---
 
@@ -61,21 +64,16 @@ mdview document.md 45
 mdview document.md:45
 mdview document.md +45
 
-# Select a color theme
-mdview -t catppuccin document.md
-mdview --theme nord document.md
+# Disable line wrapping (scroll horizontally with ← / →)
+mdview -nw document.md
 
 # Print rendered output directly to stdout (useful for AI visual output & scripts)
-mdview --stdout document.md
 mdview -s document.md
+mdview --stdout document.md
 
-# Output plain Unicode text without ANSI escape codes
-mdview --plain document.md
-mdview -P document.md
-
-# Open in one-shot less pager (less -R -S)
-mdview --pager document.md
+# Output plain text without ANSI escape codes
 mdview -p document.md
+mdview --plain document.md
 
 # Stream and render from stdin
 curl -s https://raw.githubusercontent.com/.../README.md | mdview

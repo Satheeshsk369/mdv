@@ -13,7 +13,6 @@ import app;
 
 extern fn int isatty(int fd);
 extern fn int read(int fd, void* buf, ulong count);
-extern fn int system(char* command);
 
 fn void print_version()
 {
@@ -30,10 +29,9 @@ fn void print_help()
     io::printn("    cat file.md | mdview");
     io::printn("");
     io::printn("Options:");
-    io::printn("    -nw, --no-wrap           Disable column & word wrapping (scroll with ← / →)");
-    io::printn("    -p, --pager              Open in pager (less -R -S)");
     io::printn("    -s, --stdout             Print rendered text directly to stdout");
-    io::printn("    -P, --plain              Print plain text without ANSI colors");
+    io::printn("    -p, --plain              Print plain text without ANSI formatting");
+    io::printn("    -nw, --no-wrap           Disable line wrapping");
     io::printn("    -h, --help               Show help");
     io::printn("    -v, --version            Show version");
     io::printn("");
@@ -61,63 +59,6 @@ fn void render_file_stdout(char* filename, int width, bool no_wrap)
     defer doc.free();
 
     render::render_to_stdout(&doc, config);
-}
-
-fn void render_file_pager(char* filename, int target_line, int width, bool no_wrap)
-{
-    int v_line = target_line;
-    if (target_line > 0)
-    {
-        char* content = strutils::load_file_string(filename);
-        if (content != null)
-        {
-            render::RenderConfig config;
-            config.width = width;
-            config.plain = ansi::plain_mode;
-            config.no_wrap = no_wrap;
-
-            String content_str = (String)content[:strutils::str_len(content)];
-            ast::Document doc = parser::parse_document(content_str);
-            layout::VisualDocument vdoc = render::render_document(&doc, config);
-            v_line = vdoc.find_visual_line(target_line - 1) + 1;
-
-            doc.free();
-            vdoc.free();
-            mem::free(content);
-        }
-    }
-
-    char[1024] cmd;
-    if (no_wrap)
-    {
-        strutils::copy_str(&cmd[0], "mdview -nw --stdout '", 1024);
-    }
-    else
-    {
-        strutils::copy_str(&cmd[0], "mdview --stdout '", 1024);
-    }
-    strutils::append_str(&cmd[0], filename, 1024);
-    strutils::append_str(&cmd[0], "' | less -R -S", 1024);
-
-    if (v_line > 1)
-    {
-        strutils::append_str(&cmd[0], " +", 1024);
-        char[32] num_buf;
-        int p = 0;
-        int temp = v_line;
-        while (temp > 0)
-        {
-            num_buf[p++] = (char)('0' + (temp % 10));
-            temp /= 10;
-        }
-        for (int i = p - 1; i >= 0; i--)
-        {
-            char[2] ch; ch[0] = num_buf[i]; ch[1] = 0;
-            strutils::append_str(&cmd[0], &ch[0], 1024);
-        }
-    }
-
-    system(&cmd[0]);
 }
 
 fn void read_and_render_stdin(int width, bool no_wrap)
@@ -154,7 +95,6 @@ fn void read_and_render_stdin(int width, bool no_wrap)
 fn int main(String[] args)
 {
     bool force_stdout = false;
-    bool pager_mode = false;
     bool no_wrap = false;
     char* target_file = null;
     int target_line = 0;
@@ -181,17 +121,12 @@ fn int main(String[] args)
         {
             continue;
         }
-        if (strutils::str_eq(arg, "-p") || strutils::str_eq(arg, "--pager"))
-        {
-            pager_mode = true;
-            continue;
-        }
         if (strutils::str_eq(arg, "-s") || strutils::str_eq(arg, "--stdout"))
         {
             force_stdout = true;
             continue;
         }
-        if (strutils::str_eq(arg, "-P") || strutils::str_eq(arg, "--plain"))
+        if (strutils::str_eq(arg, "-p") || strutils::str_eq(arg, "-P") || strutils::str_eq(arg, "--plain"))
         {
             ansi::set_plain(true);
             force_stdout = true;
@@ -229,21 +164,14 @@ fn int main(String[] args)
             target_file[colon_pos] = 0;
         }
 
-        // 1. One-shot static pager
-        if (pager_mode)
-        {
-            render_file_pager(target_file, target_line, width, no_wrap);
-            return 0;
-        }
-
-        // 2. Direct stdout stream
+        // 1. Direct stdout stream
         if (force_stdout || !terminal::is_tty())
         {
             render_file_stdout(target_file, width, no_wrap);
             return 0;
         }
 
-        // 3. Default: Live watch viewer with auto line sync & full colors
+        // 2. Default: Live watch viewer with auto line sync & full colors
         app::run_watch(target_file, target_line, no_wrap);
         return 0;
     }
