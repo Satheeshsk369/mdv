@@ -1,5 +1,17 @@
 module math;
 
+bitstruct MathEnvFlags : uint {
+    bool matrix      : 0; // Standard matrix grid
+    bool cases       : 1; // Piecewise cases block
+    bool align       : 2; // Multi-line derivation aligned at &
+    bool gather      : 3; // Centered multi-line formulas
+    bool array       : 4; // Generic array grid
+    uint col_gap     : 5..7; // Inter-column horizontal gap spaces
+    char align_mode  : 8..15; // 'C' (center), 'L' (left), 'A' (alternating math)
+    char delim_left  : 16..23; // Left delimiter: '(', '[', '{', '|', 'V', or 0
+    char delim_right : 24..31; // Right delimiter: ')', ']', '}', '|', 'V', or 0
+}
+
 enum MathEnvironment {
     MATRIX,
     PMATRIX,
@@ -21,25 +33,49 @@ enum MathEnvironment {
     ARRAY
 }
 
-fn bool lookup_environment(String name, MathEnvironment* out_env)
+struct EnvironmentDef {
+    String name;
+    MathEnvironment env;
+    MathEnvFlags flags;
+}
+
+const EnvironmentDef[] ENVIRONMENTS = {
+    { "matrix",      MathEnvironment.MATRIX,      { .matrix, .col_gap = 2, .align_mode = 'C' } },
+    { "pmatrix",     MathEnvironment.PMATRIX,     { .matrix, .col_gap = 2, .align_mode = 'C', .delim_left = '(', .delim_right = ')' } },
+    { "bmatrix",     MathEnvironment.BMATRIX,     { .matrix, .col_gap = 2, .align_mode = 'C', .delim_left = '[', .delim_right = ']' } },
+    { "vmatrix",     MathEnvironment.VMATRIX,     { .matrix, .col_gap = 2, .align_mode = 'C', .delim_left = '|', .delim_right = '|' } },
+    { "Vmatrix",     MathEnvironment.VM_MATRIX,   { .matrix, .col_gap = 2, .align_mode = 'C', .delim_left = 'V', .delim_right = 'V' } },
+    { "Bmatrix",     MathEnvironment.B_MATRIX,    { .matrix, .col_gap = 2, .align_mode = 'C', .delim_left = '{', .delim_right = '}' } },
+    { "smallmatrix", MathEnvironment.SMALLMATRIX, { .matrix, .col_gap = 2, .align_mode = 'C' } },
+    { "cases",       MathEnvironment.CASES,       { .cases,  .col_gap = 3, .align_mode = 'L', .delim_left = '{' } },
+    { "dcases",      MathEnvironment.DCASES,      { .cases,  .col_gap = 3, .align_mode = 'L', .delim_left = '{' } },
+    { "rcases",      MathEnvironment.RCASES,      { .cases,  .col_gap = 3, .align_mode = 'L', .delim_right = '}' } },
+    { "align",       MathEnvironment.ALIGN,       { .align,  .col_gap = 0, .align_mode = 'A' } },
+    { "align*",      MathEnvironment.ALIGN,       { .align,  .col_gap = 0, .align_mode = 'A' } },
+    { "aligned",     MathEnvironment.ALIGNED,     { .align,  .col_gap = 0, .align_mode = 'A' } },
+    { "split",       MathEnvironment.SPLIT,       { .align,  .col_gap = 0, .align_mode = 'A' } },
+    { "flalign",     MathEnvironment.FLALIGN,     { .align,  .col_gap = 0, .align_mode = 'A' } },
+    { "flalign*",    MathEnvironment.FLALIGN,     { .align,  .col_gap = 0, .align_mode = 'A' } },
+    { "eqnarray",    MathEnvironment.EQNARRAY,    { .align,  .col_gap = 0, .align_mode = 'A' } },
+    { "gather",      MathEnvironment.GATHER,      { .gather, .col_gap = 0, .align_mode = 'C' } },
+    { "gather*",     MathEnvironment.GATHER,      { .gather, .col_gap = 0, .align_mode = 'C' } },
+    { "gathered",    MathEnvironment.GATHERED,    { .gather, .col_gap = 0, .align_mode = 'C' } },
+    { "array",       MathEnvironment.ARRAY,       { .array,  .col_gap = 0, .align_mode = 'A' } }
+};
+
+fn bool lookup_environment(String name, MathEnvironment* out_env, MathEnvFlags* out_flags = null)
 {
-    if (name == "matrix") { *out_env = MathEnvironment.MATRIX; return true; }
-    if (name == "pmatrix") { *out_env = MathEnvironment.PMATRIX; return true; }
-    if (name == "bmatrix") { *out_env = MathEnvironment.BMATRIX; return true; }
-    if (name == "vmatrix") { *out_env = MathEnvironment.VMATRIX; return true; }
-    if (name == "Vmatrix") { *out_env = MathEnvironment.VM_MATRIX; return true; }
-    if (name == "Bmatrix") { *out_env = MathEnvironment.B_MATRIX; return true; }
-    if (name == "smallmatrix") { *out_env = MathEnvironment.SMALLMATRIX; return true; }
-    if (name == "cases") { *out_env = MathEnvironment.CASES; return true; }
-    if (name == "dcases") { *out_env = MathEnvironment.DCASES; return true; }
-    if (name == "rcases") { *out_env = MathEnvironment.RCASES; return true; }
-    if (name == "align" || name == "align*") { *out_env = MathEnvironment.ALIGN; return true; }
-    if (name == "aligned") { *out_env = MathEnvironment.ALIGNED; return true; }
-    if (name == "split") { *out_env = MathEnvironment.SPLIT; return true; }
-    if (name == "gather" || name == "gather*") { *out_env = MathEnvironment.GATHER; return true; }
-    if (name == "gathered") { *out_env = MathEnvironment.GATHERED; return true; }
-    if (name == "flalign" || name == "flalign*") { *out_env = MathEnvironment.FLALIGN; return true; }
-    if (name == "eqnarray") { *out_env = MathEnvironment.EQNARRAY; return true; }
-    if (name == "array") { *out_env = MathEnvironment.ARRAY; return true; }
+    for (usz i = 0; i < ENVIRONMENTS.len; i++)
+    {
+        if (name == ENVIRONMENTS[i].name)
+        {
+            *out_env = ENVIRONMENTS[i].env;
+            if (out_flags != null)
+            {
+                *out_flags = ENVIRONMENTS[i].flags;
+            }
+            return true;
+        }
+    }
     return false;
 }

@@ -122,17 +122,20 @@ struct Block {
     BlockKind kind;
     int src_line_start;
     int src_line_end;
-    FrontmatterBlock frontmatter;
-    HeadingBlock heading;
-    ParagraphBlock paragraph;
-    CodeBlock code;
-    BlockquoteBlock blockquote;
-    CalloutBlock callout;
-    ListItemBlock list_item;
-    TableBlock table;
-    MathBlock math_block;
-    FootnoteDefBlock footnote_def;
-    ImageBlock image_block;
+    union
+    {
+        FrontmatterBlock frontmatter;
+        HeadingBlock heading;
+        ParagraphBlock paragraph;
+        CodeBlock code;
+        BlockquoteBlock blockquote;
+        CalloutBlock callout;
+        ListItemBlock list_item;
+        TableBlock table;
+        MathBlock math_block;
+        FootnoteDefBlock footnote_def;
+        ImageBlock image_block;
+    }
 }
 
 struct Document {

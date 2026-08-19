@@ -82,14 +82,20 @@ fn bool is_ordered_list(String line, usz indent, int* out_num, usz* out_prefix_l
     return false;
 }
 
+fn bool is_heading_prefix(String s)
+{
+    if (s.len < 2 || s[0] != '#') return false;
+    usz h = 0;
+    while (h < (usz)s.len && s[h] == '#') h++;
+    return h >= 1 && h <= 6 && h < (usz)s.len && (s[h] == ' ' || s[h] == '\t');
+}
+
 fn bool is_block_start(String line)
 {
     String trimmed = strutils::string_trim(line);
     if (trimmed.len == 0) return true;
     if (is_thematic_break(line)) return true;
-    if (strutils::string_starts_with(trimmed, "# ") || strutils::string_starts_with(trimmed, "## ") ||
-        strutils::string_starts_with(trimmed, "### ") || strutils::string_starts_with(trimmed, "#### ") ||
-        strutils::string_starts_with(trimmed, "##### ") || strutils::string_starts_with(trimmed, "###### ")) return true;
+    if (is_heading_prefix(trimmed)) return true;
     if (strutils::string_starts_with(trimmed, "```") || strutils::string_starts_with(trimmed, "~~~")) return true;
     if (strutils::string_starts_with(trimmed, "$$") || strutils::string_starts_with(trimmed, "\\begin{")) return true;
     if (strutils::string_starts_with(trimmed, ">")) return true;

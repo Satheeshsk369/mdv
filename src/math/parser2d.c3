@@ -696,55 +696,15 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                     *prev_atom = MathAtomKind.INNER;
 
                     MathEnvironment menv;
-                    if (lookup_environment(env_name, &menv))
+                    MathEnvFlags env_flags;
+                    if (lookup_environment(env_name, &menv, &env_flags))
                     {
-                        switch (menv)
+                        MathBox inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, env_flags.align_mode, (int)env_flags.col_gap);
+                        if (env_flags.delim_left != 0 || env_flags.delim_right != 0)
                         {
-                            case CASES:
-                            case DCASES:
-                                MathBox c_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'L', 3);
-                                return box_delimiters(p.arena, c_inner, '{', (char)0);
-
-                            case RCASES:
-                                MathBox rc_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'L', 3);
-                                return box_delimiters(p.arena, rc_inner, (char)0, '}');
-
-                            case ALIGN:
-                            case ALIGNED:
-                            case SPLIT:
-                            case FLALIGN:
-                            case EQNARRAY:
-                            case ARRAY:
-                                return box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'A', 0);
-
-                            case GATHER:
-                            case GATHERED:
-                                return box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 0);
-
-                            case PMATRIX:
-                                MathBox pm_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
-                                return box_delimiters(p.arena, pm_inner, '(', ')');
-
-                            case BMATRIX:
-                                MathBox bm_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
-                                return box_delimiters(p.arena, bm_inner, '[', ']');
-
-                            case VMATRIX:
-                                MathBox vm_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
-                                return box_delimiters(p.arena, vm_inner, '|', '|');
-
-                            case VM_MATRIX:
-                                MathBox vmm_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
-                                return box_delimiters(p.arena, vmm_inner, 'V', 'V');
-
-                            case B_MATRIX:
-                                MathBox bmm_inner = box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
-                                return box_delimiters(p.arena, bmm_inner, '{', '}');
-
-                            case MATRIX:
-                            case SMALLMATRIX:
-                                return box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);
+                            return box_delimiters(p.arena, inner, env_flags.delim_left, env_flags.delim_right);
                         }
+                        return inner;
                     }
 
                     return box_grid_layout(p.arena, flat_grid, num_rows, num_cols, 'C', 2);

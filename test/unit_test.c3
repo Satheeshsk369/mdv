@@ -260,6 +260,32 @@ fn void test_primes_and_derivatives() @test
     test::gt(p1.width, 0);
 }
 
+fn void test_command_bitstruct_flags() @test
+{
+    math::MathCommand cmd;
+    math::MathCmdFlags flags;
+
+    // Check fraction traits
+    bool found_frac = math::lookup_command("frac", &cmd, &flags);
+    test::eq(found_frac, true);
+    test::eq((int)cmd, (int)math::MathCommand.FRAC);
+    test::eq(flags.fraction, true);
+    assert(flags.arity == 2);
+    test::eq(flags.opt_arg, false);
+
+    // Check sqrt traits (optional root index degree)
+    bool found_sqrt = math::lookup_command("sqrt", &cmd, &flags);
+    test::eq(found_sqrt, true);
+    test::eq((int)cmd, (int)math::MathCommand.SQRT);
+    test::eq(flags.opt_arg, true);
+    assert(flags.arity == 1);
+
+    // Check summation traits
+    bool found_sum = math::lookup_command("sum", &cmd, &flags);
+    test::eq(found_sum, true);
+    test::eq(flags.big_op, true);
+}
+
 fn void test_capi_exports() @test
 {
     // Test 2D export
