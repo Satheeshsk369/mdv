@@ -266,6 +266,26 @@ fn void render_span(LineBuilder* b, ast::Span span, bool plain)
                 b.append_char(')');
                 if (!plain) b.append_zstr((char*)ansi::RESET);
             }
+
+        case ast::SpanKind.IMAGE:
+            if (!plain)
+            {
+                b.append_zstr((char*)ansi::FG_CYAN);
+                b.append_zstr((char*)ansi::ITALIC);
+            }
+            b.append_zstr("🖼  [Image: ");
+            b.append_slice(span.text);
+            b.append_zstr("]");
+            if (!plain) b.append_zstr((char*)ansi::RESET);
+            if (span.url.len > 0)
+            {
+                b.append_char(' ');
+                if (!plain) b.append_zstr((char*)ansi::FG_MUTED);
+                b.append_char('(');
+                b.append_slice(span.url);
+                b.append_char(')');
+                if (!plain) b.append_zstr((char*)ansi::RESET);
+            }
     }
 }
 
@@ -737,6 +757,53 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 }
 
                 lb.reset();
+                emit_rendered_line(&ctx, &lb, b.src_line_end);
+
+            case ast::BlockKind.IMAGE_BLOCK:
+                if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
+                lb.append_zstr("╭── ");
+                if (!plain)
+                {
+                    lb.append_zstr((char*)ansi::FG_CYAN);
+                    lb.append_zstr((char*)ansi::BOLD);
+                }
+                lb.append_zstr("Image");
+                if (b.image_block.alt.len > 0)
+                {
+                    lb.append_zstr(": ");
+                    lb.append_slice(b.image_block.alt);
+                }
+                if (!plain)
+                {
+                    lb.append_zstr((char*)ansi::RESET);
+                    lb.append_zstr((char*)ansi::FG_MUTED);
+                }
+                lb.append_char(' ');
+                int used_w = 4 + 6 + (b.image_block.alt.len > 0 ? (int)b.image_block.alt.len + 2 : 0) + 1;
+                int cbar_len = width - 4 - used_w;
+                if (cbar_len < 4) cbar_len = 4;
+                lb.append_repeat("─", cbar_len);
+                lb.append_zstr("╮");
+                if (!plain) lb.append_zstr((char*)ansi::RESET);
+                emit_rendered_line(&ctx, &lb, b.src_line_start);
+
+                // Body
+                if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
+                lb.append_zstr("│ ");
+                if (!plain) lb.append_zstr((char*)ansi::FG_CYAN);
+                lb.append_zstr("🖼  ");
+                lb.append_slice(b.image_block.url);
+                if (!plain) lb.append_zstr((char*)ansi::RESET);
+                emit_rendered_line(&ctx, &lb, b.src_line_start);
+
+                // Bottom border
+                if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
+                lb.append_zstr("╰");
+                int bbar_len = width - 6;
+                if (bbar_len < 8) bbar_len = 8;
+                lb.append_repeat("─", bbar_len);
+                lb.append_zstr("╯");
+                if (!plain) lb.append_zstr((char*)ansi::RESET);
                 emit_rendered_line(&ctx, &lb, b.src_line_end);
 
             case ast::BlockKind.PARAGRAPH:

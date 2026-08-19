@@ -9,7 +9,8 @@ enum SpanKind {
     MATH_INLINE,
     MATH_DISPLAY,
     LINK,
-    FOOTNOTE_REF
+    FOOTNOTE_REF,
+    IMAGE
 }
 
 struct Span {
@@ -31,7 +32,13 @@ enum BlockKind {
     THEMATIC_BREAK,
     MATH_BLOCK,
     FOOTNOTE_DEF,
+    IMAGE_BLOCK,
     BLANK
+}
+
+struct ImageBlock {
+    String alt;
+    String url;
 }
 
 struct FrontmatterEntry {
@@ -124,6 +131,7 @@ struct Block {
     TableBlock table;
     MathBlock math_block;
     FootnoteDefBlock footnote_def;
+    ImageBlock image_block;
 }
 
 struct Document {

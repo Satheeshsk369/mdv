@@ -393,7 +393,7 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
             fb.append_str("\x1b[K\n");
         }
 
-        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Help \x1b[0m\x1b[38;2;117;113;94m [Press ?, Esc, or q to return to document]\x1b[0m\x1b[K");
+        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Help \x1b[0m\x1b[38;2;117;113;94m [Esc / ? / q: Close]\x1b[0m\x1b[K");
         fb.flush();
         return;
     }
@@ -462,7 +462,7 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
         }
 
         // Bottom status line
-        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Outline \x1b[0m\x1b[38;2;117;113;94m [j/k: Navigate | Enter: Jump to section | Tab/Esc/q: Return to Document]\x1b[0m\x1b[K");
+        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Outline \x1b[0m\x1b[38;2;117;113;94m [Enter: Jump │ Esc: Close]\x1b[0m\x1b[K");
         fb.flush();
         return;
     }
@@ -541,13 +541,9 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
         fb.append_str(status_msg);
         fb.append_str(" \x1b[0m\x1b[K");
     }
-    else if (no_wrap)
-    {
-        fb.append_str("\x1b[38;2;117;113;94m[? help | w wrap | ←/→ scroll | / search | Tab outline | q quit]\x1b[0m\x1b[K");
-    }
     else
     {
-        fb.append_str("\x1b[38;2;117;113;94m[? help | w no-wrap | / search | Tab outline | y copy | q quit]\x1b[0m\x1b[K");
+        fb.append_str("\x1b[38;2;117;113;94m[? Help │ q Quit]\x1b[0m\x1b[K");
     }
 
     fb.flush();
