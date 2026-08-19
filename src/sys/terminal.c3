@@ -59,6 +59,203 @@ extern fn int tcsetattr(int fd, int optional_actions, Termios* termios_p);
 extern fn int read(int fd, void* buf, ulong count);
 extern fn int write(int fd, void* buf, ulong count);
 extern fn int system(char* command);
+extern fn char* getcwd(char* buf, ulong size);
+extern fn int chdir(char* path);
+
+struct Dirent {
+    ulong d_ino;
+    long d_off;
+    ushort d_reclen;
+    char d_type;
+    char[256] d_name;
+}
+
+extern fn void* opendir(char* name);
+extern fn Dirent* readdir(void* dirp);
+extern fn int closedir(void* dirp);
+
+struct TreeNode {
+    char[128] path;
+    char[64] name;
+    int depth;
+    bool is_dir;
+    bool is_expanded;
+    bool is_current;
+    bool is_last;
+}
+
+struct FileTree {
+    TreeNode[128] nodes;
+    usz count;
+}
+
+fn bool dir_has_markdown(char* dir_path, int depth_limit)
+{
+    if (depth_limit <= 0) return false;
+    void* d = opendir(dir_path);
+    if (d == null) return false;
+
+    Dirent* ent = null;
+    bool found = false;
+    while ((ent = readdir(d)) != null)
+    {
+        char* name = &ent.d_name[0];
+        if (name[0] == '.') continue;
+        if (strutils::str_ends_with(name, ".md") || strutils::str_ends_with(name, ".markdown"))
+        {
+            found = true;
+            break;
+        }
+        if (ent.d_type == 4)
+        {
+            if (strutils::str_eq(name, "build") || strutils::str_eq(name, "node_modules") || strutils::str_eq(name, "target") || strutils::str_eq(name, ".git") || strutils::str_eq(name, "dist") || strutils::str_eq(name, ".cache"))
+            {
+                continue;
+            }
+            char[128] sub_path;
+            strutils::copy_str(&sub_path[0], dir_path, 128);
+            strutils::append_str(&sub_path[0], "/", 128);
+            strutils::append_str(&sub_path[0], name, 128);
+            if (dir_has_markdown(&sub_path[0], depth_limit - 1))
+            {
+                found = true;
+                break;
+            }
+        }
+    }
+    closedir(d);
+    return found;
+}
+
+fn void scan_tree_recursive(
+    char* dir_path,
+    int depth,
+    int max_depth,
+    char* current_file,
+    FileTree* tree
+)
+{
+    if (tree.count >= 120 || depth > max_depth) return;
+
+    void* d = opendir(dir_path);
+    if (d == null) return;
+
+    Dirent[64] dir_entries;
+    int dir_count = 0;
+    Dirent[64] file_entries;
+    int file_count = 0;
+
+    Dirent* ent = null;
+    while ((ent = readdir(d)) != null)
+    {
+        char* name = &ent.d_name[0];
+        if (name[0] == '.') continue;
+
+        if (ent.d_type == 4)
+        {
+            if (strutils::str_eq(name, "build") || strutils::str_eq(name, "node_modules") || strutils::str_eq(name, "target") || strutils::str_eq(name, ".git") || strutils::str_eq(name, "dist") || strutils::str_eq(name, ".cache"))
+            {
+                continue;
+            }
+            char[128] sub_path;
+            if (strutils::str_eq(dir_path, "."))
+            {
+                strutils::copy_str(&sub_path[0], name, 128);
+            }
+            else
+            {
+                strutils::copy_str(&sub_path[0], dir_path, 128);
+                strutils::append_str(&sub_path[0], "/", 128);
+                strutils::append_str(&sub_path[0], name, 128);
+            }
+            if (dir_has_markdown(&sub_path[0], 4) && dir_count < 60)
+            {
+                dir_entries[dir_count++] = *ent;
+            }
+        }
+        else if ((strutils::str_ends_with(name, ".md") || strutils::str_ends_with(name, ".markdown")) && file_count < 60)
+        {
+            file_entries[file_count++] = *ent;
+        }
+    }
+    closedir(d);
+
+    int total_entries = dir_count + file_count;
+    int cur_entry = 0;
+
+    // List files at current depth
+    for (int i = 0; i < file_count && tree.count < 120; i++)
+    {
+        cur_entry++;
+        char* name = &file_entries[i].d_name[0];
+        char[128] rel_path;
+        if (strutils::str_eq(dir_path, "."))
+        {
+            strutils::copy_str(&rel_path[0], name, 128);
+        }
+        else
+        {
+            strutils::copy_str(&rel_path[0], dir_path, 128);
+            strutils::append_str(&rel_path[0], "/", 128);
+            strutils::append_str(&rel_path[0], name, 128);
+        }
+
+        TreeNode* node = &tree.nodes[tree.count++];
+        strutils::copy_str(&node.path[0], &rel_path[0], 128);
+        strutils::copy_str(&node.name[0], name, 64);
+        node.depth = depth;
+        node.is_dir = false;
+        node.is_expanded = false;
+        node.is_last = (cur_entry == total_entries);
+        node.is_current = (current_file != null && (strutils::str_eq(&rel_path[0], current_file) || strutils::str_eq(name, current_file)));
+    }
+
+    // List directories at current depth
+    for (int i = 0; i < dir_count && tree.count < 120; i++)
+    {
+        cur_entry++;
+        char* name = &dir_entries[i].d_name[0];
+        char[128] rel_path;
+        if (strutils::str_eq(dir_path, "."))
+        {
+            strutils::copy_str(&rel_path[0], name, 128);
+        }
+        else
+        {
+            strutils::copy_str(&rel_path[0], dir_path, 128);
+            strutils::append_str(&rel_path[0], "/", 128);
+            strutils::append_str(&rel_path[0], name, 128);
+        }
+
+        TreeNode* node = &tree.nodes[tree.count++];
+        strutils::copy_str(&node.path[0], &rel_path[0], 128);
+        strutils::copy_str(&node.name[0], name, 64);
+        node.depth = depth;
+        node.is_dir = true;
+        node.is_expanded = (depth < 3); // Auto-expand up to 3 levels by default
+        node.is_last = (cur_entry == total_entries);
+        node.is_current = false;
+
+        scan_tree_recursive(&rel_path[0], depth + 1, max_depth, current_file, tree);
+    }
+}
+
+fn void scan_file_tree(char* current_file, FileTree* out_tree)
+{
+    out_tree.count = 0;
+
+    // Parent directory entry
+    TreeNode* parent_node = &out_tree.nodes[out_tree.count++];
+    strutils::copy_str(&parent_node.path[0], "..", 128);
+    strutils::copy_str(&parent_node.name[0], "..", 64);
+    parent_node.depth = 0;
+    parent_node.is_dir = true;
+    parent_node.is_expanded = false;
+    parent_node.is_last = false;
+    parent_node.is_current = false;
+
+    scan_tree_recursive(".", 0, 5, current_file, out_tree);
+}
 
 Termios orig_termios;
 bool raw_mode_active = false;

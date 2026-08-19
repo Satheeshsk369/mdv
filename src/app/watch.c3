@@ -216,6 +216,41 @@ fn bool char_eq_ignore_case(char a, char b)
     return a == b;
 }
 
+struct ScrollVelocity {
+    int key_streak;
+    int wheel_streak;
+    int last_dir;
+    int streak_ticks;
+}
+
+fn int get_accelerated_step(ScrollVelocity* v, int dir, bool is_wheel)
+{
+    if (v.last_dir != dir || v.streak_ticks > 8)
+    {
+        v.key_streak = 0;
+        v.wheel_streak = 0;
+    }
+    v.last_dir = dir;
+    v.streak_ticks = 0;
+
+    if (is_wheel)
+    {
+        v.wheel_streak++;
+        if (v.wheel_streak > 12) return 12;
+        if (v.wheel_streak > 6) return 8;
+        if (v.wheel_streak > 2) return 5;
+        return 3;
+    }
+    else
+    {
+        v.key_streak++;
+        if (v.key_streak > 20) return 5;
+        if (v.key_streak > 10) return 3;
+        if (v.key_streak > 4) return 2;
+        return 1;
+    }
+}
+
 fn void append_with_search_highlight(FrameBuffer* fb, String line, String query, bool is_cur_match_line)
 {
     if (query.len == 0)
@@ -339,7 +374,7 @@ fn void append_horizontal_slice(FrameBuffer* fb, String line, int scroll_left, i
     }
 }
 
-fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_top, int scroll_left, int view_height, char* filename, int changed_src_line, int term_width, char* status_msg, bool search_active, char* search_query, int match_count, int cur_match_idx, int cur_match_line, bool show_toc, TocList* toc, int toc_cursor, bool show_help, bool no_wrap, bool goto_active = false, char* goto_query = null, int cursor_line = 0)
+fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_top, int scroll_left, int view_height, char* filename, int changed_src_line, int term_width, char* status_msg, bool search_active, char* search_query, int match_count, int cur_match_idx, int cur_match_line, bool show_toc, TocList* toc, int toc_cursor, bool show_help, bool no_wrap, bool goto_active = false, char* goto_query = null, int cursor_line = 0, bool show_files = false, terminal::FileTree* tree = null, int file_cursor = 0)
 {
     fb.len = 0;
 
@@ -358,10 +393,10 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
         for (int k = 0; k < term_width - 2 && k < 120; k++) fb.append_str("─");
         fb.append_str("\x1b[0m\x1b[K\n");
 
-        char*[19] help_rows = {
+        char*[20] help_rows = {
             "\x1b[38;2;102;217;239m\x1b[1mVertical Navigation:\x1b[0m",
-            "  \x1b[38;2;230;219;116mj / ↓\x1b[0m                 Scroll down 1 line",
-            "  \x1b[38;2;230;219;116mk / ↑\x1b[0m                 Scroll up 1 line",
+            "  \x1b[38;2;230;219;116mj / ↓\x1b[0m                 Scroll down (with acceleration)",
+            "  \x1b[38;2;230;219;116mk / ↑\x1b[0m                 Scroll up (with acceleration)",
             "  \x1b[38;2;230;219;116md / Ctrl+D\x1b[0m            Half page down",
             "  \x1b[38;2;230;219;116mu / Ctrl+U\x1b[0m            Half page up",
             "  \x1b[38;2;230;219;116mSpace / Ctrl+F\x1b[0m        Full page down",
@@ -374,6 +409,7 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
             "",
             "\x1b[38;2;102;217;239m\x1b[1mFeatures & Actions:\x1b[0m",
             "  \x1b[38;2;166;226;46mTab / t\x1b[0m               Document Outline (Table of Contents)",
+            "  \x1b[38;2;166;226;46mo\x1b[0m                     Switch Document (Markdown File Tree)",
             "  \x1b[38;2;166;226;46m/\x1b[0m                     In-document search (n next, N prev)",
             "  \x1b[38;2;166;226;46me\x1b[0m                     Open $EDITOR at current line",
             "  \x1b[38;2;166;226;46my\x1b[0m                     Copy document to clipboard (OSC 52)",
@@ -382,7 +418,7 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
 
         for (int r = 0; r < view_height; r++)
         {
-            if (r < 19)
+            if (r < 20)
             {
                 fb.append_str("  ");
                 fb.append_str(help_rows[r]);
@@ -464,6 +500,157 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
 
         // Bottom status line
         fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Outline \x1b[0m\x1b[38;2;117;113;94m [Enter: Jump │ Esc: Close]\x1b[0m\x1b[K");
+        fb.flush();
+        return;
+    }
+
+    // ── File Tree View ───────────────────────────────────────────────
+    if (show_files && tree != null)
+    {
+        char[256] cwd_buf;
+        char* cwd = terminal::getcwd(&cwd_buf[0], 256);
+        if (cwd == null) cwd = ".";
+
+        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+        fb.append_str(filename);
+        fb.append_str(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;166;226;46m\x1b[1mTree: \x1b[0m\x1b[38;2;248;248;242m");
+        fb.append_str(cwd);
+        fb.append_str("\x1b[0m\x1b[K\n");
+
+        // Separator line
+        fb.append_str("\x1b[38;2;117;113;94m");
+        for (int k = 0; k < term_width - 2 && k < 120; k++) fb.append_str("─");
+        fb.append_str("\x1b[0m\x1b[K\n");
+
+        // Compute visible nodes
+        int[128] vis_idx;
+        int vis_count = 0;
+
+        int[16] collapse_depth;
+        int collapse_count = 0;
+
+        for (usz i = 0; i < tree.count; i++)
+        {
+            terminal::TreeNode* node = &tree.nodes[i];
+            while (collapse_count > 0 && collapse_depth[collapse_count - 1] >= node.depth)
+            {
+                collapse_count--;
+            }
+
+            if (collapse_count == 0 && vis_count < 128)
+            {
+                vis_idx[vis_count++] = (int)i;
+            }
+
+            if (node.is_dir && !node.is_expanded && collapse_count < 15)
+            {
+                collapse_depth[collapse_count++] = node.depth;
+            }
+        }
+
+        int f_offset = 0;
+        if (file_cursor >= view_height)
+        {
+            f_offset = file_cursor - view_height + 1;
+        }
+
+        for (int r = 0; r < view_height; r++)
+        {
+            int v_idx = f_offset + r;
+            if (v_idx < vis_count)
+            {
+                int node_idx = vis_idx[v_idx];
+                terminal::TreeNode* item = &tree.nodes[node_idx];
+                bool is_cur = (v_idx == file_cursor);
+
+                if (is_cur)
+                {
+                    fb.append_str("  \x1b[48;2;49;50;68m\x1b[38;2;166;226;46m\x1b[1m▶ ");
+                }
+                else
+                {
+                    fb.append_str("    ");
+                }
+
+                if (strutils::str_eq(&item.name[0], ".."))
+                {
+                    if (is_cur)
+                    {
+                        fb.append_str("\x1b[48;2;49;50;68m\x1b[38;2;253;151;31m\x1b[1m📁 ../ \x1b[38;2;248;248;242m(Parent Directory)\x1b[0m");
+                    }
+                    else
+                    {
+                        fb.append_str("\x1b[38;2;253;151;31m\x1b[1m📁 ../ \x1b[0m\x1b[38;2;117;113;94m(Parent Directory)\x1b[0m");
+                    }
+                }
+                else
+                {
+                    // Indentation
+                    for (int d = 0; d < item.depth && d < 6; d++)
+                    {
+                        fb.append_str("\x1b[38;2;117;113;94m│   \x1b[0m");
+                    }
+
+                    if (item.is_dir)
+                    {
+                        if (item.is_expanded)
+                        {
+                            fb.append_str("\x1b[38;2;253;151;31m\x1b[1m▾ \x1b[0m");
+                        }
+                        else
+                        {
+                            fb.append_str("\x1b[38;2;253;151;31m\x1b[1m▸ \x1b[0m");
+                        }
+
+                        if (is_cur)
+                        {
+                            fb.append_str("\x1b[48;2;49;50;68m\x1b[38;2;102;217;239m\x1b[1m");
+                        }
+                        else
+                        {
+                            fb.append_str("\x1b[38;2;102;217;239m\x1b[1m");
+                        }
+                        fb.append_str(&item.name[0]);
+                        fb.append_str("/\x1b[0m");
+                    }
+                    else
+                    {
+                        if (item.is_last)
+                        {
+                            fb.append_str("\x1b[38;2;117;113;94m└── \x1b[0m");
+                        }
+                        else
+                        {
+                            fb.append_str("\x1b[38;2;117;113;94m├── \x1b[0m");
+                        }
+
+                        if (is_cur)
+                        {
+                            fb.append_str("\x1b[48;2;49;50;68m\x1b[38;2;248;248;242m\x1b[1m");
+                        }
+                        else
+                        {
+                            fb.append_str("\x1b[38;2;248;248;242m");
+                        }
+                        fb.append_str(&item.name[0]);
+                        fb.append_str("\x1b[0m");
+
+                        if (item.is_current)
+                        {
+                            fb.append_str(" \x1b[38;2;166;226;46m[Active]\x1b[0m");
+                        }
+                    }
+                }
+            }
+            else
+            {
+                fb.append_str("\x1b[38;2;60;60;50m~\x1b[0m");
+            }
+            fb.append_str("\x1b[K\n");
+        }
+
+        // Bottom status line
+        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Tree \x1b[0m\x1b[38;2;117;113;94m [Enter: CD/Open │ a: Toggle all │ ←/→: Fold │ Esc: Close]\x1b[0m\x1b[K");
         fb.flush();
         return;
     }
@@ -566,15 +753,13 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
     }
     else
     {
-        fb.append_str("\x1b[38;2;117;113;94m[? Help │ \x1b[38;2;166;226;46me Edit (Ln ");
-        fb.append_int(cur_src);
-        fb.append_str(")\x1b[38;2;117;113;94m │ q Quit]\x1b[0m\x1b[K");
+        fb.append_str("\x1b[38;2;117;113;94m[? Help │ \x1b[38;2;166;226;46me Edit\x1b[38;2;117;113;94m │ q Quit]\x1b[0m\x1b[K");
     }
 
     fb.flush();
 }
 
-fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false)
+fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false, bool initial_file_picker = false)
 {
     terminal::enable_raw_mode();
     terminal::enter_alt_screen();
@@ -636,9 +821,35 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     }
 
     // TUI state
+    ScrollVelocity velocity = {};
     bool show_toc = false;
     int toc_cursor = 0;
     bool show_help = false;
+
+    bool show_files = initial_file_picker;
+    terminal::FileTree file_tree;
+    int file_cursor = 0;
+    char[256] cur_filename;
+    strutils::copy_str(&cur_filename[0], filename, 256);
+
+    if (initial_file_picker)
+    {
+        terminal::scan_file_tree(&cur_filename[0], &file_tree);
+        int[16] collapse_depth;
+        int collapse_count = 0;
+        int v_count = 0;
+        for (usz f = 0; f < file_tree.count; f++)
+        {
+            terminal::TreeNode* node = &file_tree.nodes[f];
+            while (collapse_count > 0 && collapse_depth[collapse_count - 1] >= node.depth) collapse_count--;
+            if (collapse_count == 0)
+            {
+                if (node.is_current) { file_cursor = v_count; break; }
+                v_count++;
+            }
+            if (node.is_dir && !node.is_expanded && collapse_count < 15) collapse_depth[collapse_count++] = node.depth;
+        }
+    }
 
     bool search_mode = false;
     char[128] search_buf;
@@ -659,7 +870,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     int status_ticks = 0;
 
     int cur_match_line = (match_count > 0 && cur_match_idx < match_count) ? match_lines[cur_match_idx] : -1;
-    draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, filename, last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, cur_match_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line);
+    draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, &cur_filename[0], last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, cur_match_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line, show_files, &file_tree, file_cursor);
     prev_content = content;
     terminal::get_file_state(filename, &prev_state);
 
@@ -680,6 +891,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 need_redraw = true;
             }
         }
+        velocity.streak_ticks++;
 
         // Process keypresses
         while (true)
@@ -837,6 +1049,176 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 continue;
             }
 
+            // ── File Tree Mode ────────────────────────────────────────────
+            if (show_files)
+            {
+                int[128] vis_idx;
+                int vis_count = 0;
+
+                int[16] collapse_depth;
+                int collapse_count = 0;
+
+                for (usz i = 0; i < file_tree.count; i++)
+                {
+                    terminal::TreeNode* node = &file_tree.nodes[i];
+                    while (collapse_count > 0 && collapse_depth[collapse_count - 1] >= node.depth)
+                    {
+                        collapse_count--;
+                    }
+
+                    if (collapse_count == 0 && vis_count < 128)
+                    {
+                        vis_idx[vis_count++] = (int)i;
+                    }
+
+                    if (node.is_dir && !node.is_expanded && collapse_count < 15)
+                    {
+                        collapse_depth[collapse_count++] = node.depth;
+                    }
+                }
+
+                if (key == 27 || key == 'o' || key == 'O' || key == 'q')
+                {
+                    show_files = false;
+                    need_redraw = true;
+                }
+                else if (key == 'j' || key == 1000) // Down
+                {
+                    if (file_cursor + 1 < vis_count) { file_cursor++; need_redraw = true; }
+                }
+                else if (key == 'k' || key == 1001) // Up
+                {
+                    if (file_cursor > 0) { file_cursor--; need_redraw = true; }
+                }
+                else if (key == 'a' || key == 'A') // Toggle all folders
+                {
+                    bool any_expanded = false;
+                    for (usz i = 0; i < file_tree.count; i++)
+                    {
+                        if (file_tree.nodes[i].is_dir && file_tree.nodes[i].is_expanded)
+                        {
+                            any_expanded = true;
+                            break;
+                        }
+                    }
+
+                    bool target_state = !any_expanded;
+                    for (usz i = 0; i < file_tree.count; i++)
+                    {
+                        if (file_tree.nodes[i].is_dir && !strutils::str_eq(&file_tree.nodes[i].name[0], ".."))
+                        {
+                            file_tree.nodes[i].is_expanded = target_state;
+                        }
+                    }
+                    need_redraw = true;
+                }
+                else if (key == 1006 || key == 'h' || key == 'H') // Left arrow -> Collapse or jump to parent
+                {
+                    if (file_cursor < vis_count)
+                    {
+                        int node_idx = vis_idx[file_cursor];
+                        terminal::TreeNode* sel = &file_tree.nodes[node_idx];
+                        if (sel.is_dir && sel.is_expanded)
+                        {
+                            sel.is_expanded = false;
+                        }
+                        else if (sel.depth > 0)
+                        {
+                            for (int p = file_cursor - 1; p >= 0; p--)
+                            {
+                                int p_idx = vis_idx[p];
+                                if (file_tree.nodes[p_idx].is_dir && file_tree.nodes[p_idx].depth < sel.depth)
+                                {
+                                    file_cursor = p;
+                                    break;
+                                }
+                            }
+                        }
+                        need_redraw = true;
+                    }
+                }
+                else if (key == 1007 || key == 'l' || key == 'L') // Right arrow -> Expand or step into child
+                {
+                    if (file_cursor < vis_count)
+                    {
+                        int node_idx = vis_idx[file_cursor];
+                        terminal::TreeNode* sel = &file_tree.nodes[node_idx];
+                        if (sel.is_dir)
+                        {
+                            if (!sel.is_expanded)
+                            {
+                                sel.is_expanded = true;
+                            }
+                            else if (file_cursor + 1 < vis_count)
+                            {
+                                file_cursor++;
+                            }
+                            need_redraw = true;
+                        }
+                    }
+                }
+                else if (key == ' ') // Space -> Toggle expand/collapse
+                {
+                    if (file_cursor < vis_count)
+                    {
+                        int node_idx = vis_idx[file_cursor];
+                        terminal::TreeNode* sel = &file_tree.nodes[node_idx];
+                        if (sel.is_dir)
+                        {
+                            sel.is_expanded = !sel.is_expanded;
+                            need_redraw = true;
+                        }
+                    }
+                }
+                else if (key == 10 || key == 13) // Enter -> Open file or CD into folder
+                {
+                    if (file_cursor < vis_count)
+                    {
+                        int node_idx = vis_idx[file_cursor];
+                        terminal::TreeNode* sel = &file_tree.nodes[node_idx];
+                        if (sel.is_dir)
+                        {
+                            terminal::chdir(&sel.path[0]);
+                            terminal::scan_file_tree(&cur_filename[0], &file_tree);
+                            file_cursor = 0;
+                            need_redraw = true;
+                        }
+                        else
+                        {
+                            char* new_path = &sel.path[0];
+                            char* new_c = strutils::load_file_string(new_path);
+                            if (new_c != null)
+                            {
+                                if (prev_content != null) mem::free(prev_content);
+                                prev_content = new_c;
+                                strutils::copy_str(&cur_filename[0], new_path, 256);
+                                filename = &cur_filename[0];
+                                doc.free();
+                                vdoc.free();
+                                content_str = (String)new_c[:strutils::str_len(new_c)];
+                                doc = parser::parse_document(content_str);
+                                vdoc = render::render_document(&doc, config);
+                                extract_toc(&doc, &vdoc, &toc);
+                                total_lines = vdoc.get_total_lines();
+                                max_scroll = total_lines > 0 ? total_lines - 1 : 0;
+                                scroll_top = 0;
+                                cursor_line = 0;
+                                terminal::get_file_state(filename, &prev_state);
+
+                                char[128] sw_msg;
+                                strutils::copy_str(&sw_msg[0], "✔ Switched to ", 128);
+                                strutils::append_str(&sw_msg[0], filename, 128);
+                                strutils::copy_str(&status_msg_buf[0], &sw_msg[0], 128);
+                                status_ticks = 40;
+                            }
+                            show_files = false;
+                            need_redraw = true;
+                        }
+                    }
+                }
+                continue;
+            }
+
             // ── Normal Navigation Mode ────────────────────────────────────
             if (key == 'q' || key == 'Q' || key == 0x03)
             {
@@ -857,44 +1239,52 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                     need_redraw = true;
                 }
             }
-            else if (key == 'j' || key == 1000) // Down
+            else if (key == 'j' || key == 1000) // Down (with acceleration)
             {
-                if (cursor_line + 1 < total_lines)
+                int step = get_accelerated_step(&velocity, 1, false);
+                cursor_line += step;
+                if (cursor_line >= total_lines) cursor_line = total_lines > 0 ? total_lines - 1 : 0;
+                int scrolloff = view_height > 6 ? 2 : 0;
+                if (cursor_line + scrolloff >= scroll_top + view_height)
                 {
-                    cursor_line++;
-                    if (cursor_line >= scroll_top + view_height)
-                    {
-                        scroll_top = cursor_line - view_height + 1;
-                    }
-                    need_redraw = true;
+                    scroll_top = cursor_line + scrolloff - view_height + 1;
+                    if (scroll_top > max_scroll) scroll_top = max_scroll;
                 }
-            }
-            else if (key == 'k' || key == 1001) // Up
-            {
-                if (cursor_line > 0)
-                {
-                    cursor_line--;
-                    if (cursor_line < scroll_top)
-                    {
-                        scroll_top = cursor_line;
-                    }
-                    need_redraw = true;
-                }
-            }
-            else if (key == 1012) // Mouse Wheel Up
-            {
-                scroll_top -= 3;
-                if (scroll_top < 0) scroll_top = 0;
-                cursor_line -= 3;
-                if (cursor_line < 0) cursor_line = 0;
                 need_redraw = true;
             }
-            else if (key == 1013) // Mouse Wheel Down
+            else if (key == 'k' || key == 1001) // Up (with acceleration)
             {
-                scroll_top += 3;
+                int step = get_accelerated_step(&velocity, -1, false);
+                cursor_line -= step;
+                if (cursor_line < 0) cursor_line = 0;
+                int scrolloff = view_height > 6 ? 2 : 0;
+                if (cursor_line - scrolloff < scroll_top)
+                {
+                    scroll_top = cursor_line - scrolloff;
+                    if (scroll_top < 0) scroll_top = 0;
+                }
+                need_redraw = true;
+            }
+            else if (key == 1012) // Mouse Wheel Up (with acceleration)
+            {
+                int step = get_accelerated_step(&velocity, -1, true);
+                scroll_top -= step;
+                if (scroll_top < 0) scroll_top = 0;
+                cursor_line -= step;
+                if (cursor_line < 0) cursor_line = 0;
+                if (cursor_line < scroll_top) cursor_line = scroll_top;
+                if (cursor_line >= scroll_top + view_height) cursor_line = scroll_top + view_height - 1;
+                need_redraw = true;
+            }
+            else if (key == 1013) // Mouse Wheel Down (with acceleration)
+            {
+                int step = get_accelerated_step(&velocity, 1, true);
+                scroll_top += step;
                 if (scroll_top > max_scroll) scroll_top = max_scroll;
-                cursor_line += 3;
+                cursor_line += step;
                 if (cursor_line >= total_lines) cursor_line = total_lines > 0 ? total_lines - 1 : 0;
+                if (cursor_line < scroll_top) cursor_line = scroll_top;
+                if (cursor_line >= scroll_top + view_height) cursor_line = scroll_top + view_height - 1;
                 need_redraw = true;
             }
             else if (key == 1006 || key == 'h' || key == 'H') // Left arrow
@@ -982,6 +1372,27 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             else if (key == 9 || key == 't' || key == 'T') // Tab / 't' -> Open TOC outline
             {
                 show_toc = true;
+                need_redraw = true;
+            }
+            else if (key == 'o' || key == 'O') // 'o' -> Open File Tree Switcher
+            {
+                terminal::scan_file_tree(&cur_filename[0], &file_tree);
+                file_cursor = 0;
+                int[16] collapse_depth;
+                int collapse_count = 0;
+                int v_count = 0;
+                for (usz f = 0; f < file_tree.count; f++)
+                {
+                    terminal::TreeNode* node = &file_tree.nodes[f];
+                    while (collapse_count > 0 && collapse_depth[collapse_count - 1] >= node.depth) collapse_count--;
+                    if (collapse_count == 0)
+                    {
+                        if (node.is_current) { file_cursor = v_count; break; }
+                        v_count++;
+                    }
+                    if (node.is_dir && !node.is_expanded && collapse_count < 15) collapse_depth[collapse_count++] = node.depth;
+                }
+                show_files = true;
                 need_redraw = true;
             }
             else if (key == '/') // Search
@@ -1126,7 +1537,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
         if (need_redraw)
         {
             int active_line = (match_count > 0 && cur_match_idx < match_count) ? match_lines[cur_match_idx] : -1;
-            draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, filename, last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, active_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line);
+            draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, &cur_filename[0], last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, active_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line, show_files, &file_tree, file_cursor);
         }
 
         terminal::sleep_ms(12);

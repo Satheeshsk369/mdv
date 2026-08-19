@@ -88,6 +88,22 @@ fn bool str_starts_with(char* str, char* prefix)
     return true;
 }
 
+fn bool str_ends_with(char* str, char* suffix)
+{
+    if (str == null || suffix == null) return false;
+    int slen = str_len(str);
+    int suflen = str_len(suffix);
+    if (suflen > slen) return false;
+    int p = slen - suflen;
+    int k = 0;
+    while (k < suflen)
+    {
+        if (str[p + k] != suffix[k]) return false;
+        k++;
+    }
+    return true;
+}
+
 fn bool str_eq(char* a, char* b)
 {
     if (a == null || b == null) return a == b;

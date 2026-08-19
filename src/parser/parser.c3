@@ -359,11 +359,17 @@ fn Document parse_document(String content)
             continue;
         }
 
-        // 2. Fenced Code Block: ``` or ~~~
+        // 2. Fenced Code Block: ```... or ~~~... (CommonMark / GFM arbitrary fence length)
         if (strutils::string_starts_with(trimmed, "```") || strutils::string_starts_with(trimmed, "~~~"))
         {
-            String fence = trimmed[0:3];
-            String lang = strutils::string_trim(trimmed[3..]);
+            char fence_char = trimmed[0];
+            usz fence_len = 0;
+            while (fence_len < (usz)trimmed.len && trimmed[fence_len] == fence_char)
+            {
+                fence_len++;
+            }
+
+            String lang = strutils::string_trim(trimmed[fence_len..]);
 
             LineList code_lines;
             code_lines.init(16);
@@ -374,10 +380,30 @@ fn Document parse_document(String content)
             {
                 String cur_line = raw_lines.items[line_idx];
                 String cur_trimmed = strutils::string_trim(cur_line);
-                if (strutils::string_starts_with(cur_trimmed, fence))
+
+                bool is_closing_fence = false;
+                if ((usz)cur_trimmed.len >= fence_len && cur_trimmed[0] == fence_char)
+                {
+                    usz close_len = 0;
+                    while (close_len < (usz)cur_trimmed.len && cur_trimmed[close_len] == fence_char)
+                    {
+                        close_len++;
+                    }
+                    if (close_len >= fence_len)
+                    {
+                        String rest = strutils::string_trim(cur_trimmed[close_len..]);
+                        if (rest.len == 0)
+                        {
+                            is_closing_fence = true;
+                        }
+                    }
+                }
+
+                if (is_closing_fence)
                 {
                     break;
                 }
+
                 code_lines.push(doc.arena.dup_string(cur_line));
                 line_idx++;
             }

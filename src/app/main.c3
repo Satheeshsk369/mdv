@@ -183,6 +183,33 @@ fn int main(String[] args)
         return 0;
     }
 
+    // Default when run interactively without arguments: Open directly into File Switcher
+    if (terminal::is_tty())
+    {
+        terminal::FileTree file_tree;
+        terminal::scan_file_tree(null, &file_tree);
+        if (file_tree.count > 0)
+        {
+            char* first_file = null;
+            for (usz i = 0; i < file_tree.count; i++)
+            {
+                if (!file_tree.nodes[i].is_dir)
+                {
+                    first_file = &file_tree.nodes[i].path[0];
+                    break;
+                }
+            }
+            if (first_file != null)
+            {
+                app::run_watch(first_file, 0, no_wrap, true);
+                return 0;
+            }
+        }
+
+        io::printn("No Markdown files (*.md) found in the current directory.");
+        io::printn("");
+    }
+
     print_help();
     return 1;
 }
