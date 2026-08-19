@@ -4,6 +4,7 @@ import std::core::mem;
 import ansi;
 import strutils;
 import ast;
+import buffer;
 
 fn bool is_keyword_token(String s)
 {
@@ -18,7 +19,7 @@ fn bool is_type_or_literal_token(String s)
     return false;
 }
 
-fn void highlight_code_line(LineBuilder* b, String line, String lang, bool plain)
+fn void highlight_code_line(buffer::ByteBuffer* b, String line, String lang, bool plain)
 {
     if (plain || line.len == 0)
     {

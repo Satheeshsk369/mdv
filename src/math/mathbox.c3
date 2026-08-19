@@ -3,91 +3,13 @@ module math;
 import std::core::mem;
 import ast;
 import strutils;
+import buffer;
 
 struct MathBox {
     int width;
     int height;
     int baseline;
     String[] rows;
-}
-
-struct MathRowBuilder {
-    char[] buf;
-    usz len;
-    usz cap;
-}
-
-fn void MathRowBuilder.init(MathRowBuilder* mb, usz initial_cap = 512)
-{
-    mb.buf = mem::alloc_array(char, (sz)initial_cap);
-    mb.len = 0;
-    mb.cap = initial_cap;
-}
-
-fn void MathRowBuilder.append_char(MathRowBuilder* mb, char c)
-{
-    if (mb.len >= mb.cap - 1)
-    {
-        usz new_cap = mb.cap * 2;
-        char[] new_buf = mem::alloc_array(char, (sz)new_cap);
-        for (usz i = 0; i < mb.len; i++) new_buf[i] = mb.buf[i];
-        mem::free(mb.buf);
-        mb.buf = new_buf;
-        mb.cap = new_cap;
-    }
-    mb.buf[mb.len++] = c;
-}
-
-fn void MathRowBuilder.append_zstr(MathRowBuilder* mb, char* s)
-{
-    if (s == null) return;
-    usz i = 0;
-    while (s[i] != 0)
-    {
-        mb.append_char(s[i++]);
-    }
-}
-
-fn void MathRowBuilder.append_slice(MathRowBuilder* mb, String s)
-{
-    for (usz i = 0; i < (usz)s.len; i++)
-    {
-        mb.append_char(s[i]);
-    }
-}
-
-fn void MathRowBuilder.append_spaces(MathRowBuilder* mb, int count)
-{
-    for (int i = 0; i < count; i++)
-    {
-        mb.append_char(' ');
-    }
-}
-
-fn void MathRowBuilder.append_repeat(MathRowBuilder* mb, char* s, int count)
-{
-    for (int i = 0; i < count; i++)
-    {
-        mb.append_zstr(s);
-    }
-}
-
-fn String MathRowBuilder.to_arena_string(MathRowBuilder* mb, ast::Arena* arena)
-{
-    if (mb.len == 0) return "";
-    String s = (String)mb.buf[:mb.len];
-    return arena.dup_string(s);
-}
-
-fn void MathRowBuilder.free(MathRowBuilder* mb)
-{
-    if (mb.buf.ptr != null)
-    {
-        mem::free(mb.buf);
-        mb.buf = {};
-        mb.len = 0;
-        mb.cap = 0;
-    }
 }
 
 fn MathBox box_empty(ast::Arena* arena)
@@ -125,7 +47,7 @@ fn MathBox box_from_zstr(ast::Arena* arena, char* text)
 fn MathBox box_spaces(ast::Arena* arena, int count)
 {
     if (count <= 0) return box_empty(arena);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init((usz)(count + 1));
     defer mb.free();
     mb.append_spaces(count);
@@ -156,13 +78,13 @@ fn MathBox box_hconcat(ast::Arena* arena, MathBox left, MathBox right, int gap =
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
 
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
     for (int r = 0; r < new_h; r++)
     {
-        mb.len = 0;
+        mb.reset();
 
         // Left part
         int lr = r - (above - left.baseline);
@@ -216,14 +138,14 @@ fn MathBox box_fraction(ast::Arena* arena, MathBox num, MathBox den)
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
 
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
     // Numerator rows (centered)
     for (int r = 0; r < num.height; r++)
     {
-        mb.len = 0;
+        mb.reset();
         int row_w = strutils::string_display_width(num.rows[r]);
         int total_pad = w - row_w;
         int lpad = total_pad / 2;
@@ -235,14 +157,14 @@ fn MathBox box_fraction(ast::Arena* arena, MathBox num, MathBox den)
     }
 
     // Fraction bar
-    mb.len = 0;
+    mb.reset();
     mb.append_repeat("─", w);
     r_buf[num.height] = mb.to_arena_string(arena);
 
     // Denominator rows (centered)
     for (int r = 0; r < den.height; r++)
     {
-        mb.len = 0;
+        mb.reset();
         int row_w = strutils::string_display_width(den.rows[r]);
         int total_pad = w - row_w;
         int lpad = total_pad / 2;
@@ -271,12 +193,12 @@ fn MathBox box_sqrt(ast::Arena* arena, MathBox inner, MathBox degree)
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
 
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
     // Top vinculum overline: [deg_spaces] ┌───
-    mb.len = 0;
+    mb.reset();
     if (deg_w > 0) mb.append_spaces(deg_w);
     mb.append_spaces(left_w - deg_w);
     mb.append_zstr("┌");
@@ -286,7 +208,7 @@ fn MathBox box_sqrt(ast::Arena* arena, MathBox inner, MathBox degree)
     // Inner rows with radical symbol
     for (int r = 0; r < inner.height; r++)
     {
-        mb.len = 0;
+        mb.reset();
         if (r == inner.height - 1)
         {
             if (deg_w > 0)
@@ -334,7 +256,7 @@ fn MathBox box_summation_op(ast::Arena* arena, MathBox sub, MathBox sup)
     int base = sup_h + 2;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
@@ -345,7 +267,7 @@ fn MathBox box_summation_op(ast::Arena* arena, MathBox sub, MathBox sup)
     {
         for (int r = 0; r < sup.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             int rw = strutils::string_display_width(sup.rows[r]);
             int pad = (max_w - rw) / 2;
             mb.append_spaces(pad);
@@ -359,7 +281,7 @@ fn MathBox box_summation_op(ast::Arena* arena, MathBox sub, MathBox sup)
     char*[5] sig = { " ─── ", " \\   ", "  >  ", " /   ", " ─── " };
     for (int i = 0; i < 5; i++)
     {
-        mb.len = 0;
+        mb.reset();
         int pad = (max_w - sym_w) / 2;
         mb.append_spaces(pad);
         mb.append_zstr(sig[i]);
@@ -372,7 +294,7 @@ fn MathBox box_summation_op(ast::Arena* arena, MathBox sub, MathBox sup)
     {
         for (int r = 0; r < sub.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             int rw = strutils::string_display_width(sub.rows[r]);
             int pad = (max_w - rw) / 2;
             mb.append_spaces(pad);
@@ -403,7 +325,7 @@ fn MathBox box_product_op(ast::Arena* arena, MathBox sub, MathBox sup)
     int base = sup_h + 2;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
@@ -414,7 +336,7 @@ fn MathBox box_product_op(ast::Arena* arena, MathBox sub, MathBox sup)
     {
         for (int r = 0; r < sup.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             int rw = strutils::string_display_width(sup.rows[r]);
             int pad = (max_w - rw) / 2;
             mb.append_spaces(pad);
@@ -428,7 +350,7 @@ fn MathBox box_product_op(ast::Arena* arena, MathBox sub, MathBox sup)
     char*[5] pi_lines = { " ─── ", " ┬ ┬ ", " │ │ ", " │ │ ", " ┴ ┴ " };
     for (int i = 0; i < 5; i++)
     {
-        mb.len = 0;
+        mb.reset();
         int pad = (max_w - sym_w) / 2;
         mb.append_spaces(pad);
         mb.append_zstr(pi_lines[i]);
@@ -441,7 +363,7 @@ fn MathBox box_product_op(ast::Arena* arena, MathBox sub, MathBox sup)
     {
         for (int r = 0; r < sub.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             int rw = strutils::string_display_width(sub.rows[r]);
             int pad = (max_w - rw) / 2;
             mb.append_spaces(pad);
@@ -473,7 +395,7 @@ fn MathBox box_integral_op(ast::Arena* arena, MathBox sub, MathBox sup, int int_
     int base = sup_h + (h / 2);
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
@@ -484,7 +406,7 @@ fn MathBox box_integral_op(ast::Arena* arena, MathBox sub, MathBox sup, int int_
     {
         for (int r = 0; r < sup.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             mb.append_spaces(sym_w);
             mb.append_slice(sup.rows[r]);
             int rw = strutils::string_display_width(sup.rows[r]);
@@ -497,7 +419,7 @@ fn MathBox box_integral_op(ast::Arena* arena, MathBox sub, MathBox sup, int int_
     // Integral rows
     for (int r = 0; r < h; r++)
     {
-        mb.len = 0;
+        mb.reset();
         if (int_order == 1)
         {
             if (r == 0) { mb.append_zstr(" ⌠ "); }
@@ -526,7 +448,7 @@ fn MathBox box_integral_op(ast::Arena* arena, MathBox sub, MathBox sup, int int_
     {
         for (int r = 0; r < sub.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             mb.append_spaces(sym_w);
             mb.append_slice(sub.rows[r]);
             int rw = strutils::string_display_width(sub.rows[r]);
@@ -556,7 +478,7 @@ fn MathBox box_limits_op(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup
     int base = sup_h + op.baseline;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
@@ -567,7 +489,7 @@ fn MathBox box_limits_op(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup
     {
         for (int r = 0; r < sup.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             int rw = strutils::string_display_width(sup.rows[r]);
             int pad = (max_w - rw) / 2;
             mb.append_spaces(pad);
@@ -580,7 +502,7 @@ fn MathBox box_limits_op(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup
     // Op in middle
     for (int r = 0; r < op.height; r++)
     {
-        mb.len = 0;
+        mb.reset();
         int rw = strutils::string_display_width(op.rows[r]);
         int pad = (max_w - rw) / 2;
         mb.append_spaces(pad);
@@ -594,7 +516,7 @@ fn MathBox box_limits_op(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup
     {
         for (int r = 0; r < sub.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             int rw = strutils::string_display_width(sub.rows[r]);
             int pad = (max_w - rw) / 2;
             mb.append_spaces(pad);
@@ -615,7 +537,7 @@ fn MathBox box_limits_op(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup
 fn String try_unicode_superscript(ast::Arena* arena, String s)
 {
     if (s.len == 0) return "";
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init((usz)(s.len * 4 + 8));
     defer mb.free();
 
@@ -631,7 +553,7 @@ fn String try_unicode_superscript(ast::Arena* arena, String s)
 fn String try_unicode_subscript(ast::Arena* arena, String s)
 {
     if (s.len == 0) return "";
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init((usz)(s.len * 4 + 8));
     defer mb.free();
 
@@ -655,7 +577,7 @@ fn MathBox box_supsub(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
         String u_sub = (sub.width > 0) ? try_unicode_subscript(arena, sub_txt) : "";
         if (u_sub.len > 0)
         {
-            MathRowBuilder mb;
+            buffer::ByteBuffer mb;
             mb.init(128);
             defer mb.free();
             mb.append_slice(base.rows[0]);
@@ -673,7 +595,7 @@ fn MathBox box_supsub(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
     int new_w = base.width + script_w;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
@@ -684,7 +606,7 @@ fn MathBox box_supsub(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
     {
         for (int r = 0; r < sup.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             mb.append_spaces(base.width);
             mb.append_slice(sup.rows[r]);
             int rw = strutils::string_display_width(sup.rows[r]);
@@ -697,7 +619,7 @@ fn MathBox box_supsub(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
     // Base rows
     for (int r = 0; r < base.height; r++)
     {
-        mb.len = 0;
+        mb.reset();
         mb.append_slice(base.rows[r]);
         int rw = strutils::string_display_width(base.rows[r]);
         int pad = base.width - rw;
@@ -711,7 +633,7 @@ fn MathBox box_supsub(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
     {
         for (int r = 0; r < sub.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             mb.append_spaces(base.width);
             mb.append_slice(sub.rows[r]);
             int rw = strutils::string_display_width(sub.rows[r]);
@@ -737,11 +659,11 @@ fn MathBox box_overarrow(ast::Arena* arena, MathBox inner, bool right_dir = true
     int new_base = inner.baseline + 1;
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
-    mb.len = 0;
+    mb.reset();
     if (right_dir)
     {
         if (w > 1) mb.append_repeat("─", w - 1);
@@ -778,13 +700,13 @@ fn MathBox box_cancel(ast::Arena* arena, MathBox inner)
 {
     if (inner.height == 0) return inner;
     String* r_buf = (String*)arena.alloc((usz)inner.height * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
     for (int r = 0; r < inner.height; r++)
     {
-        mb.len = 0;
+        mb.reset();
         String row = inner.rows[r];
         for (usz i = 0; i < (usz)row.len; i++)
         {
@@ -809,13 +731,13 @@ fn MathBox box_colorize(ast::Arena* arena, MathBox inner, char* ansi_color)
 {
     if (inner.height == 0 || ansi_color == null) return inner;
     String* r_buf = (String*)arena.alloc((usz)inner.height * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
     for (int r = 0; r < inner.height; r++)
     {
-        mb.len = 0;
+        mb.reset();
         mb.append_zstr(ansi_color);
         mb.append_slice(inner.rows[r]);
         mb.append_zstr("\x1b[0m\x1b[38;2;255;216;102m\x1b[1m");
@@ -851,13 +773,13 @@ fn MathBox box_delimiters(ast::Arena* arena, MathBox inner, char open_ch, char c
     int new_w = inner.width + l_pad + r_pad;
 
     String* r_buf = (String*)arena.alloc((usz)h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
     for (int r = 0; r < h; r++)
     {
-        mb.len = 0;
+        mb.reset();
 
         // Left delimiter
         if (open_ch == '(')
@@ -958,7 +880,7 @@ fn MathBox box_vconcat_list(ast::Arena* arena, MathBox[] list)
     }
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
@@ -968,7 +890,7 @@ fn MathBox box_vconcat_list(ast::Arena* arena, MathBox[] list)
         MathBox b = list[i];
         for (int r = 0; r < b.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             mb.append_slice(b.rows[r]);
             int rw = strutils::string_display_width(b.rows[r]);
             int pad = max_w - rw;
@@ -992,12 +914,12 @@ fn MathBox box_boxed(ast::Arena* arena, MathBox inner)
     int new_base = inner.baseline + 1;
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
     // Top border: ┌───┐
-    mb.len = 0;
+    mb.reset();
     mb.append_zstr("┌");
     mb.append_repeat("─", inner.width + 2);
     mb.append_zstr("┐");
@@ -1006,7 +928,7 @@ fn MathBox box_boxed(ast::Arena* arena, MathBox inner)
     // Inner rows: │ text │
     for (int r = 0; r < inner.height; r++)
     {
-        mb.len = 0;
+        mb.reset();
         mb.append_zstr("│ ");
         mb.append_slice(inner.rows[r]);
         int rw = strutils::string_display_width(inner.rows[r]);
@@ -1017,7 +939,7 @@ fn MathBox box_boxed(ast::Arena* arena, MathBox inner)
     }
 
     // Bottom border: └───┘
-    mb.len = 0;
+    mb.reset();
     mb.append_zstr("└");
     mb.append_repeat("─", inner.width + 2);
     mb.append_zstr("┘");
@@ -1039,11 +961,11 @@ fn MathBox box_overline(ast::Arena* arena, MathBox inner)
     int new_base = inner.baseline + 1;
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
-    mb.len = 0;
+    mb.reset();
     mb.append_repeat("─", w);
     r_buf[0] = mb.to_arena_string(arena);
 
@@ -1068,7 +990,7 @@ fn MathBox box_overbrace(ast::Arena* arena, MathBox inner, MathBox label)
     int base = lab_h + 1 + inner.baseline;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
@@ -1079,7 +1001,7 @@ fn MathBox box_overbrace(ast::Arena* arena, MathBox inner, MathBox label)
     {
         for (int r = 0; r < label.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             int rw = strutils::string_display_width(label.rows[r]);
             int pad = (max_w - rw) / 2;
             mb.append_spaces(pad);
@@ -1090,7 +1012,7 @@ fn MathBox box_overbrace(ast::Arena* arena, MathBox inner, MathBox label)
     }
 
     // Overbrace glyph: ⏞ or ───┴───
-    mb.len = 0;
+    mb.reset();
     int pad = (max_w - inner.width) / 2;
     mb.append_spaces(pad);
     mb.append_repeat("⏞", inner.width);
@@ -1100,7 +1022,7 @@ fn MathBox box_overbrace(ast::Arena* arena, MathBox inner, MathBox label)
     // Inner rows
     for (int r = 0; r < inner.height; r++)
     {
-        mb.len = 0;
+        mb.reset();
         int rw = strutils::string_display_width(inner.rows[r]);
         int pad2 = (max_w - rw) / 2;
         mb.append_spaces(pad2);
@@ -1125,7 +1047,7 @@ fn MathBox box_underbrace(ast::Arena* arena, MathBox inner, MathBox label)
     int base = inner.baseline;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
@@ -1134,7 +1056,7 @@ fn MathBox box_underbrace(ast::Arena* arena, MathBox inner, MathBox label)
     // Inner rows
     for (int r = 0; r < inner.height; r++)
     {
-        mb.len = 0;
+        mb.reset();
         int rw = strutils::string_display_width(inner.rows[r]);
         int pad = (max_w - rw) / 2;
         mb.append_spaces(pad);
@@ -1144,7 +1066,7 @@ fn MathBox box_underbrace(ast::Arena* arena, MathBox inner, MathBox label)
     }
 
     // Underbrace glyph: ⏟ or ───┬───
-    mb.len = 0;
+    mb.reset();
     int pad = (max_w - inner.width) / 2;
     mb.append_spaces(pad);
     mb.append_repeat("⏟", inner.width);
@@ -1156,7 +1078,7 @@ fn MathBox box_underbrace(ast::Arena* arena, MathBox inner, MathBox label)
     {
         for (int r = 0; r < label.height; r++)
         {
-            mb.len = 0;
+            mb.reset();
             int rw = strutils::string_display_width(label.rows[r]);
             int pad2 = (max_w - rw) / 2;
             mb.append_spaces(pad2);
@@ -1174,24 +1096,31 @@ fn MathBox box_underbrace(ast::Arena* arena, MathBox inner, MathBox label)
     return res;
 }
 
-fn MathBox box_grid_layout(ast::Arena* arena, MathBox[16][16]* grid, int num_rows, int num_cols, char align_mode, int col_gap = 2)
+fn MathBox box_grid_layout(ast::Arena* arena, MathBox[] grid, int num_rows, int num_cols, char align_mode, int col_gap = 2)
 {
-    if (num_rows <= 0 || num_cols <= 0) return box_empty(arena);
+    if (num_rows <= 0 || num_cols <= 0 || grid.len < (usz)(num_rows * num_cols)) return box_empty(arena);
 
-    int[16] col_w;
+    int[] col_w = mem::alloc_array(int, (sz)num_cols);
+    defer mem::free(col_w);
+
     for (int c = 0; c < num_cols; c++)
     {
         int max_cw = 0;
         for (int r = 0; r < num_rows; r++)
         {
-            if ((*grid)[r][c].width > max_cw) max_cw = (*grid)[r][c].width;
+            MathBox cell = grid[(usz)(r * num_cols + c)];
+            if (cell.width > max_cw) max_cw = cell.width;
         }
         col_w[c] = max_cw;
     }
 
-    int[16] row_above;
-    int[16] row_below;
-    int[16] row_h;
+    int[] row_above = mem::alloc_array(int, (sz)num_rows);
+    defer mem::free(row_above);
+    int[] row_below = mem::alloc_array(int, (sz)num_rows);
+    defer mem::free(row_below);
+    int[] row_h = mem::alloc_array(int, (sz)num_rows);
+    defer mem::free(row_h);
+
     int total_h = 0;
 
     for (int r = 0; r < num_rows; r++)
@@ -1200,7 +1129,7 @@ fn MathBox box_grid_layout(ast::Arena* arena, MathBox[16][16]* grid, int num_row
         int max_below = 0;
         for (int c = 0; c < num_cols; c++)
         {
-            MathBox cell = (*grid)[r][c];
+            MathBox cell = grid[(usz)(r * num_cols + c)];
             if (cell.baseline > max_above) max_above = cell.baseline;
             int below = cell.height - 1 - cell.baseline;
             if (below > max_below) max_below = below;
@@ -1219,7 +1148,7 @@ fn MathBox box_grid_layout(ast::Arena* arena, MathBox[16][16]* grid, int num_row
     }
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    MathRowBuilder mb;
+    buffer::ByteBuffer mb;
     mb.init(512);
     defer mb.free();
 
@@ -1231,13 +1160,13 @@ fn MathBox box_grid_layout(ast::Arena* arena, MathBox[16][16]* grid, int num_row
 
         for (int sub_r = 0; sub_r < rh; sub_r++)
         {
-            mb.len = 0;
+            mb.reset();
 
             for (int c = 0; c < num_cols; c++)
             {
                 if (c > 0) mb.append_spaces(col_gap);
 
-                MathBox cell = (*grid)[r][c];
+                MathBox cell = grid[(usz)(r * num_cols + c)];
                 int cell_r = sub_r - (rabove - cell.baseline);
                 int target_w = col_w[c];
 

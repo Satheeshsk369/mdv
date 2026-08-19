@@ -26,10 +26,14 @@
       "sources": [
         "src/app/install.c3",
         "src/render/ansi.c3",
-        "src/sys/strutils.c3"
+        "src/sys/strutils.c3",
+        "src/sys/buffer.c3"
       ]
     }
   },
+  "test-sources": [
+    "test/**"
+  ],
   "cpu": "native",
   "opt": "O5"
 }

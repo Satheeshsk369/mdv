@@ -1,9 +1,13 @@
 module math;
 
 import std::core::mem;
+import std::collections::list;
 import ast;
 import ansi;
 import strutils;
+import buffer;
+
+alias MathBoxList = List{MathBox};
 
 enum MathAtomKind {
     ORD,    // Ordinary symbol or variable (x, 2, \alpha)
@@ -120,7 +124,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
             String raw_tag = p.src[t_start : p.pos - t_start];
             if (p.peek() == '}') p.get();
 
-            MathRowBuilder tb;
+            buffer::ByteBuffer tb;
             tb.init(64);
             defer tb.free();
             if (!starred) tb.append_char('(');
@@ -249,11 +253,13 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
         {
             p.skip_spaces();
             if (p.peek() == '{') p.get();
-            MathBox[8] lines;
-            int line_count = 0;
-            while (!p.eof() && line_count < 8)
+            List{MathBox} lines;
+            lines.init(mem, 4);
+            defer lines.free();
+
+            while (!p.eof())
             {
-                lines[line_count++] = parse_math_expression(p, false, true);
+                lines.push(parse_math_expression(p, false, true));
                 p.skip_spaces();
                 if (p.peek() == '\\' && p.pos + 1 < (usz)p.src.len && p.src[p.pos + 1] == '\\')
                 {
@@ -270,7 +276,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                 }
             }
             *prev_atom = MathAtomKind.ORD;
-            return box_vconcat_list(p.arena, lines[: (usz)line_count]);
+            return box_vconcat_list(p.arena, lines.entries[:(usz)lines.size]);
         }
 
         // ── Square Root: \sqrt[n]{expr} ──────────────────────────────────────
@@ -427,14 +433,19 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                 }
             }
 
-            const usz MAX_ENV_ROWS = 16;
-            const usz MAX_ENV_COLS = 16;
-            MathBox[MAX_ENV_COLS][MAX_ENV_ROWS] grid;
-            int num_rows = 0;
-            int num_cols = 0;
+            List{MathBoxList} env_rows;
+            env_rows.init(mem, 8);
+            defer {
+                for (sz r = 0; r < env_rows.size; r++) env_rows.entries[r].free();
+                env_rows.free();
+            }
 
-            int cur_col = 0;
-            while (!p.eof() && num_rows < (int)MAX_ENV_ROWS)
+            MathBoxList cur_row;
+            cur_row.init(mem, 4);
+
+            int max_cols = 0;
+
+            while (!p.eof())
             {
                 p.skip_spaces();
 
@@ -452,14 +463,20 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                         if (p.peek() == '{') p.get();
                         while (!p.eof() && p.peek() != '}') p.pos++;
                         if (p.peek() == '}') p.get();
-                        if (cur_col > 0) num_rows++;
+                        if (cur_row.size > 0)
+                        {
+                            if ((int)cur_row.size > max_cols) max_cols = (int)cur_row.size;
+                            env_rows.push(cur_row);
+                            cur_row.init(mem, 4);
+                        }
                         break;
                     }
-                    else if (p.src[save_pos + 1] == '\\') // double backslash \\
+                    else if (save_pos + 1 < (usz)p.src.len && p.src[save_pos + 1] == '\\') // double backslash \\
                     {
                         p.pos = save_pos + 2;
-                        num_rows++;
-                        cur_col = 0;
+                        if ((int)cur_row.size > max_cols) max_cols = (int)cur_row.size;
+                        env_rows.push(cur_row);
+                        cur_row.init(mem, 4);
                         continue;
                     }
                     else
@@ -469,12 +486,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                 }
 
                 MathBox cell = parse_math_expression(p, true, true);
-                if (cur_col < (int)MAX_ENV_COLS)
-                {
-                    grid[num_rows][cur_col] = cell;
-                    cur_col++;
-                    if (cur_col > num_cols) num_cols = cur_col;
-                }
+                cur_row.push(cell);
 
                 p.skip_spaces();
                 if (p.peek() == '&')
@@ -484,30 +496,56 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                 else if (p.peek() == '\\' && p.pos + 1 < (usz)p.src.len && p.src[p.pos + 1] == '\\')
                 {
                     p.pos += 2;
-                    num_rows++;
-                    cur_col = 0;
+                    if ((int)cur_row.size > max_cols) max_cols = (int)cur_row.size;
+                    env_rows.push(cur_row);
+                    cur_row.init(mem, 4);
                 }
             }
+
+            if (cur_row.size > 0)
+            {
+                if ((int)cur_row.size > max_cols) max_cols = (int)cur_row.size;
+                env_rows.push(cur_row);
+            }
+            else
+            {
+                cur_row.free();
+            }
+
+            int num_rows = (int)env_rows.size;
+            int num_cols = max_cols > 0 ? max_cols : 1;
+
+            // Flatten into 1D array of size num_rows * num_cols
+            MathBox* flat_buf = (MathBox*)p.arena.alloc((usz)(num_rows * num_cols) * MathBox::size);
+            for (int r = 0; r < num_rows; r++)
+            {
+                MathBoxList row = env_rows.entries[(usz)r];
+                for (int col = 0; col < num_cols; col++)
+                {
+                    flat_buf[(usz)(r * num_cols + col)] = (col < (int)row.size) ? row.entries[(usz)col] : box_empty(p.arena);
+                }
+            }
+            MathBox[] flat_grid = flat_buf[: (usz)(num_rows * num_cols)];
 
             *prev_atom = MathAtomKind.INNER;
 
             // 1. Cases
             if (strutils::string_eq(env_name, "cases"))
             {
-                MathBox inner = box_grid_layout(p.arena, &grid, num_rows, num_cols, 'L', 3);
+                MathBox inner = box_grid_layout(p.arena, flat_grid[: (usz)(num_rows * num_cols)], num_rows, num_cols, 'L', 3);
                 return box_delimiters(p.arena, inner, '{', (char)0);
             }
 
             // 2. Align / Aligned / Split / Array
             if (strutils::string_eq(env_name, "align") || strutils::string_eq(env_name, "align*") || strutils::string_eq(env_name, "aligned") || strutils::string_eq(env_name, "split") || strutils::string_eq(env_name, "array"))
             {
-                return box_grid_layout(p.arena, &grid, num_rows, num_cols, 'A', 0);
+                return box_grid_layout(p.arena, flat_grid[: (usz)(num_rows * num_cols)], num_rows, num_cols, 'A', 0);
             }
 
             // 3. Gather / Gather*
             if (strutils::string_eq(env_name, "gather") || strutils::string_eq(env_name, "gather*"))
             {
-                return box_grid_layout(p.arena, &grid, num_rows, num_cols, 'C', 0);
+                return box_grid_layout(p.arena, flat_grid[: (usz)(num_rows * num_cols)], num_rows, num_cols, 'C', 0);
             }
 
             // 4. Matrices: matrix, pmatrix, bmatrix, vmatrix, Vmatrix, Bmatrix, smallmatrix
@@ -518,7 +556,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
             else if (strutils::string_eq(env_name, "Vmatrix")) { bracket_type = 'V'; }
             else if (strutils::string_eq(env_name, "Bmatrix")) { bracket_type = 'B'; }
 
-            MathBox inner = box_grid_layout(p.arena, &grid, num_rows, num_cols, 'C', 2);
+            MathBox inner = box_grid_layout(p.arena, flat_grid[: (usz)(num_rows * num_cols)], num_rows, num_cols, 'C', 2);
 
             char open_b = '['; char close_b = ']';
             if (bracket_type == 'p') { open_b = '('; close_b = ')'; }
@@ -559,7 +597,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
             if (p.peek() == '{')
             {
                 p.get();
-                MathRowBuilder mb;
+                buffer::ByteBuffer mb;
                 mb.init(32);
                 defer mb.free();
                 while (!p.eof() && p.peek() != '}')
@@ -584,7 +622,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
             if (p.peek() == '{')
             {
                 p.get();
-                MathRowBuilder mb;
+                buffer::ByteBuffer mb;
                 mb.init(32);
                 defer mb.free();
                 while (!p.eof() && p.peek() != '}')
@@ -621,7 +659,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
             else if (strutils::string_eq(cmd, "ddot")) { combining = "̈"; }
             else if (strutils::string_eq(cmd, "tilde")) { combining = "̃"; }
 
-            MathRowBuilder mb;
+            buffer::ByteBuffer mb;
             mb.init(64);
             defer mb.free();
             if (inner.height > 0)
@@ -645,7 +683,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                 if (is_relational_sym(cmd))
                 {
                     *prev_atom = MathAtomKind.REL;
-                    MathRowBuilder mb;
+                    buffer::ByteBuffer mb;
                     mb.init(32);
                     defer mb.free();
                     mb.append_char(' ');
@@ -659,7 +697,7 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                     if (*prev_atom == MathAtomKind.ORD || *prev_atom == MathAtomKind.CLOSE || *prev_atom == MathAtomKind.INNER)
                     {
                         *prev_atom = MathAtomKind.BIN;
-                        MathRowBuilder mb;
+                        buffer::ByteBuffer mb;
                         mb.init(32);
                         defer mb.free();
                         mb.append_char(' ');

@@ -2,6 +2,7 @@ module main;
 
 import std::io;
 import std::core::mem;
+import std::core::string;
 import ansi;
 import terminal;
 import strutils;
@@ -101,47 +102,47 @@ fn int main(String[] args)
 
     for (int i = 1; i < args.len; i++)
     {
-        char* arg = (char*)args[i].ptr;
-        if (strutils::str_eq(arg, "-h") || strutils::str_eq(arg, "--help"))
+        String arg = args[i];
+        if (arg == "-h" || arg == "--help")
         {
             print_help();
             return 0;
         }
-        if (strutils::str_eq(arg, "-v") || strutils::str_eq(arg, "--version"))
+        if (arg == "-v" || arg == "--version")
         {
             print_version();
             return 0;
         }
-        if (strutils::str_eq(arg, "-nw") || strutils::str_eq(arg, "--no-wrap"))
+        if (arg == "-nw" || arg == "--no-wrap")
         {
             no_wrap = true;
             continue;
         }
-        if (strutils::str_eq(arg, "-w") || strutils::str_eq(arg, "--watch"))
+        if (arg == "-w" || arg == "--watch")
         {
             continue;
         }
-        if (strutils::str_eq(arg, "-s") || strutils::str_eq(arg, "--stdout"))
+        if (arg == "-s" || arg == "--stdout")
         {
             force_stdout = true;
             continue;
         }
-        if (strutils::str_eq(arg, "-p") || strutils::str_eq(arg, "-P") || strutils::str_eq(arg, "--plain"))
+        if (arg == "-p" || arg == "-P" || arg == "--plain")
         {
             ansi::set_plain(true);
             force_stdout = true;
             continue;
         }
-        if (strutils::is_numeric(arg))
+        if (strutils::is_numeric((char*)arg.ptr))
         {
-            target_line = strutils::parse_int(arg);
+            target_line = strutils::parse_int((char*)arg.ptr);
             continue;
         }
-        if (arg[0] != '-')
+        if (!arg.starts_with("-"))
         {
-            target_file = arg;
+            target_file = (char*)arg.ptr;
         }
-        else if (strutils::str_eq(arg, "-"))
+        else if (arg == "-")
         {
             target_file = "-";
         }

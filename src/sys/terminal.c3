@@ -49,6 +49,14 @@ struct Termios {
     uint c_ospeed;
 }
 
+struct PollFd {
+    int fd;
+    short events;
+    short revents;
+}
+
+const short POLLIN = 0x0001;
+
 extern fn int ioctl(int fd, ulong request, ...);
 extern fn int isatty(int fd);
 extern fn char* getenv(char* name);
@@ -61,6 +69,11 @@ extern fn int write(int fd, void* buf, ulong count);
 extern fn int system(char* command);
 extern fn char* getcwd(char* buf, ulong size);
 extern fn int chdir(char* path);
+extern fn int poll(PollFd* fds, ulong nfds, int timeout);
+extern fn void exit(int status);
+
+alias SignalHandler = fn void(int sig);
+extern fn SignalHandler signal(int signum, SignalHandler handler);
 
 struct Dirent {
     ulong d_ino;
@@ -260,6 +273,20 @@ fn void scan_file_tree(char* current_file, FileTree* out_tree)
 Termios orig_termios;
 bool raw_mode_active = false;
 
+fn void handle_signal(int sig)
+{
+    disable_raw_mode();
+    leave_alt_screen();
+    exit(128 + sig);
+}
+
+fn void setup_signals()
+{
+    signal(2, &handle_signal);  // SIGINT
+    signal(15, &handle_signal); // SIGTERM
+    signal(1, &handle_signal);  // SIGHUP
+}
+
 fn int get_width()
 {
     WinSize ws;
@@ -372,9 +399,9 @@ fn void open_editor_at_line(char* filename, int src_line)
     strutils::int_to_str(src_line, &line_str[0], 16);
     strutils::append_str(&cmd_buf[0], &line_str[0], 1024);
 
-    strutils::append_str(&cmd_buf[0], " \"", 1024);
+    strutils::append_str(&cmd_buf[0], " '", 1024);
     strutils::append_str(&cmd_buf[0], filename, 1024);
-    strutils::append_str(&cmd_buf[0], "\"", 1024);
+    strutils::append_str(&cmd_buf[0], "'", 1024);
 
     system(&cmd_buf[0]);
 
@@ -385,6 +412,16 @@ fn void open_editor_at_line(char* filename, int src_line)
 fn void sleep_ms(uint ms)
 {
     usleep(ms * 1000);
+}
+
+fn bool wait_for_input(int timeout_ms)
+{
+    PollFd pfd;
+    pfd.fd = 0;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    int res = poll(&pfd, 1, timeout_ms);
+    return res > 0 && (pfd.revents & POLLIN) != 0;
 }
 
 fn bool get_file_state(char* path, FileState* state)
@@ -413,6 +450,7 @@ fn bool file_has_changed(FileState* prev, FileState* curr)
 fn void enable_raw_mode()
 {
     if (raw_mode_active || isatty(0) == 0) return;
+    setup_signals();
     if (tcgetattr(0, &orig_termios) == 0)
     {
         Termios raw = orig_termios;

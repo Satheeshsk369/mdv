@@ -2,11 +2,13 @@ module render;
 
 import std::io;
 import std::core::mem;
+import std::collections::list;
 import ast;
 import ansi;
 import layout;
 import math;
 import strutils;
+import buffer;
 
 struct RenderConfig {
     int width;
@@ -14,151 +16,14 @@ struct RenderConfig {
     bool no_wrap;
 }
 
-struct VisualLineList {
-    layout::VisualLine[] items;
-    usz count;
-    usz capacity;
-}
-
-fn void VisualLineList.init(VisualLineList* l, usz initial_cap = 128)
-{
-    l.items = mem::alloc_array(layout::VisualLine, (sz)initial_cap);
-    l.count = 0;
-    l.capacity = initial_cap;
-}
-
-fn void VisualLineList.push(VisualLineList* l, layout::VisualLine line)
-{
-    if (l.count >= l.capacity)
-    {
-        usz new_cap = l.capacity * 2;
-        layout::VisualLine[] new_items = mem::alloc_array(layout::VisualLine, (sz)new_cap);
-        for (usz i = 0; i < l.count; i++)
-        {
-            new_items[i] = l.items[i];
-        }
-        mem::free(l.items);
-        l.items = new_items;
-        l.capacity = new_cap;
-    }
-    l.items[l.count++] = line;
-}
-
-fn layout::VisualLine[] VisualLineList.to_arena_slice(VisualLineList* l, ast::Arena* arena)
-{
-    if (l.count == 0) return {};
-    layout::VisualLine* buf = (layout::VisualLine*)arena.alloc(l.count * layout::VisualLine::size);
-    for (usz i = 0; i < l.count; i++)
-    {
-        buf[i] = l.items[i];
-    }
-    return buf[:l.count];
-}
-
-fn void VisualLineList.free(VisualLineList* l)
-{
-    if (l.items.ptr != null)
-    {
-        mem::free(l.items);
-        l.items = {};
-        l.count = 0;
-        l.capacity = 0;
-    }
-}
-
-struct LineBuilder {
-    char[] buf;
-    usz len;
-    usz cap;
-}
-
-fn void LineBuilder.init(LineBuilder* b, usz initial_cap = 4096)
-{
-    b.buf = mem::alloc_array(char, (sz)initial_cap);
-    b.len = 0;
-    b.cap = initial_cap;
-}
-
-fn void LineBuilder.append_char(LineBuilder* b, char c)
-{
-    if (b.len >= b.cap - 1)
-    {
-        usz new_cap = b.cap * 2;
-        char[] new_buf = mem::alloc_array(char, (sz)new_cap);
-        for (usz i = 0; i < b.len; i++)
-        {
-            new_buf[i] = b.buf[i];
-        }
-        mem::free(b.buf);
-        b.buf = new_buf;
-        b.cap = new_cap;
-    }
-    b.buf[b.len++] = c;
-}
-
-fn void LineBuilder.append_zstr(LineBuilder* b, char* s)
-{
-    if (s == null) return;
-    usz sl = 0;
-    while (s[sl] != 0)
-    {
-        b.append_char(s[sl++]);
-    }
-}
-
-fn void LineBuilder.append_slice(LineBuilder* b, String s)
-{
-    for (usz i = 0; i < (usz)s.len; i++)
-    {
-        b.append_char(s[i]);
-    }
-}
-
-fn void LineBuilder.append_spaces(LineBuilder* b, int count)
-{
-    for (int i = 0; i < count; i++)
-    {
-        b.append_char(' ');
-    }
-}
-
-fn void LineBuilder.append_repeat(LineBuilder* b, char* ch, int count)
-{
-    for (int i = 0; i < count; i++)
-    {
-        b.append_zstr(ch);
-    }
-}
-
-fn String LineBuilder.to_string(LineBuilder* b)
-{
-    return (String)b.buf[:b.len];
-}
-
-fn void LineBuilder.reset(LineBuilder* b)
-{
-    b.len = 0;
-}
-
-fn void LineBuilder.free(LineBuilder* b)
-{
-    if (b.buf.ptr != null)
-    {
-        mem::free(b.buf);
-        b.buf = {};
-        b.len = 0;
-        b.cap = 0;
-    }
-}
-
 struct DocRenderContext {
     layout::VisualDocument* vdoc;
     ast::Arena* arena;
     RenderConfig config;
-    VisualLineList list;
+    List{layout::VisualLine} list;
 }
 
-fn void render_span(LineBuilder* b, ast::Span span, bool plain)
+fn void render_span(buffer::ByteBuffer* b, ast::Span span, bool plain)
 {
     switch (span.kind)
     {
@@ -289,7 +154,7 @@ fn void render_span(LineBuilder* b, ast::Span span, bool plain)
     }
 }
 
-fn void render_spans(LineBuilder* b, ast::Span[] spans, bool plain)
+fn void render_spans(buffer::ByteBuffer* b, ast::Span[] spans, bool plain)
 {
     for (usz i = 0; i < spans.len; i++)
     {
@@ -297,53 +162,74 @@ fn void render_spans(LineBuilder* b, ast::Span[] spans, bool plain)
     }
 }
 
+fn void emit_rendered_line(DocRenderContext* ctx, buffer::ByteBuffer* lb, int src_line)
+{
+    String s = lb.to_string();
+    layout::VisualLine vl;
+    vl.text = ctx.arena.dup_string(s);
+    vl.src_line = src_line;
+    vl.display_width = strutils::string_display_width(s);
+    ctx.list.push(vl);
+    lb.reset();
+}
+
+fn void emit_table_line_cb(void* ctx_ptr, String text, int src_line)
+{
+    DocRenderContext* ctx = (DocRenderContext*)ctx_ptr;
+    layout::VisualLine vl;
+    vl.text = ctx.arena.dup_string(text);
+    vl.src_line = src_line;
+    vl.display_width = strutils::string_display_width(text);
+    ctx.list.push(vl);
+}
+
 fn void render_wrapped_spans(
     DocRenderContext* ctx,
     ast::Span[] spans,
     int src_line,
     int max_w,
-    char* prefix_str,
-    char* first_prefix_str,
+    String prefix_str,
+    String first_prefix_str,
     bool plain,
     bool no_wrap
 )
 {
     if (spans.len == 0)
     {
-        LineBuilder lb;
+        buffer::ByteBuffer lb;
         lb.init(512);
         defer lb.free();
-        if (first_prefix_str != null) lb.append_zstr(first_prefix_str);
+        if (first_prefix_str.len > 0) lb.append_slice(first_prefix_str);
         emit_rendered_line(ctx, &lb, src_line);
         return;
     }
 
     if (no_wrap || max_w <= 20)
     {
-        LineBuilder lb;
+        buffer::ByteBuffer lb;
         lb.init(4096);
         defer lb.free();
-        if (first_prefix_str != null) lb.append_zstr(first_prefix_str);
+        if (first_prefix_str.len > 0) lb.append_slice(first_prefix_str);
         render_spans(&lb, spans, plain);
         emit_rendered_line(ctx, &lb, src_line);
         return;
     }
 
-    LineBuilder cur_line;
+    buffer::ByteBuffer cur_line;
     cur_line.init(4096);
     defer cur_line.free();
 
     int cur_w = 0;
-    if (first_prefix_str != null)
+    if (first_prefix_str.len > 0)
     {
-        cur_line.append_zstr(first_prefix_str);
-        cur_w = strutils::string_display_width((String)first_prefix_str[:strutils::str_len(first_prefix_str)]);
+        cur_line.append_slice(first_prefix_str);
+        cur_w = strutils::string_display_width(first_prefix_str);
     }
 
     int cont_prefix_w = 0;
-    if (prefix_str != null)
+    if (prefix_str.len > 0)
     {
-        cont_prefix_w = strutils::string_display_width((String)prefix_str[:strutils::str_len(prefix_str)]);
+        cont_prefix_w = strutils::string_display_width(prefix_str);
     }
 
     for (usz s_idx = 0; s_idx < spans.len; s_idx++)
@@ -387,12 +273,12 @@ fn void render_wrapped_spans(
             String word = txt[w_start : p - w_start];
             int word_w = strutils::string_display_width(word);
 
-            if (cur_w + 1 + word_w > max_w && cur_w > (prefix_str != null ? cont_prefix_w : 0))
+            if (cur_w + 1 + word_w > max_w && cur_w > (prefix_str.len > 0 ? cont_prefix_w : 0))
             {
                 emit_rendered_line(ctx, &cur_line, src_line);
-                if (prefix_str != null)
+                if (prefix_str.len > 0)
                 {
-                    cur_line.append_zstr(prefix_str);
+                    cur_line.append_slice(prefix_str);
                     cur_w = cont_prefix_w;
                 }
                 else
@@ -400,7 +286,7 @@ fn void render_wrapped_spans(
                     cur_w = 0;
                 }
             }
-            else if (cur_w > (prefix_str != null ? cont_prefix_w : (first_prefix_str != null ? cont_prefix_w : 0)))
+            else if (cur_w > (prefix_str.len > 0 ? cont_prefix_w : (first_prefix_str.len > 0 ? cont_prefix_w : 0)))
             {
                 cur_line.append_char(' ');
                 cur_w++;
@@ -418,9 +304,9 @@ fn void render_wrapped_spans(
             if (cur_w + url_w > max_w && cur_w > cont_prefix_w)
             {
                 emit_rendered_line(ctx, &cur_line, src_line);
-                if (prefix_str != null)
+                if (prefix_str.len > 0)
                 {
-                    cur_line.append_zstr(prefix_str);
+                    cur_line.append_slice(prefix_str);
                     cur_w = cont_prefix_w;
                 }
                 else
@@ -448,27 +334,6 @@ fn void render_wrapped_spans(
     }
 }
 
-fn void emit_table_line_cb(void* ctx_ptr, String text, int src_line)
-{
-    DocRenderContext* ctx = (DocRenderContext*)ctx_ptr;
-    layout::VisualLine vl;
-    vl.text = ctx.arena.dup_string(text);
-    vl.src_line = src_line;
-    vl.display_width = strutils::string_display_width(text);
-    ctx.list.push(vl);
-}
-
-fn void emit_rendered_line(DocRenderContext* ctx, LineBuilder* lb, int src_line)
-{
-    String s = lb.to_string();
-    layout::VisualLine vl;
-    vl.text = ctx.arena.dup_string(s);
-    vl.src_line = src_line;
-    vl.display_width = strutils::string_display_width(s);
-    ctx.list.push(vl);
-    lb.reset();
-}
-
 fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig config)
 {
     layout::VisualDocument vdoc;
@@ -478,9 +343,9 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
     ctx.vdoc = &vdoc;
     ctx.arena = &vdoc.arena;
     ctx.config = config;
-    ctx.list.init(256);
+    ctx.list.init(mem, 256);
 
-    LineBuilder lb;
+    buffer::ByteBuffer lb;
     lb.init(4096);
     defer lb.free();
 
@@ -603,7 +468,7 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                     }
                 }
 
-                // Bottom border ╰────────────────────────────────────────╯
+                // Bottom border ╰────────────────────────╯
                 if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
                 lb.append_zstr("╰");
                 int bbar_len = width - 6;
@@ -613,10 +478,24 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 if (!plain) lb.append_zstr((char*)ansi::RESET);
                 emit_rendered_line(&ctx, &lb, b.src_line_end);
 
-        case ast::BlockKind.FOOTNOTE_DEF:
-            render_wrapped_spans(&ctx, b.footnote_def.spans, b.src_line_start, width - 4, "      ", "  [1] ", plain, config.no_wrap);
+            case ast::BlockKind.FOOTNOTE_DEF:
+                buffer::ByteBuffer fn_pfx;
+                fn_pfx.init(64);
+                defer fn_pfx.free();
 
-        case ast::BlockKind.BLANK:
+                fn_pfx.append_zstr("  [");
+                fn_pfx.append_slice(b.footnote_def.label);
+                fn_pfx.append_zstr("] ");
+
+                int fn_w = strutils::string_display_width(fn_pfx.to_string());
+                buffer::ByteBuffer fn_cont;
+                fn_cont.init(64);
+                defer fn_cont.free();
+                fn_cont.append_spaces(fn_w);
+
+                render_wrapped_spans(&ctx, b.footnote_def.spans, b.src_line_start, width - 4, fn_cont.to_string(), fn_pfx.to_string(), plain, config.no_wrap);
+
+            case ast::BlockKind.BLANK:
                 emit_rendered_line(&ctx, &lb, b.src_line_start);
 
             case ast::BlockKind.THEMATIC_BREAK:
@@ -724,7 +603,7 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                         case ast::CalloutKind.IMPORTANT:
                             lb.append_zstr((char*)ansi::FG_PURPLE);
                             lb.append_zstr((char*)ansi::BOLD);
-                            lb.append_zstr("│ 📌 IMPORTANT");
+                            lb.append_zstr("│ 📢 IMPORTANT");
                         case ast::CalloutKind.CAUTION:
                             lb.append_zstr((char*)ansi::FG_PINK);
                             lb.append_zstr((char*)ansi::BOLD);
@@ -740,7 +619,7 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 }
                 emit_rendered_line(&ctx, &lb, b.src_line_start);
 
-                // Body line
+                // Body lines
                 if (b.callout.spans.len > 0)
                 {
                     render_wrapped_spans(&ctx, b.callout.spans, b.src_line_end, width - 6, "│ ", "│ ", plain, config.no_wrap);
@@ -750,30 +629,36 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 render_wrapped_spans(&ctx, b.blockquote.spans, b.src_line_start, width - 6, "│ ", "│ ", plain, config.no_wrap);
 
             case ast::BlockKind.LIST_ITEM:
-                char[64] pfx_indent;
-                int p_len = 0;
-                for (int spc = 0; spc < b.list_item.indent_level && p_len < 30; spc++)
-                {
-                    pfx_indent[p_len++] = ' ';
-                }
-                pfx_indent[p_len] = 0;
+                buffer::ByteBuffer pfx_indent;
+                pfx_indent.init(32);
+                defer pfx_indent.free();
+                pfx_indent.append_spaces(b.list_item.indent_level);
 
-                char[64] first_full;
-                char[64] cont_full;
-                strutils::copy_str(&first_full[0], &pfx_indent[0], 64);
-                strutils::copy_str(&cont_full[0], &pfx_indent[0], 64);
+                buffer::ByteBuffer first_full;
+                first_full.init(64);
+                defer first_full.free();
+                first_full.append_slice(pfx_indent.to_string());
+
+                buffer::ByteBuffer cont_full;
+                cont_full.init(64);
+                defer cont_full.free();
+                cont_full.append_slice(pfx_indent.to_string());
 
                 switch (b.list_item.kind)
                 {
                     case ast::ListKind.TASK_UNCHECKED:
-                        strutils::append_str(&first_full[0], "☐  ", 64);
-                        strutils::append_str(&cont_full[0], "   ", 64);
-                        render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, &cont_full[0], &first_full[0], plain, config.no_wrap);
+                        first_full.append_zstr("☐  ");
+                        cont_full.append_zstr("   ");
 
                     case ast::ListKind.TASK_CHECKED:
-                        strutils::append_str(&first_full[0], "✔  ", 64);
-                        strutils::append_str(&cont_full[0], "   ", 64);
-                        render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, &cont_full[0], &first_full[0], plain, config.no_wrap);
+                        first_full.append_zstr("✔  ");
+                        cont_full.append_zstr("   ");
+
+                    case ast::ListKind.ORDERED:
+                        first_full.append_int(b.list_item.order_number);
+                        first_full.append_zstr(". ");
+                        int ord_w = strutils::string_display_width(first_full.to_string()) - b.list_item.indent_level;
+                        cont_full.append_spaces(ord_w);
 
                     case ast::ListKind.BULLET:
                         char* b_glyph = "• ";
@@ -785,15 +670,15 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                         {
                             b_glyph = "◦ ";
                         }
-                        strutils::append_str(&first_full[0], b_glyph, 64);
-                        strutils::append_str(&cont_full[0], "  ", 64);
-                        render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, &cont_full[0], &first_full[0], plain, config.no_wrap);
+                        first_full.append_zstr(b_glyph);
+                        cont_full.append_spaces(strutils::string_display_width((String)b_glyph[:strutils::str_len(b_glyph)]));
 
                     default:
-                        strutils::append_str(&first_full[0], "• ", 64);
-                        strutils::append_str(&cont_full[0], "  ", 64);
-                        render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, &cont_full[0], &first_full[0], plain, config.no_wrap);
+                        first_full.append_zstr("• ");
+                        cont_full.append_zstr("  ");
                 }
+
+                render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, cont_full.to_string(), first_full.to_string(), plain, config.no_wrap);
 
             case ast::BlockKind.TABLE:
                 layout::render_table(&b.table, b.src_line_start, width, plain, (void*)&ctx, &emit_table_line_cb);
@@ -872,11 +757,24 @@ fn layout::VisualDocument render_document(ast::Document* doc, RenderConfig confi
                 emit_rendered_line(&ctx, &lb, b.src_line_end);
 
             case ast::BlockKind.PARAGRAPH:
-                render_wrapped_spans(&ctx, b.paragraph.spans, b.src_line_start, width - 2, null, null, plain, config.no_wrap);
+                render_wrapped_spans(&ctx, b.paragraph.spans, b.src_line_start, width - 2, "", "", plain, config.no_wrap);
         }
     }
 
-    vdoc.lines = ctx.list.to_arena_slice(&vdoc.arena);
+    if (ctx.list.size > 0)
+    {
+        layout::VisualLine* v_buf = (layout::VisualLine*)vdoc.arena.alloc((usz)ctx.list.size * layout::VisualLine::size);
+        for (sz i = 0; i < ctx.list.size; i++)
+        {
+            v_buf[i] = ctx.list.entries[i];
+        }
+        vdoc.lines = v_buf[:(usz)ctx.list.size];
+    }
+    else
+    {
+        vdoc.lines = {};
+    }
+
     ctx.list.free();
     return vdoc;
 }

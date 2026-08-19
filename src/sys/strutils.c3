@@ -163,6 +163,54 @@ fn String string_trim(String src)
     return src[start : end - start];
 }
 
+fn int codepoint_display_width(uint cp)
+{
+    // Control characters & null
+    if (cp < 0x20 || (cp >= 0x7F && cp < 0xA0)) return 0;
+    // Standard ASCII
+    if (cp < 0x7F) return 1;
+
+    // Combining diacritical marks & non-spacing marks (width 0)
+    if ((cp >= 0x0300 && cp <= 0x036F) ||
+        (cp >= 0x0483 && cp <= 0x0489) ||
+        (cp >= 0x0591 && cp <= 0x05BD) ||
+        (cp == 0x05BF) || (cp >= 0x05C1 && cp <= 0x05C2) || (cp >= 0x05C4 && cp <= 0x05C5) || (cp == 0x05C7) ||
+        (cp >= 0x0610 && cp <= 0x061A) || (cp >= 0x064B && cp <= 0x065F) || (cp == 0x0670) ||
+        (cp == 0x0711) || (cp >= 0x0730 && cp <= 0x074A) ||
+        (cp >= 0x1AB0 && cp <= 0x1AFF) ||
+        (cp >= 0x1DC0 && cp <= 0x1DFF) ||
+        (cp >= 0x20D0 && cp <= 0x20FF) ||
+        (cp >= 0xFE20 && cp <= 0xFE2F) ||
+        (cp >= 0xFE00 && cp <= 0xFE0F) || // Variation selectors
+        (cp >= 0x200B && cp <= 0x200F) || // ZWSP, ZWNJ, ZWJ, LRM, RLM
+        (cp >= 0x202A && cp <= 0x202E) || // BiDi controls
+        (cp >= 0x2060 && cp <= 0x206F) || // Invisible formatting
+        (cp == 0xFEFF))                    // Byte order mark
+    {
+        return 0;
+    }
+
+    // Mathematical Alphanumeric Symbols in Plane 1 (Double-struck, Script, Fraktur, Bold math letters)
+    if (cp >= 0x1D400 && cp <= 0x1D7FF) return 1;
+
+    // Wide Emojis, Symbols, and CJK Ideographs (width 2)
+    if ((cp >= 0x1100 && cp <= 0x115F) ||
+        (cp >= 0x2E80 && cp <= 0xA4CF && cp != 0x303F) ||
+        (cp >= 0xAC00 && cp <= 0xD7A3) ||
+        (cp >= 0xF900 && cp <= 0xFAFF) ||
+        (cp >= 0xFE10 && cp <= 0xFE19) ||
+        (cp >= 0xFE30 && cp <= 0xFE6F) ||
+        (cp >= 0xFF01 && cp <= 0xFF60) ||
+        (cp >= 0xFFE0 && cp <= 0xFFE6) ||
+        (cp >= 0x1F000 && cp <= 0x1FAFF) ||
+        (cp >= 0x20000 && cp <= 0x3FFFF))
+    {
+        return 2;
+    }
+
+    return 1;
+}
+
 fn int utf8_display_width(char* s)
 {
     if (s == null) return 0;
@@ -170,6 +218,7 @@ fn int utf8_display_width(char* s)
     int width = 0;
     while (s[i] != 0)
     {
+        // Skip ANSI escape sequence
         if (s[i] == 0x1b && s[i+1] == '[')
         {
             i += 2;
@@ -184,33 +233,31 @@ fn int utf8_display_width(char* s)
         uint c = (uint)s[i];
         if (c < 0x80)
         {
-            if (c >= 0x20 && c != 0x7F) width++;
+            width += codepoint_display_width(c);
             i++;
         }
         else if ((c & 0xe0) == 0xc0)
         {
+            uint cp = (c & 0x1f) << 6;
+            if (s[i+1] != 0) cp |= ((uint)s[i+1] & 0x3f);
+            width += codepoint_display_width(cp);
             i += (s[i+1] != 0) ? 2 : 1;
-            width++;
         }
         else if ((c & 0xf0) == 0xe0)
         {
-            uint cp = ((c & 0x0f) << 12);
+            uint cp = (c & 0x0f) << 12;
             if (s[i+1] != 0) cp |= ((uint)s[i+1] & 0x3f) << 6;
             if (s[i+1] != 0 && s[i+2] != 0) cp |= ((uint)s[i+2] & 0x3f);
-
-            if ((cp >= 0x2E80 && cp <= 0xA4CF) || (cp >= 0xAC00 && cp <= 0xD7A3) || (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFE30 && cp <= 0xFE6F) || (cp >= 0xFF01 && cp <= 0xFF60))
-            {
-                width += 2;
-            }
-            else
-            {
-                width++;
-            }
+            width += codepoint_display_width(cp);
             i += (s[i+1] != 0 && s[i+2] != 0) ? 3 : (s[i+1] != 0 ? 2 : 1);
         }
         else if ((c & 0xf8) == 0xf0)
         {
-            width += 2;
+            uint cp = (c & 0x07) << 18;
+            if (s[i+1] != 0) cp |= ((uint)s[i+1] & 0x3f) << 12;
+            if (s[i+1] != 0 && s[i+2] != 0) cp |= ((uint)s[i+2] & 0x3f) << 6;
+            if (s[i+1] != 0 && s[i+2] != 0 && s[i+3] != 0) cp |= ((uint)s[i+3] & 0x3f);
+            width += codepoint_display_width(cp);
             int step = 1;
             if (s[i+1] != 0) step++;
             if (step == 2 && s[i+2] != 0) step++;
@@ -232,6 +279,7 @@ fn int string_display_width(String s)
     int width = 0;
     while (i < (sz)s.len)
     {
+        // Skip ANSI escape sequence
         if (s[i] == 0x1b && i + 1 < (sz)s.len && s[i+1] == '[')
         {
             i += 2;
@@ -246,33 +294,31 @@ fn int string_display_width(String s)
         uint c = (uint)s[i];
         if (c < 0x80)
         {
-            if (c >= 0x20 && c != 0x7F) width++;
+            width += codepoint_display_width(c);
             i++;
         }
         else if ((c & 0xe0) == 0xc0)
         {
+            uint cp = (c & 0x1f) << 6;
+            if (i + 1 < (sz)s.len) cp |= ((uint)s[i+1] & 0x3f);
+            width += codepoint_display_width(cp);
             i += (i + 1 < (sz)s.len) ? 2 : 1;
-            width++;
         }
         else if ((c & 0xf0) == 0xe0)
         {
-            uint cp = ((c & 0x0f) << 12);
+            uint cp = (c & 0x0f) << 12;
             if (i + 1 < (sz)s.len) cp |= ((uint)s[i+1] & 0x3f) << 6;
             if (i + 2 < (sz)s.len) cp |= ((uint)s[i+2] & 0x3f);
-
-            if ((cp >= 0x2E80 && cp <= 0xA4CF) || (cp >= 0xAC00 && cp <= 0xD7A3) || (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFE30 && cp <= 0xFE6F) || (cp >= 0xFF01 && cp <= 0xFF60))
-            {
-                width += 2;
-            }
-            else
-            {
-                width++;
-            }
+            width += codepoint_display_width(cp);
             i += (i + 2 < (sz)s.len) ? 3 : ((i + 1 < (sz)s.len) ? 2 : 1);
         }
         else if ((c & 0xf8) == 0xf0)
         {
-            width += 2;
+            uint cp = (c & 0x07) << 18;
+            if (i + 1 < (sz)s.len) cp |= ((uint)s[i+1] & 0x3f) << 12;
+            if (i + 2 < (sz)s.len) cp |= ((uint)s[i+2] & 0x3f) << 6;
+            if (i + 3 < (sz)s.len) cp |= ((uint)s[i+3] & 0x3f);
+            width += codepoint_display_width(cp);
             sz step = 1;
             if (i + 1 < (sz)s.len) step++;
             if (step == 2 && i + 2 < (sz)s.len) step++;

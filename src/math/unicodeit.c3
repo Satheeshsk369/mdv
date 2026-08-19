@@ -3,6 +3,7 @@ module math;
 import std::core::mem;
 import ast;
 import strutils;
+import buffer;
 
 struct SymbolEntry {
     String name;
@@ -334,56 +335,6 @@ const SymbolEntry[] SYMBOLS = {
     { "vdots", "⋮" }
 };
 
-struct MathBuffer {
-    char[] buf;
-    usz len;
-    usz cap;
-}
-
-fn void MathBuffer.init(MathBuffer* b, usz initial_cap)
-{
-    b.buf = mem::alloc_array(char, (sz)initial_cap);
-    b.len = 0;
-    b.cap = initial_cap;
-}
-
-fn void MathBuffer.append_char(MathBuffer* b, char c)
-{
-    if (b.len < b.cap - 1)
-    {
-        b.buf[b.len++] = c;
-    }
-}
-
-fn void MathBuffer.append_str(MathBuffer* b, char* s)
-{
-    if (s == null) return;
-    usz sl = 0;
-    while (s[sl] != 0 && b.len < b.cap - 1)
-    {
-        b.buf[b.len++] = s[sl++];
-    }
-}
-
-fn void MathBuffer.append_slice(MathBuffer* b, String s)
-{
-    for (usz i = 0; i < (usz)s.len && b.len < b.cap - 1; i++)
-    {
-        b.buf[b.len++] = s[i];
-    }
-}
-
-fn void MathBuffer.free(MathBuffer* b)
-{
-    if (b.buf.ptr != null)
-    {
-        mem::free(b.buf);
-        b.buf = {};
-        b.len = 0;
-        b.cap = 0;
-    }
-}
-
 fn char* get_superscript_char(char c)
 {
     switch (c)
@@ -476,25 +427,24 @@ fn char* get_mathbb_char(char c)
 {
     switch (c)
     {
-        case 'R': return "ℝ";
-        case 'C': return "ℂ";
-        case 'N': return "ℕ";
-        case 'Z': return "ℤ";
-        case 'Q': return "ℚ";
-        case 'P': return "ℙ";
-        case 'E': return "𝔼";
-        case 'H': return "ℍ";
-        case 'F': return "𝔽";
-        case 'K': return "𝕂";
         case 'A': return "𝔸";
         case 'B': return "𝔹";
+        case 'C': return "ℂ";
         case 'D': return "𝔻";
+        case 'E': return "𝔼";
+        case 'F': return "𝔽";
         case 'G': return "𝔾";
+        case 'H': return "ℍ";
         case 'I': return "𝕀";
         case 'J': return "𝕁";
+        case 'K': return "𝕂";
         case 'L': return "𝕃";
         case 'M': return "𝕄";
+        case 'N': return "ℕ";
         case 'O': return "𝕆";
+        case 'P': return "ℙ";
+        case 'Q': return "ℚ";
+        case 'R': return "ℝ";
         case 'S': return "𝕊";
         case 'T': return "𝕋";
         case 'U': return "𝕌";
@@ -502,6 +452,7 @@ fn char* get_mathbb_char(char c)
         case 'W': return "𝕎";
         case 'X': return "𝕏";
         case 'Y': return "𝕐";
+        case 'Z': return "ℤ";
         case '0': return "𝟘";
         case '1': return "𝟙";
         default: return null;
@@ -546,9 +497,8 @@ fn String transform_math(ast::Arena* arena, String input)
 {
     if (input.len == 0) return "";
 
-    usz max_out = (usz)input.len * 4 + 256;
-    MathBuffer mb;
-    mb.init(max_out);
+    buffer::ByteBuffer mb;
+    mb.init((usz)input.len * 4 + 256);
     defer mb.free();
 
     usz i = 0;
@@ -571,19 +521,19 @@ fn String transform_math(ast::Arena* arena, String input)
                 }
                 if (next_c == ',')
                 {
-                    mb.append_str(" ");
+                    mb.append_zstr(" ");
                     i += 2;
                     continue;
                 }
                 if (next_c == ':')
                 {
-                    mb.append_str(" ");
+                    mb.append_zstr(" ");
                     i += 2;
                     continue;
                 }
                 if (next_c == ';')
                 {
-                    mb.append_str(" ");
+                    mb.append_zstr(" ");
                     i += 2;
                     continue;
                 }
@@ -623,21 +573,21 @@ fn String transform_math(ast::Arena* arena, String input)
             String cmd = input[cmd_start : cmd_end - cmd_start];
 
             // ── Quad Spacing: \quad, \qquad ──────────────────────────────────
-            if (strutils::string_eq(cmd, "quad"))
+            if (cmd == "quad")
             {
-                mb.append_str(" ");
+                mb.append_zstr(" ");
                 i = cmd_end;
                 continue;
             }
-            if (strutils::string_eq(cmd, "qquad"))
+            if (cmd == "qquad")
             {
-                mb.append_str("  ");
+                mb.append_zstr("  ");
                 i = cmd_end;
                 continue;
             }
 
             // ── Operatorname / Text / Style Wrappers ─────────────────────────
-            if (strutils::string_eq(cmd, "operatorname") || strutils::string_eq(cmd, "text") || strutils::string_eq(cmd, "mathbf") || strutils::string_eq(cmd, "mathrm") || strutils::string_eq(cmd, "mathit") || strutils::string_eq(cmd, "mathsf") || strutils::string_eq(cmd, "hspace") || strutils::string_eq(cmd, "vspace"))
+            if (cmd == "operatorname" || cmd == "text" || cmd == "mathbf" || cmd == "mathrm" || cmd == "mathit" || cmd == "mathsf" || cmd == "hspace" || cmd == "vspace")
             {
                 i = cmd_end;
                 while (i < (usz)input.len && (input[i] == ' ' || input[i] == '*')) i++;
@@ -646,7 +596,7 @@ fn String transform_math(ast::Arena* arena, String input)
                     i++;
                     while (i < (usz)input.len && input[i] != '}')
                     {
-                        if (!strutils::string_eq(cmd, "hspace") && !strutils::string_eq(cmd, "vspace"))
+                        if (cmd != "hspace" && cmd != "vspace")
                         {
                             mb.append_char(input[i]);
                         }
@@ -654,12 +604,12 @@ fn String transform_math(ast::Arena* arena, String input)
                     }
                     if (i < (usz)input.len && input[i] == '}') i++;
                 }
-                if (strutils::string_eq(cmd, "operatorname")) mb.append_char(' ');
+                if (cmd == "operatorname") mb.append_char(' ');
                 continue;
             }
 
             // ── Blackboard Bold: \mathbb{R} ───────────────────────────────────
-            if (strutils::string_eq(cmd, "mathbb"))
+            if (cmd == "mathbb")
             {
                 i = cmd_end;
                 while (i < (usz)input.len && input[i] == ' ') i++;
@@ -671,7 +621,7 @@ fn String transform_math(ast::Arena* arena, String input)
                         char* bb = get_mathbb_char(input[i]);
                         if (bb != null)
                         {
-                            mb.append_str(bb);
+                            mb.append_zstr(bb);
                         }
                         else
                         {
@@ -685,7 +635,7 @@ fn String transform_math(ast::Arena* arena, String input)
             }
 
             // ── Calligraphic / Script: \mathcal{L} ─────────────────────────────
-            if (strutils::string_eq(cmd, "mathcal") || strutils::string_eq(cmd, "mathscr"))
+            if (cmd == "mathcal" || cmd == "mathscr")
             {
                 i = cmd_end;
                 while (i < (usz)input.len && input[i] == ' ') i++;
@@ -697,7 +647,7 @@ fn String transform_math(ast::Arena* arena, String input)
                         char* cal = get_mathcal_char(input[i]);
                         if (cal != null)
                         {
-                            mb.append_str(cal);
+                            mb.append_zstr(cal);
                         }
                         else
                         {
@@ -711,34 +661,34 @@ fn String transform_math(ast::Arena* arena, String input)
             }
 
             // ── Accents: \vec, \hat, \bar, \overline, \dot, \ddot, \tilde ────
-            if (strutils::string_eq(cmd, "vec") || strutils::string_eq(cmd, "hat") || strutils::string_eq(cmd, "bar") || strutils::string_eq(cmd, "overline") || strutils::string_eq(cmd, "dot") || strutils::string_eq(cmd, "ddot") || strutils::string_eq(cmd, "tilde") || strutils::string_eq(cmd, "acute") || strutils::string_eq(cmd, "grave"))
+            if (cmd == "vec" || cmd == "hat" || cmd == "bar" || cmd == "overline" || cmd == "dot" || cmd == "ddot" || cmd == "tilde" || cmd == "acute" || cmd == "grave")
             {
                 char* combining = "⃗";
-                if (strutils::string_eq(cmd, "hat"))
+                if (cmd == "hat")
                 {
                     combining = "̂";
                 }
-                else if (strutils::string_eq(cmd, "bar") || strutils::string_eq(cmd, "overline"))
+                else if (cmd == "bar" || cmd == "overline")
                 {
                     combining = "̄";
                 }
-                else if (strutils::string_eq(cmd, "dot"))
+                else if (cmd == "dot")
                 {
                     combining = "̇";
                 }
-                else if (strutils::string_eq(cmd, "ddot"))
+                else if (cmd == "ddot")
                 {
                     combining = "̈";
                 }
-                else if (strutils::string_eq(cmd, "tilde"))
+                else if (cmd == "tilde")
                 {
                     combining = "̃";
                 }
-                else if (strutils::string_eq(cmd, "acute"))
+                else if (cmd == "acute")
                 {
                     combining = "́";
                 }
-                else if (strutils::string_eq(cmd, "grave"))
+                else if (cmd == "grave")
                 {
                     combining = "̀";
                 }
@@ -755,18 +705,18 @@ fn String transform_math(ast::Arena* arena, String input)
 
                     String t_arg = transform_math(arena, arg_content);
                     mb.append_slice(t_arg);
-                    mb.append_str(combining);
+                    mb.append_zstr(combining);
                 }
                 else if (i < (usz)input.len)
                 {
                     mb.append_char(input[i++]);
-                    mb.append_str(combining);
+                    mb.append_zstr(combining);
                 }
                 continue;
             }
 
             // ── Fractions: \frac{num}{den} ───────────────────────────────────
-            if (strutils::string_eq(cmd, "frac") || strutils::string_eq(cmd, "dfrac") || strutils::string_eq(cmd, "tfrac"))
+            if (cmd == "frac" || cmd == "dfrac" || cmd == "tfrac")
             {
                 i = cmd_end;
                 while (i < (usz)input.len && input[i] == ' ') i++;
@@ -814,21 +764,21 @@ fn String transform_math(ast::Arena* arena, String input)
                         String t_num = transform_math(arena, num);
                         String t_den = transform_math(arena, den);
 
-                        if (strutils::string_eq(t_num, "1") && strutils::string_eq(t_den, "2")) { mb.append_str("½"); continue; }
-                        if (strutils::string_eq(t_num, "1") && strutils::string_eq(t_den, "3")) { mb.append_str("⅓"); continue; }
-                        if (strutils::string_eq(t_num, "2") && strutils::string_eq(t_den, "3")) { mb.append_str("⅔"); continue; }
-                        if (strutils::string_eq(t_num, "1") && strutils::string_eq(t_den, "4")) { mb.append_str("¼"); continue; }
-                        if (strutils::string_eq(t_num, "3") && strutils::string_eq(t_den, "4")) { mb.append_str("¾"); continue; }
-                        if (strutils::string_eq(t_num, "1") && strutils::string_eq(t_den, "5")) { mb.append_str("⅕"); continue; }
-                        if (strutils::string_eq(t_num, "2") && strutils::string_eq(t_den, "5")) { mb.append_str("⅖"); continue; }
-                        if (strutils::string_eq(t_num, "3") && strutils::string_eq(t_den, "5")) { mb.append_str("⅗"); continue; }
-                        if (strutils::string_eq(t_num, "4") && strutils::string_eq(t_den, "5")) { mb.append_str("⅘"); continue; }
-                        if (strutils::string_eq(t_num, "1") && strutils::string_eq(t_den, "6")) { mb.append_str("⅙"); continue; }
-                        if (strutils::string_eq(t_num, "5") && strutils::string_eq(t_den, "6")) { mb.append_str("⅚"); continue; }
-                        if (strutils::string_eq(t_num, "1") && strutils::string_eq(t_den, "8")) { mb.append_str("⅛"); continue; }
-                        if (strutils::string_eq(t_num, "3") && strutils::string_eq(t_den, "8")) { mb.append_str("⅜"); continue; }
-                        if (strutils::string_eq(t_num, "5") && strutils::string_eq(t_den, "8")) { mb.append_str("⅝"); continue; }
-                        if (strutils::string_eq(t_num, "7") && strutils::string_eq(t_den, "8")) { mb.append_str("⅞"); continue; }
+                        if (t_num == "1" && t_den == "2") { mb.append_zstr("½"); continue; }
+                        if (t_num == "1" && t_den == "3") { mb.append_zstr("⅓"); continue; }
+                        if (t_num == "2" && t_den == "3") { mb.append_zstr("⅔"); continue; }
+                        if (t_num == "1" && t_den == "4") { mb.append_zstr("¼"); continue; }
+                        if (t_num == "3" && t_den == "4") { mb.append_zstr("¾"); continue; }
+                        if (t_num == "1" && t_den == "5") { mb.append_zstr("⅕"); continue; }
+                        if (t_num == "2" && t_den == "5") { mb.append_zstr("⅖"); continue; }
+                        if (t_num == "3" && t_den == "5") { mb.append_zstr("⅗"); continue; }
+                        if (t_num == "4" && t_den == "5") { mb.append_zstr("⅘"); continue; }
+                        if (t_num == "1" && t_den == "6") { mb.append_zstr("⅙"); continue; }
+                        if (t_num == "5" && t_den == "6") { mb.append_zstr("⅚"); continue; }
+                        if (t_num == "1" && t_den == "8") { mb.append_zstr("⅛"); continue; }
+                        if (t_num == "3" && t_den == "8") { mb.append_zstr("⅜"); continue; }
+                        if (t_num == "5" && t_den == "8") { mb.append_zstr("⅝"); continue; }
+                        if (t_num == "7" && t_den == "8") { mb.append_zstr("⅞"); continue; }
 
                         bool complex_num = (t_num.len > 1 && (t_num[0] != '(' || t_num[t_num.len - 1] != ')'));
                         bool complex_den = (t_den.len > 1 && (t_den[0] != '(' || t_den[t_den.len - 1] != ')'));
@@ -837,7 +787,7 @@ fn String transform_math(ast::Arena* arena, String input)
                         mb.append_slice(t_num);
                         if (complex_num) mb.append_char(')');
 
-                        mb.append_str(" / ");
+                        mb.append_zstr(" / ");
 
                         if (complex_den) mb.append_char('(');
                         mb.append_slice(t_den);
@@ -848,7 +798,7 @@ fn String transform_math(ast::Arena* arena, String input)
             }
 
             // ── Roots: \sqrt[n]{...} or \sqrt{...} ───────────────────────────
-            if (strutils::string_eq(cmd, "sqrt"))
+            if (cmd == "sqrt")
             {
                 i = cmd_end;
                 while (i < (usz)input.len && input[i] == ' ') i++;
@@ -862,7 +812,7 @@ fn String transform_math(ast::Arena* arena, String input)
                         char* deg = get_superscript_char(input[i]);
                         if (deg != null)
                         {
-                            mb.append_str(deg);
+                            mb.append_zstr(deg);
                         }
                         else
                         {
@@ -873,7 +823,7 @@ fn String transform_math(ast::Arena* arena, String input)
                     if (i < (usz)input.len && input[i] == ']') i++;
                 }
 
-                mb.append_str("√");
+                mb.append_zstr("√");
 
                 while (i < (usz)input.len && input[i] == ' ') i++;
                 if (i < (usz)input.len && input[i] == '{')
@@ -915,10 +865,9 @@ fn String transform_math(ast::Arena* arena, String input)
             bool found_sym = false;
             for (usz s = 0; s < SYMBOLS.len; s++)
             {
-                if (strutils::string_eq(cmd, SYMBOLS[s].name))
+                if (cmd == SYMBOLS[s].name)
                 {
                     mb.append_slice(SYMBOLS[s].glyph);
-                    // If followed by an alphanumeric character, add a space
                     if (cmd_end < (usz)input.len && ((input[cmd_end] >= 'a' && input[cmd_end] <= 'z') || (input[cmd_end] >= 'A' && input[cmd_end] <= 'Z') || (input[cmd_end] >= '0' && input[cmd_end] <= '9')))
                     {
                         mb.append_char(' ');
@@ -955,22 +904,22 @@ fn String transform_math(ast::Arena* arena, String input)
                         usz s_end = s_start;
                         while (s_end < (usz)input.len && ((input[s_end] >= 'a' && input[s_end] <= 'z') || (input[s_end] >= 'A' && input[s_end] <= 'Z'))) s_end++;
                         String scmd = input[s_start : s_end - s_start];
-                        if (strutils::string_eq(scmd, "alpha")) { mb.append_str("ᵅ"); }
-                        else if (strutils::string_eq(scmd, "beta")) { mb.append_str("ᵝ"); }
-                        else if (strutils::string_eq(scmd, "gamma")) { mb.append_str("ᵞ"); }
-                        else if (strutils::string_eq(scmd, "delta")) { mb.append_str("ᵟ"); }
-                        else if (strutils::string_eq(scmd, "epsilon")) { mb.append_str("ᵋ"); }
-                        else if (strutils::string_eq(scmd, "theta")) { mb.append_str("ᶿ"); }
-                        else if (strutils::string_eq(scmd, "phi")) { mb.append_str("ᵠ"); }
-                        else if (strutils::string_eq(scmd, "chi")) { mb.append_str("ᵡ"); }
-                        else if (strutils::string_eq(scmd, "infty")) { mb.append_str("∞"); }
-                        else if (strutils::string_eq(scmd, "to") || strutils::string_eq(scmd, "rightarrow")) { mb.append_str("→"); }
+                        if (scmd == "alpha") { mb.append_zstr("ᵅ"); }
+                        else if (scmd == "beta") { mb.append_zstr("ᵝ"); }
+                        else if (scmd == "gamma") { mb.append_zstr("ᵞ"); }
+                        else if (scmd == "delta") { mb.append_zstr("ᵟ"); }
+                        else if (scmd == "epsilon") { mb.append_zstr("ᵋ"); }
+                        else if (scmd == "theta") { mb.append_zstr("ᶿ"); }
+                        else if (scmd == "phi") { mb.append_zstr("ᵠ"); }
+                        else if (scmd == "chi") { mb.append_zstr("ᵡ"); }
+                        else if (scmd == "infty") { mb.append_zstr("∞"); }
+                        else if (scmd == "to" || scmd == "rightarrow") { mb.append_zstr("→"); }
                         else
                         {
                             bool found = false;
                             for (usz s = 0; s < SYMBOLS.len; s++)
                             {
-                                if (strutils::string_eq(scmd, SYMBOLS[s].name))
+                                if (scmd == SYMBOLS[s].name)
                                 {
                                     mb.append_slice(SYMBOLS[s].glyph);
                                     found = true;
@@ -986,7 +935,7 @@ fn String transform_math(ast::Arena* arena, String input)
                     char* sup = get_superscript_char(input[i]);
                     if (sup != null)
                     {
-                        mb.append_str(sup);
+                        mb.append_zstr(sup);
                     }
                     else
                     {
@@ -1002,7 +951,7 @@ fn String transform_math(ast::Arena* arena, String input)
                 char* sup = get_superscript_char(input[i]);
                 if (sup != null)
                 {
-                    mb.append_str(sup);
+                    mb.append_zstr(sup);
                     i++;
                     continue;
                 }
@@ -1032,19 +981,19 @@ fn String transform_math(ast::Arena* arena, String input)
                         usz s_end = s_start;
                         while (s_end < (usz)input.len && ((input[s_end] >= 'a' && input[s_end] <= 'z') || (input[s_end] >= 'A' && input[s_end] <= 'Z'))) s_end++;
                         String scmd = input[s_start : s_end - s_start];
-                        if (strutils::string_eq(scmd, "beta")) { mb.append_str("ᵦ"); }
-                        else if (strutils::string_eq(scmd, "gamma")) { mb.append_str("ᵧ"); }
-                        else if (strutils::string_eq(scmd, "rho")) { mb.append_str("ᵨ"); }
-                        else if (strutils::string_eq(scmd, "phi")) { mb.append_str("ᵩ"); }
-                        else if (strutils::string_eq(scmd, "chi")) { mb.append_str("ᵪ"); }
-                        else if (strutils::string_eq(scmd, "infty")) { mb.append_str("∞"); }
-                        else if (strutils::string_eq(scmd, "to") || strutils::string_eq(scmd, "rightarrow")) { mb.append_str("→"); }
+                        if (scmd == "beta") { mb.append_zstr("ᵦ"); }
+                        else if (scmd == "gamma") { mb.append_zstr("ᵧ"); }
+                        else if (scmd == "rho") { mb.append_zstr("ᵨ"); }
+                        else if (scmd == "phi") { mb.append_zstr("ᵩ"); }
+                        else if (scmd == "chi") { mb.append_zstr("ᵪ"); }
+                        else if (scmd == "infty") { mb.append_zstr("∞"); }
+                        else if (scmd == "to" || scmd == "rightarrow") { mb.append_zstr("→"); }
                         else
                         {
                             bool found = false;
                             for (usz s = 0; s < SYMBOLS.len; s++)
                             {
-                                if (strutils::string_eq(scmd, SYMBOLS[s].name))
+                                if (scmd == SYMBOLS[s].name)
                                 {
                                     mb.append_slice(SYMBOLS[s].glyph);
                                     found = true;
@@ -1060,7 +1009,7 @@ fn String transform_math(ast::Arena* arena, String input)
                     char* sub = get_subscript_char(input[i]);
                     if (sub != null)
                     {
-                        mb.append_str(sub);
+                        mb.append_zstr(sub);
                     }
                     else
                     {
@@ -1076,7 +1025,7 @@ fn String transform_math(ast::Arena* arena, String input)
                 char* sub = get_subscript_char(input[i]);
                 if (sub != null)
                 {
-                    mb.append_str(sub);
+                    mb.append_zstr(sub);
                     i++;
                     continue;
                 }
@@ -1096,6 +1045,5 @@ fn String transform_math(ast::Arena* arena, String input)
         i++;
     }
 
-    String result_slice = (String)mb.buf[:mb.len];
-    return arena.dup_string(result_slice);
+    return mb.to_arena_string(arena);
 }

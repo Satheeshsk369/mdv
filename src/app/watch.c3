@@ -2,6 +2,7 @@ module app;
 
 import std::io;
 import std::core::mem;
+import std::collections::list;
 import ast;
 import parser;
 import render;
@@ -9,83 +10,16 @@ import layout;
 import ansi;
 import terminal;
 import strutils;
+import buffer;
 
 extern fn int write(int fd, void* buf, ulong count);
 
-struct FrameBuffer {
-    char[] buf;
-    usz len;
-    usz cap;
-}
-
-fn void FrameBuffer.init(FrameBuffer* fb, usz initial_cap = 262144)
-{
-    fb.buf = mem::alloc_array(char, (sz)initial_cap);
-    fb.len = 0;
-    fb.cap = initial_cap;
-}
-
-fn void FrameBuffer.append_char(FrameBuffer* fb, char c)
-{
-    if (fb.len < fb.cap - 1)
-    {
-        fb.buf[fb.len++] = c;
-    }
-}
-
-fn void FrameBuffer.append_str(FrameBuffer* fb, char* s)
-{
-    if (s == null) return;
-    usz sl = 0;
-    while (s[sl] != 0 && fb.len < fb.cap - 1)
-    {
-        fb.buf[fb.len++] = s[sl++];
-    }
-}
-
-fn void FrameBuffer.append_slice(FrameBuffer* fb, String s)
-{
-    for (usz i = 0; i < (usz)s.len && fb.len < fb.cap - 1; i++)
-    {
-        fb.buf[fb.len++] = s[i];
-    }
-}
-
-fn void FrameBuffer.append_int(FrameBuffer* fb, int val)
-{
-    char[32] tmp;
-    if (val == 0) { fb.append_str("0"); return; }
-    if (val < 0) { fb.append_str("-"); val = -val; }
-    int p = 0;
-    while (val > 0)
-    {
-        tmp[p++] = (char)('0' + (val % 10));
-        val /= 10;
-    }
-    for (int i = p - 1; i >= 0; i--)
-    {
-        char[2] ch; ch[0] = tmp[i]; ch[1] = 0;
-        fb.append_str(&ch[0]);
-    }
-}
-
-fn void FrameBuffer.flush(FrameBuffer* fb)
+fn void flush_fb(buffer::ByteBuffer* fb)
 {
     if (fb.len > 0)
     {
         write(1, (void*)fb.buf.ptr, (ulong)fb.len);
         fb.len = 0;
-    }
-}
-
-fn void FrameBuffer.free(FrameBuffer* fb)
-{
-    if (fb.buf.ptr != null)
-    {
-        mem::free(fb.buf);
-        fb.buf = {};
-        fb.len = 0;
-        fb.cap = 0;
     }
 }
 
@@ -96,33 +30,25 @@ struct TocItem {
     int visual_line;
 }
 
-struct TocList {
-    TocItem[64] items;
-    usz count;
-}
-
-fn void extract_toc(ast::Document* doc, layout::VisualDocument* vdoc, TocList* toc)
+fn void extract_toc(ast::Document* doc, layout::VisualDocument* vdoc, List{TocItem}* toc)
 {
-    toc.count = 0;
+    toc.clear();
     int total_lines = vdoc.get_total_lines();
-    for (usz i = 0; i < doc.blocks.len && toc.count < 64; i++)
+    for (usz i = 0; i < doc.blocks.len; i++)
     {
         ast::Block* b = &doc.blocks[i];
         if (b.kind == ast::BlockKind.HEADING)
         {
             // Build plain title
-            char[256] tbuf;
-            int tp = 0;
+            buffer::ByteBuffer tbuf;
+            tbuf.init(128);
+            defer tbuf.free();
+
             for (usz s = 0; s < b.heading.spans.len; s++)
             {
-                String sp_txt = b.heading.spans[s].text;
-                for (usz c = 0; c < (usz)sp_txt.len && tp < 250; c++)
-                {
-                    tbuf[tp++] = sp_txt[c];
-                }
+                tbuf.append_slice(b.heading.spans[s].text);
             }
-            tbuf[tp] = 0;
-            String title_str = vdoc.arena.dup_string((String)tbuf[:tp]);
+            String title_str = tbuf.to_arena_string(&vdoc.arena);
 
             // Find exact visual line containing this heading
             int start_hint = vdoc.find_visual_line(b.src_line_start);
@@ -156,7 +82,7 @@ fn void extract_toc(ast::Document* doc, layout::VisualDocument* vdoc, TocList* t
             item.title = title_str;
             item.src_line = b.src_line_start;
             item.visual_line = exact_vline;
-            toc.items[toc.count++] = item;
+            toc.push(item);
         }
     }
 }
@@ -251,7 +177,7 @@ fn int get_accelerated_step(ScrollVelocity* v, int dir, bool is_wheel)
     }
 }
 
-fn void append_with_search_highlight(FrameBuffer* fb, String line, String query, bool is_cur_match_line)
+fn void append_with_search_highlight(buffer::ByteBuffer* fb, String line, String query, bool is_cur_match_line)
 {
     if (query.len == 0)
     {
@@ -295,18 +221,18 @@ fn void append_with_search_highlight(FrameBuffer* fb, String line, String query,
                 // Active match = bright lime green background, other matches = warm orange background
                 if (is_cur_match_line)
                 {
-                    fb.append_str("\x1b[48;2;166;226;46m\x1b[38;2;0;0;0m\x1b[1m");
+                    fb.append_zstr("\x1b[48;2;166;226;46m\x1b[38;2;0;0;0m\x1b[1m");
                 }
                 else
                 {
-                    fb.append_str("\x1b[48;2;253;151;31m\x1b[38;2;0;0;0m\x1b[1m");
+                    fb.append_zstr("\x1b[48;2;253;151;31m\x1b[38;2;0;0;0m\x1b[1m");
                 }
 
                 for (usz k = 0; k < qlen; k++)
                 {
                     fb.append_char(line[p++]);
                 }
-                fb.append_str("\x1b[0m");
+                fb.append_zstr("\x1b[0m");
                 continue;
             }
         }
@@ -315,7 +241,7 @@ fn void append_with_search_highlight(FrameBuffer* fb, String line, String query,
     }
 }
 
-fn void append_horizontal_slice(FrameBuffer* fb, String line, int scroll_left, int max_w)
+fn void append_horizontal_slice(buffer::ByteBuffer* fb, String line, int scroll_left, int max_w)
 {
     if (scroll_left <= 0)
     {
@@ -374,24 +300,52 @@ fn void append_horizontal_slice(FrameBuffer* fb, String line, int scroll_left, i
     }
 }
 
-fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_top, int scroll_left, int view_height, char* filename, int changed_src_line, int term_width, char* status_msg, bool search_active, char* search_query, int match_count, int cur_match_idx, int cur_match_line, bool show_toc, TocList* toc, int toc_cursor, bool show_help, bool no_wrap, bool goto_active = false, char* goto_query = null, int cursor_line = 0, bool show_files = false, terminal::FileTree* tree = null, int file_cursor = 0)
+fn void draw_viewport(
+    buffer::ByteBuffer* fb,
+    layout::VisualDocument* vdoc,
+    int scroll_top,
+    int scroll_left,
+    int view_height,
+    char* filename,
+    int changed_src_line,
+    int term_width,
+    char* status_msg,
+    bool search_active,
+    char* search_query,
+    int match_count,
+    int cur_match_idx,
+    int cur_match_line,
+    bool show_toc,
+    List{TocItem}* toc,
+    int toc_cursor,
+    bool show_help,
+    bool no_wrap,
+    bool goto_active = false,
+    char* goto_query = null,
+    int cursor_line = 0,
+    bool show_files = false,
+    terminal::FileTree* tree = null,
+    int file_cursor = 0
+)
 {
-    fb.len = 0;
+    fb.reset();
 
     // Disable line wrap and move cursor to top-left (1,1)
-    fb.append_str("\x1b[?7l\x1b[H");
+    fb.append_zstr("\x1b[?7l\x1b[H");
 
     // ── Help Modal View ───────────────────────────────────────────────
     if (show_help)
     {
-        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
-        fb.append_str(filename);
-        fb.append_str(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;253;151;31m\x1b[1mKeyboard Controls & Keybindings\x1b[0m\x1b[K\n");
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+        fb.append_zstr(filename);
+        fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;253;151;31m\x1b[1mKeyboard Controls & Keybindings\x1b[0m\x1b[K\n");
 
         // Separator line
-        fb.append_str("\x1b[38;2;117;113;94m");
-        for (int k = 0; k < term_width - 2 && k < 120; k++) fb.append_str("─");
-        fb.append_str("\x1b[0m\x1b[K\n");
+        fb.append_zstr("\x1b[38;2;117;113;94m");
+        int bar_w = term_width - 2;
+        if (bar_w < 10) bar_w = 10;
+        fb.append_repeat("─", bar_w);
+        fb.append_zstr("\x1b[0m\x1b[K\n");
 
         char*[20] help_rows = {
             "\x1b[38;2;102;217;239m\x1b[1mVertical Navigation:\x1b[0m",
@@ -420,87 +374,89 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
         {
             if (r < 20)
             {
-                fb.append_str("  ");
-                fb.append_str(help_rows[r]);
+                fb.append_zstr("  ");
+                fb.append_zstr(help_rows[r]);
             }
             else
             {
-                fb.append_str("\x1b[38;2;60;60;50m~\x1b[0m");
+                fb.append_zstr("\x1b[38;2;60;60;50m~\x1b[0m");
             }
-            fb.append_str("\x1b[K\n");
+            fb.append_zstr("\x1b[K\n");
         }
 
-        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Help \x1b[0m\x1b[38;2;117;113;94m [Esc / ? / q: Close]\x1b[0m\x1b[K");
-        fb.flush();
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Help \x1b[0m\x1b[38;2;117;113;94m [Esc / ? / q: Close]\x1b[0m\x1b[K");
+        flush_fb(fb);
         return;
     }
 
     // ── Table of Contents (Outline) View ──────────────────────────────
     if (show_toc)
     {
-        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
-        fb.append_str(filename);
-        fb.append_str(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;166;226;46m\x1b[1mDocument Outline (Table of Contents)\x1b[0m\x1b[K\n");
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+        fb.append_zstr(filename);
+        fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;166;226;46m\x1b[1mDocument Outline (Table of Contents)\x1b[0m\x1b[K\n");
 
         // Separator line
-        fb.append_str("\x1b[38;2;117;113;94m");
-        for (int k = 0; k < term_width - 2 && k < 120; k++) fb.append_str("─");
-        fb.append_str("\x1b[0m\x1b[K\n");
+        fb.append_zstr("\x1b[38;2;117;113;94m");
+        int bar_w = term_width - 2;
+        if (bar_w < 10) bar_w = 10;
+        fb.append_repeat("─", bar_w);
+        fb.append_zstr("\x1b[0m\x1b[K\n");
 
-        int toc_total = (toc != null) ? (int)toc.count : 0;
+        int toc_total = (toc != null) ? (int)toc.size : 0;
 
         for (int r = 0; r < view_height; r++)
         {
             if (r < toc_total)
             {
-                TocItem item = toc.items[r];
+                TocItem item = toc.entries[r];
                 bool is_cur = (r == toc_cursor);
 
                 if (is_cur)
                 {
-                    fb.append_str("  \x1b[48;2;49;50;68m\x1b[38;2;166;226;46m\x1b[1m▶ ");
+                    fb.append_zstr("  \x1b[48;2;49;50;68m\x1b[38;2;166;226;46m\x1b[1m▶ ");
                 }
                 else
                 {
-                    fb.append_str("    ");
+                    fb.append_zstr("    ");
                 }
 
                 // Indent by level
-                for (int lv = 1; lv < item.level && lv < 5; lv++) fb.append_str("   ");
+                for (int lv = 1; lv < item.level && lv < 5; lv++) fb.append_zstr("   ");
 
                 if (is_cur)
                 {
-                    fb.append_str("\x1b[38;2;248;248;242m\x1b[1m");
+                    fb.append_zstr("\x1b[38;2;248;248;242m\x1b[1m");
                 }
                 else
                 {
                     switch (item.level)
                     {
-                        case 1: fb.append_str("\x1b[38;2;249;38;114m\x1b[1m");
-                        case 2: fb.append_str("\x1b[38;2;166;226;46m\x1b[1m");
-                        case 3: fb.append_str("\x1b[38;2;253;151;31m\x1b[1m");
-                        case 4: fb.append_str("\x1b[38;2;230;219;116m\x1b[1m");
-                        default: fb.append_str("\x1b[38;2;102;217;239m\x1b[1m");
+                        case 1: fb.append_zstr("\x1b[38;2;249;38;114m\x1b[1m");
+                        case 2: fb.append_zstr("\x1b[38;2;166;226;46m\x1b[1m");
+                        case 3: fb.append_zstr("\x1b[38;2;253;151;31m\x1b[1m");
+                        case 4: fb.append_zstr("\x1b[38;2;230;219;116m\x1b[1m");
+                        default: fb.append_zstr("\x1b[38;2;102;217;239m\x1b[1m");
                     }
                 }
 
                 fb.append_slice(item.title);
-                fb.append_str("\x1b[0m");
+                fb.append_zstr("\x1b[0m");
 
-                fb.append_str(" \x1b[38;2;117;113;94m(Line ");
+                fb.append_zstr(" \x1b[38;2;117;113;94m(Line ");
                 fb.append_int(item.src_line + 1);
-                fb.append_str(")\x1b[0m");
+                fb.append_zstr(")\x1b[0m");
             }
             else
             {
-                fb.append_str("\x1b[38;2;60;60;50m~\x1b[0m");
+                fb.append_zstr("\x1b[38;2;60;60;50m~\x1b[0m");
             }
-            fb.append_str("\x1b[K\n");
+            fb.append_zstr("\x1b[K\n");
         }
 
         // Bottom status line
-        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Outline \x1b[0m\x1b[38;2;117;113;94m [Enter: Jump │ Esc: Close]\x1b[0m\x1b[K");
-        fb.flush();
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Outline \x1b[0m\x1b[38;2;117;113;94m [Enter: Jump │ Esc: Close]\x1b[0m\x1b[K");
+        flush_fb(fb);
         return;
     }
 
@@ -511,16 +467,18 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
         char* cwd = terminal::getcwd(&cwd_buf[0], 256);
         if (cwd == null) cwd = ".";
 
-        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
-        fb.append_str(filename);
-        fb.append_str(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;166;226;46m\x1b[1mTree: \x1b[0m\x1b[38;2;248;248;242m");
-        fb.append_str(cwd);
-        fb.append_str("\x1b[0m\x1b[K\n");
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+        fb.append_zstr(filename);
+        fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;166;226;46m\x1b[1mTree: \x1b[0m\x1b[38;2;248;248;242m");
+        fb.append_zstr(cwd);
+        fb.append_zstr("\x1b[0m\x1b[K\n");
 
         // Separator line
-        fb.append_str("\x1b[38;2;117;113;94m");
-        for (int k = 0; k < term_width - 2 && k < 120; k++) fb.append_str("─");
-        fb.append_str("\x1b[0m\x1b[K\n");
+        fb.append_zstr("\x1b[38;2;117;113;94m");
+        int bar_w = term_width - 2;
+        if (bar_w < 10) bar_w = 10;
+        fb.append_repeat("─", bar_w);
+        fb.append_zstr("\x1b[0m\x1b[K\n");
 
         // Compute visible nodes
         int[128] vis_idx;
@@ -565,22 +523,22 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
 
                 if (is_cur)
                 {
-                    fb.append_str("  \x1b[48;2;49;50;68m\x1b[38;2;166;226;46m\x1b[1m▶ ");
+                    fb.append_zstr("  \x1b[48;2;49;50;68m\x1b[38;2;166;226;46m\x1b[1m▶ ");
                 }
                 else
                 {
-                    fb.append_str("    ");
+                    fb.append_zstr("    ");
                 }
 
                 if (strutils::str_eq(&item.name[0], ".."))
                 {
                     if (is_cur)
                     {
-                        fb.append_str("\x1b[48;2;49;50;68m\x1b[38;2;253;151;31m\x1b[1m📁 ../ \x1b[38;2;248;248;242m(Parent Directory)\x1b[0m");
+                        fb.append_zstr("\x1b[48;2;49;50;68m\x1b[38;2;253;151;31m\x1b[1m📁 ../ \x1b[38;2;248;248;242m(Parent Directory)\x1b[0m");
                     }
                     else
                     {
-                        fb.append_str("\x1b[38;2;253;151;31m\x1b[1m📁 ../ \x1b[0m\x1b[38;2;117;113;94m(Parent Directory)\x1b[0m");
+                        fb.append_zstr("\x1b[38;2;253;151;31m\x1b[1m📁 ../ \x1b[0m\x1b[38;2;117;113;94m(Parent Directory)\x1b[0m");
                     }
                 }
                 else
@@ -588,70 +546,70 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
                     // Indentation
                     for (int d = 0; d < item.depth && d < 6; d++)
                     {
-                        fb.append_str("\x1b[38;2;117;113;94m│   \x1b[0m");
+                        fb.append_zstr("\x1b[38;2;117;113;94m│   \x1b[0m");
                     }
 
                     if (item.is_dir)
                     {
                         if (item.is_expanded)
                         {
-                            fb.append_str("\x1b[38;2;253;151;31m\x1b[1m▾ \x1b[0m");
+                            fb.append_zstr("\x1b[38;2;253;151;31m\x1b[1m▾ \x1b[0m");
                         }
                         else
                         {
-                            fb.append_str("\x1b[38;2;253;151;31m\x1b[1m▸ \x1b[0m");
+                            fb.append_zstr("\x1b[38;2;253;151;31m\x1b[1m▸ \x1b[0m");
                         }
 
                         if (is_cur)
                         {
-                            fb.append_str("\x1b[48;2;49;50;68m\x1b[38;2;102;217;239m\x1b[1m");
+                            fb.append_zstr("\x1b[48;2;49;50;68m\x1b[38;2;102;217;239m\x1b[1m");
                         }
                         else
                         {
-                            fb.append_str("\x1b[38;2;102;217;239m\x1b[1m");
+                            fb.append_zstr("\x1b[38;2;102;217;239m\x1b[1m");
                         }
-                        fb.append_str(&item.name[0]);
-                        fb.append_str("/\x1b[0m");
+                        fb.append_zstr(&item.name[0]);
+                        fb.append_zstr("/\x1b[0m");
                     }
                     else
                     {
                         if (item.is_last)
                         {
-                            fb.append_str("\x1b[38;2;117;113;94m└── \x1b[0m");
+                            fb.append_zstr("\x1b[38;2;117;113;94m└── \x1b[0m");
                         }
                         else
                         {
-                            fb.append_str("\x1b[38;2;117;113;94m├── \x1b[0m");
+                            fb.append_zstr("\x1b[38;2;117;113;94m├── \x1b[0m");
                         }
 
                         if (is_cur)
                         {
-                            fb.append_str("\x1b[48;2;49;50;68m\x1b[38;2;248;248;242m\x1b[1m");
+                            fb.append_zstr("\x1b[48;2;49;50;68m\x1b[38;2;248;248;242m\x1b[1m");
                         }
                         else
                         {
-                            fb.append_str("\x1b[38;2;248;248;242m");
+                            fb.append_zstr("\x1b[38;2;248;248;242m");
                         }
-                        fb.append_str(&item.name[0]);
-                        fb.append_str("\x1b[0m");
+                        fb.append_zstr(&item.name[0]);
+                        fb.append_zstr("\x1b[0m");
 
                         if (item.is_current)
                         {
-                            fb.append_str(" \x1b[38;2;166;226;46m[Active]\x1b[0m");
+                            fb.append_zstr(" \x1b[38;2;166;226;46m[Active]\x1b[0m");
                         }
                     }
                 }
             }
             else
             {
-                fb.append_str("\x1b[38;2;60;60;50m~\x1b[0m");
+                fb.append_zstr("\x1b[38;2;60;60;50m~\x1b[0m");
             }
-            fb.append_str("\x1b[K\n");
+            fb.append_zstr("\x1b[K\n");
         }
 
         // Bottom status line
-        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Tree \x1b[0m\x1b[38;2;117;113;94m [Enter: CD/Open │ a: Toggle all │ ←/→: Fold │ Esc: Close]\x1b[0m\x1b[K");
-        fb.flush();
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Tree \x1b[0m\x1b[38;2;117;113;94m [Enter: CD/Open │ a: Toggle all │ ←/→: Fold │ Esc: Close]\x1b[0m\x1b[K");
+        flush_fb(fb);
         return;
     }
 
@@ -663,31 +621,33 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
     int cur_src = (cursor_line >= 0 && cursor_line < total && vdoc.lines[cursor_line].src_line >= 0) ? vdoc.lines[cursor_line].src_line + 1 : 1;
     int pct = total > 0 ? ((cursor_line + 1) * 100) / total : 0;
 
-    fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
-    fb.append_str(filename);
-    fb.append_str(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m ");
+    fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdview \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+    fb.append_zstr(filename);
+    fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m ");
 
     if (changed_src_line >= 0)
     {
-        fb.append_str("\x1b[38;2;166;226;46m\x1b[1m⚡ Sync L");
+        fb.append_zstr("\x1b[38;2;166;226;46m\x1b[1m⚡ Sync L");
         fb.append_int(changed_src_line + 1);
-        fb.append_str("\x1b[0m \x1b[38;2;117;113;94m│\x1b[0m ");
+        fb.append_zstr("\x1b[0m \x1b[38;2;117;113;94m│\x1b[0m ");
     }
 
-    fb.append_str("\x1b[38;2;166;226;46m\x1b[1mLn ");
+    fb.append_zstr("\x1b[38;2;166;226;46m\x1b[1mLn ");
     fb.append_int(cur_src);
-    fb.append_str("\x1b[0m \x1b[38;2;117;113;94m(");
+    fb.append_zstr("\x1b[0m \x1b[38;2;117;113;94m(");
     fb.append_int(cursor_line + 1);
-    fb.append_str("/");
+    fb.append_zstr("/");
     fb.append_int(total);
-    fb.append_str(" · ");
+    fb.append_zstr(" · ");
     fb.append_int(pct);
-    fb.append_str("%)\x1b[0m\x1b[K\n");
+    fb.append_zstr("%)\x1b[0m\x1b[K\n");
 
     // Separator line
-    fb.append_str("\x1b[38;2;117;113;94m");
-    for (int k = 0; k < term_width - 2 && k < 120; k++) fb.append_str("─");
-    fb.append_str("\x1b[0m\x1b[K\n");
+    fb.append_zstr("\x1b[38;2;117;113;94m");
+    int bar_w = term_width - 2;
+    if (bar_w < 10) bar_w = 10;
+    fb.append_repeat("─", bar_w);
+    fb.append_zstr("\x1b[0m\x1b[K\n");
 
     // Visual document lines
     String q_str = (search_query != null) ? (String)search_query[:strutils::str_len(search_query)] : "";
@@ -701,11 +661,11 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
 
             if (is_cursor)
             {
-                fb.append_str("\x1b[38;2;102;217;239m\x1b[1m▌\x1b[0m");
+                fb.append_zstr("\x1b[38;2;102;217;239m\x1b[1m▌\x1b[0m");
             }
             else
             {
-                fb.append_str(" ");
+                fb.append_zstr(" ");
             }
 
             if (q_str.len > 0 && (search_active || match_count > 0))
@@ -716,47 +676,47 @@ fn void draw_viewport(FrameBuffer* fb, layout::VisualDocument* vdoc, int scroll_
             {
                 append_horizontal_slice(fb, vdoc.lines[i].text, scroll_left, term_width - 1);
             }
-            fb.append_str("\x1b[K\n");
+            fb.append_zstr("\x1b[K\n");
         }
         else
         {
-            fb.append_str(" \x1b[38;2;60;60;50m~\x1b[0m\x1b[K\n");
+            fb.append_zstr(" \x1b[38;2;60;60;50m~\x1b[0m\x1b[K\n");
         }
     }
 
     // Bottom Status / Search Bar
     if (goto_active)
     {
-        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;253;151;31m\x1b[1m : \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m ");
-        if (goto_query != null) fb.append_str(goto_query);
-        fb.append_str(" \x1b[0m\x1b[38;2;117;113;94m (Enter: Goto line, Esc: Cancel)\x1b[0m\x1b[K");
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;253;151;31m\x1b[1m : \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m ");
+        if (goto_query != null) fb.append_zstr(goto_query);
+        fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m (Enter: Goto line, Esc: Cancel)\x1b[0m\x1b[K");
     }
     else if (search_active)
     {
-        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;253;151;31m\x1b[1m / \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m ");
-        fb.append_str(search_query);
-        fb.append_str(" \x1b[0m\x1b[38;2;117;113;94m (Enter: Search, Esc: Cancel)\x1b[0m\x1b[K");
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;253;151;31m\x1b[1m / \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m ");
+        fb.append_zstr(search_query);
+        fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m (Enter: Search, Esc: Cancel)\x1b[0m\x1b[K");
     }
     else if (match_count > 0)
     {
-        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;166;226;46m\x1b[1m Match ");
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;166;226;46m\x1b[1m Match ");
         fb.append_int(cur_match_idx + 1);
-        fb.append_str(" of ");
+        fb.append_zstr(" of ");
         fb.append_int(match_count);
-        fb.append_str(" \x1b[0m\x1b[38;2;117;113;94m (n: Next, N: Prev, Esc: Clear)\x1b[0m\x1b[K");
+        fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m (n: Next, N: Prev, Esc: Clear)\x1b[0m\x1b[K");
     }
     else if (status_msg != null && status_msg[0] != 0)
     {
-        fb.append_str("\x1b[48;2;39;40;34m\x1b[38;2;166;226;46m\x1b[1m ");
-        fb.append_str(status_msg);
-        fb.append_str(" \x1b[0m\x1b[K");
+        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;166;226;46m\x1b[1m ");
+        fb.append_zstr(status_msg);
+        fb.append_zstr(" \x1b[0m\x1b[K");
     }
     else
     {
-        fb.append_str("\x1b[38;2;117;113;94m[? Help │ \x1b[38;2;166;226;46me Edit\x1b[38;2;117;113;94m │ q Quit]\x1b[0m\x1b[K");
+        fb.append_zstr("\x1b[38;2;117;113;94m[? Help │ \x1b[38;2;166;226;46me Edit\x1b[38;2;117;113;94m │ q Quit]\x1b[0m\x1b[K");
     }
 
-    fb.flush();
+    flush_fb(fb);
 }
 
 fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false, bool initial_file_picker = false)
@@ -782,7 +742,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     int cursor_line = 0;
     int last_changed_line = initial_line > 0 ? initial_line - 1 : -1;
 
-    FrameBuffer fb;
+    buffer::ByteBuffer fb;
     fb.init(262144);
     defer fb.free();
 
@@ -803,7 +763,9 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     ast::Document doc = parser::parse_document(content_str);
     layout::VisualDocument vdoc = render::render_document(&doc, config);
 
-    TocList toc;
+    List{TocItem} toc;
+    toc.init(mem, 32);
+    defer toc.free();
     extract_toc(&doc, &vdoc, &toc);
 
     int total_lines = vdoc.get_total_lines();
@@ -861,20 +823,20 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     int goto_len = 0;
     goto_buf[0] = 0;
 
-    int[128] match_lines;
-    int match_count = 0;
+    List{int} match_lines;
+    match_lines.init(mem, 32);
+    defer match_lines.free();
+
     int cur_match_idx = 0;
 
     char[128] status_msg_buf;
     status_msg_buf[0] = 0;
     int status_ticks = 0;
 
-    int cur_match_line = (match_count > 0 && cur_match_idx < match_count) ? match_lines[cur_match_idx] : -1;
-    draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, &cur_filename[0], last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, cur_match_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line, show_files, &file_tree, file_cursor);
+    int cur_match_line = (match_lines.size > 0 && cur_match_idx < (int)match_lines.size) ? match_lines.entries[cur_match_idx] : -1;
+    draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, &cur_filename[0], last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], (int)match_lines.size, cur_match_idx, cur_match_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line, show_files, &file_tree, file_cursor);
     prev_content = content;
     terminal::get_file_state(filename, &prev_state);
-
-    int idle_tick = 0;
 
     while (true)
     {
@@ -921,22 +883,22 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 else if (key == 10) // Enter -> Execute search
                 {
                     search_mode = false;
-                    match_count = 0;
+                    match_lines.clear();
                     cur_match_idx = 0;
 
                     if (search_len > 0)
                     {
                         String query = (String)search_buf[:search_len];
-                        for (int i = 0; i < total_lines && match_count < 128; i++)
+                        for (int i = 0; i < total_lines; i++)
                         {
                             if (strutils::string_contains(vdoc.lines[i].text, query))
                             {
-                                match_lines[match_count++] = i;
+                                match_lines.push(i);
                             }
                         }
-                        if (match_count > 0)
+                        if (match_lines.size > 0)
                         {
-                            scroll_top = match_lines[0] - view_height / 3;
+                            scroll_top = match_lines.entries[0] - view_height / 3;
                             if (scroll_top < 0) scroll_top = 0;
                             if (scroll_top > max_scroll) scroll_top = max_scroll;
                         }
@@ -1028,7 +990,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 }
                 else if (key == 'j' || key == 1000) // Down
                 {
-                    if (toc_cursor + 1 < (int)toc.count) { toc_cursor++; need_redraw = true; }
+                    if (toc_cursor + 1 < (int)toc.size) { toc_cursor++; need_redraw = true; }
                 }
                 else if (key == 'k' || key == 1001) // Up
                 {
@@ -1041,14 +1003,14 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 }
                 else if (key == 'G' || key == 1009) // Bottom
                 {
-                    toc_cursor = (int)toc.count > 0 ? (int)toc.count - 1 : 0;
+                    toc_cursor = (int)toc.size > 0 ? (int)toc.size - 1 : 0;
                     need_redraw = true;
                 }
                 else if (key == 10) // Enter -> Jump to heading
                 {
-                    if (toc_cursor < (int)toc.count)
+                    if (toc_cursor < (int)toc.size)
                     {
-                        cursor_line = toc.items[toc_cursor].visual_line;
+                        cursor_line = toc.entries[toc_cursor].visual_line;
                         scroll_top = cursor_line;
                         if (scroll_top > max_scroll) scroll_top = max_scroll;
                         if (scroll_top < 0) scroll_top = 0;
@@ -1249,9 +1211,9 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             }
             else if (key == 27) // Esc in normal mode: clear search highlights without quitting
             {
-                if (match_count > 0 || search_len > 0)
+                if (match_lines.size > 0 || search_len > 0)
                 {
-                    match_count = 0;
+                    match_lines.clear();
                     cur_match_idx = 0;
                     search_len = 0;
                     search_buf[0] = 0;
@@ -1328,10 +1290,8 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             {
                 no_wrap = !no_wrap;
                 scroll_left = 0;
-                doc.free();
                 vdoc.free();
                 config.no_wrap = no_wrap;
-                doc = parser::parse_document(content_str);
                 vdoc = render::render_document(&doc, config);
                 extract_toc(&doc, &vdoc, &toc);
                 total_lines = vdoc.get_total_lines();
@@ -1424,10 +1384,10 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             }
             else if (key == 'n') // Next search match
             {
-                if (match_count > 0)
+                if (match_lines.size > 0)
                 {
-                    cur_match_idx = (cur_match_idx + 1) % match_count;
-                    cursor_line = match_lines[cur_match_idx];
+                    cur_match_idx = (cur_match_idx + 1) % (int)match_lines.size;
+                    cursor_line = match_lines.entries[cur_match_idx];
                     scroll_top = cursor_line - view_height / 3;
                     if (scroll_top < 0) scroll_top = 0;
                     if (scroll_top > max_scroll) scroll_top = max_scroll;
@@ -1436,10 +1396,10 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             }
             else if (key == 'N') // Prev search match
             {
-                if (match_count > 0)
+                if (match_lines.size > 0)
                 {
-                    cur_match_idx = (cur_match_idx - 1 + match_count) % match_count;
-                    cursor_line = match_lines[cur_match_idx];
+                    cur_match_idx = (cur_match_idx - 1 + (int)match_lines.size) % (int)match_lines.size;
+                    cursor_line = match_lines.entries[cur_match_idx];
                     scroll_top = cursor_line - view_height / 3;
                     if (scroll_top < 0) scroll_top = 0;
                     if (scroll_top > max_scroll) scroll_top = max_scroll;
@@ -1494,72 +1454,82 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             }
         }
 
-        // Check for file updates every ~25ms
-        idle_tick++;
-        if (idle_tick >= 2)
+        // Check for window resize
+        int cur_width = terminal::get_width();
+        int cur_height = terminal::get_height();
+        if (cur_width != width || cur_height != height)
         {
-            idle_tick = 0;
-            terminal::FileState curr_state;
-            bool state_ok = terminal::get_file_state(filename, &curr_state);
-            int cur_width = terminal::get_width();
-            int cur_height = terminal::get_height();
+            width = cur_width;
+            height = cur_height;
+            view_height = height - 3;
+            if (view_height < 2) view_height = 2;
 
-            if ((state_ok && terminal::file_has_changed(&prev_state, &curr_state)) || cur_width != width || cur_height != height)
+            config.width = width;
+            vdoc.free();
+            vdoc = render::render_document(&doc, config);
+            extract_toc(&doc, &vdoc, &toc);
+            total_lines = vdoc.get_total_lines();
+            max_scroll = total_lines > 0 ? total_lines - 1 : 0;
+            if (scroll_top > max_scroll) scroll_top = max_scroll;
+            need_redraw = true;
+        }
+
+        // Check for file updates on disk
+        terminal::FileState curr_state;
+        bool state_ok = terminal::get_file_state(filename, &curr_state);
+
+        if (state_ok && terminal::file_has_changed(&prev_state, &curr_state))
+        {
+            prev_state = curr_state;
+
+            char* new_content = strutils::load_file_string(filename);
+            if (new_content != null)
             {
-                prev_state = curr_state;
-                width = cur_width;
-                height = cur_height;
-                view_height = height - 3;
-                if (view_height < 2) view_height = 2;
-
-                char* new_content = strutils::load_file_string(filename);
-                if (new_content != null)
+                int diff_line = strutils::find_first_diff_line(prev_content, new_content);
+                if (diff_line >= 0)
                 {
-                    int diff_line = strutils::find_first_diff_line(prev_content, new_content);
-                    if (diff_line >= 0)
-                    {
-                        last_changed_line = diff_line;
-                    }
-
-                    // Free old AST & VisualDoc
-                    doc.free();
-                    vdoc.free();
-
-                    config.width = width;
-                    config.plain = ansi::plain_mode;
-
-                    String new_str = (String)new_content[:strutils::str_len(new_content)];
-                    doc = parser::parse_document(new_str);
-                    vdoc = render::render_document(&doc, config);
-                    extract_toc(&doc, &vdoc, &toc);
-
-                    total_lines = vdoc.get_total_lines();
-                    max_scroll = total_lines > 0 ? total_lines - 1 : 0;
-
-                    // Line sync
-                    if (diff_line >= 0)
-                    {
-                        int v_line = vdoc.find_visual_line(diff_line);
-                        int context_offset = view_height / 3;
-                        if (context_offset < 5) context_offset = 5;
-                        scroll_top = v_line - context_offset;
-                        if (scroll_top < 0) scroll_top = 0;
-                        if (scroll_top > max_scroll) scroll_top = max_scroll;
-                    }
-
-                    if (prev_content != null) mem::free(prev_content);
-                    prev_content = new_content;
-                    need_redraw = true;
+                    last_changed_line = diff_line;
                 }
+
+                // Free old AST & VisualDoc
+                doc.free();
+                vdoc.free();
+
+                config.width = width;
+                config.plain = ansi::plain_mode;
+
+                String new_str = (String)new_content[:strutils::str_len(new_content)];
+                doc = parser::parse_document(new_str);
+                vdoc = render::render_document(&doc, config);
+                extract_toc(&doc, &vdoc, &toc);
+
+                total_lines = vdoc.get_total_lines();
+                max_scroll = total_lines > 0 ? total_lines - 1 : 0;
+
+                // Line sync
+                if (diff_line >= 0)
+                {
+                    int v_line = vdoc.find_visual_line(diff_line);
+                    int context_offset = view_height / 3;
+                    if (context_offset < 5) context_offset = 5;
+                    scroll_top = v_line - context_offset;
+                    if (scroll_top < 0) scroll_top = 0;
+                    if (scroll_top > max_scroll) scroll_top = max_scroll;
+                }
+
+                if (prev_content != null) mem::free(prev_content);
+                prev_content = new_content;
+                need_redraw = true;
             }
         }
 
         if (need_redraw)
         {
-            int active_line = (match_count > 0 && cur_match_idx < match_count) ? match_lines[cur_match_idx] : -1;
-            draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, &cur_filename[0], last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], match_count, cur_match_idx, active_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line, show_files, &file_tree, file_cursor);
+            int active_line = (match_lines.size > 0 && cur_match_idx < (int)match_lines.size) ? match_lines.entries[cur_match_idx] : -1;
+            draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, &cur_filename[0], last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], (int)match_lines.size, cur_match_idx, active_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line, show_files, &file_tree, file_cursor);
         }
 
-        terminal::sleep_ms(12);
+        // Wait up to 30ms for keyboard/terminal input event; if timeout, loop checks file state
+        terminal::wait_for_input(30);
     }
 }

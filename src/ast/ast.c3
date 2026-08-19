@@ -103,6 +103,7 @@ struct CalloutBlock {
 struct ListItemBlock {
     ListKind kind;
     int indent_level;
+    int order_number;
     Span[] spans;
 }
 
