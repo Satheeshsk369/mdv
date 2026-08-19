@@ -1,0 +1,119 @@
+module ast;
+
+enum SpanKind {
+    TEXT,
+    BOLD,
+    ITALIC,
+    STRIKETHROUGH,
+    CODE_INLINE,
+    MATH_INLINE,
+    MATH_DISPLAY,
+    LINK
+}
+
+struct Span {
+    SpanKind kind;
+    String text;
+    String url;
+    Span[] children;
+}
+
+enum BlockKind {
+    HEADING,
+    PARAGRAPH,
+    CODE_BLOCK,
+    BLOCKQUOTE,
+    CALLOUT,
+    LIST_ITEM,
+    TABLE,
+    THEMATIC_BREAK,
+    BLANK
+}
+
+enum CalloutKind {
+    NOTE,
+    TIP,
+    WARNING,
+    IMPORTANT,
+    CAUTION
+}
+
+enum ListKind {
+    BULLET,
+    ORDERED,
+    TASK_UNCHECKED,
+    TASK_CHECKED
+}
+
+enum Alignment {
+    LEFT,
+    CENTER,
+    RIGHT
+}
+
+struct HeadingBlock {
+    int level;          // 1 - 6
+    Span[] spans;
+}
+
+struct ParagraphBlock {
+    Span[] spans;
+}
+
+struct CodeBlock {
+    String language;
+    String[] lines;
+}
+
+struct BlockquoteBlock {
+    Span[] spans;
+}
+
+struct CalloutBlock {
+    CalloutKind kind;
+    String title;
+    Span[] spans;
+}
+
+struct ListItemBlock {
+    ListKind kind;
+    int indent_level;
+    Span[] spans;
+}
+
+struct TableBlock {
+    int col_count;
+    Alignment[] alignments;
+    Span[][] headers;
+    Span[][][] rows;
+}
+
+struct Block {
+    BlockKind kind;
+    int src_line_start;
+    int src_line_end;
+    HeadingBlock heading;
+    ParagraphBlock paragraph;
+    CodeBlock code;
+    BlockquoteBlock blockquote;
+    CalloutBlock callout;
+    ListItemBlock list_item;
+    TableBlock table;
+}
+
+struct Document {
+    Block[] blocks;
+    Arena arena;
+}
+
+fn void Document.init(Document* doc)
+{
+    doc.blocks = {};
+    doc.arena.init(65536);
+}
+
+fn void Document.free(Document* doc)
+{
+    doc.arena.free();
+    doc.blocks = {};
+}

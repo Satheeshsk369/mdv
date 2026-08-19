@@ -1,0 +1,35 @@
+{
+  "langrev": "1",
+  "warnings": ["no-unused"],
+  "dependency-search-paths": ["lib"],
+  "dependencies": [],
+  "authors": ["Satheeshkumar"],
+  "version": "0.1.0",
+  "build-dir": "build",
+  "output": "build",
+  "targets": {
+    "mdview": {
+      "type": "executable",
+      "sources": [
+        "src/app/main.c3",
+        "src/app/watch.c3",
+        "src/ast/**",
+        "src/parser/**",
+        "src/math/**",
+        "src/layout/**",
+        "src/render/**",
+        "src/sys/**"
+      ]
+    },
+    "install": {
+      "type": "executable",
+      "sources": [
+        "src/app/install.c3",
+        "src/render/ansi.c3",
+        "src/sys/strutils.c3"
+      ]
+    }
+  },
+  "cpu": "generic",
+  "opt": "O5"
+}
