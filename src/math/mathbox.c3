@@ -883,3 +883,321 @@ fn MathBox box_vconcat_list(ast::Arena* arena, MathBox[] list)
     res.rows = r_buf[0 : (usz)total_h];
     return res;
 }
+
+fn MathBox box_boxed(ast::Arena* arena, MathBox inner)
+{
+    int w = inner.width + 4;
+    int new_h = inner.height + 2;
+    int new_base = inner.baseline + 1;
+
+    String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
+    MathRowBuilder mb;
+    mb.init(512);
+    defer mb.free();
+
+    // Top border: ┌───┐
+    mb.len = 0;
+    mb.append_zstr("┌");
+    mb.append_repeat("─", inner.width + 2);
+    mb.append_zstr("┐");
+    r_buf[0] = mb.to_arena_string(arena);
+
+    // Inner rows: │ text │
+    for (int r = 0; r < inner.height; r++)
+    {
+        mb.len = 0;
+        mb.append_zstr("│ ");
+        mb.append_slice(inner.rows[r]);
+        int rw = strutils::string_display_width(inner.rows[r]);
+        int pad = inner.width - rw;
+        if (pad > 0) mb.append_spaces(pad);
+        mb.append_zstr(" │");
+        r_buf[r + 1] = mb.to_arena_string(arena);
+    }
+
+    // Bottom border: └───┘
+    mb.len = 0;
+    mb.append_zstr("└");
+    mb.append_repeat("─", inner.width + 2);
+    mb.append_zstr("┘");
+    r_buf[new_h - 1] = mb.to_arena_string(arena);
+
+    MathBox res;
+    res.width = w;
+    res.height = new_h;
+    res.baseline = new_base;
+    res.rows = r_buf[0 : (usz)new_h];
+    return res;
+}
+
+fn MathBox box_overline(ast::Arena* arena, MathBox inner)
+{
+    if (inner.width == 0) return inner;
+    int w = inner.width;
+    int new_h = inner.height + 1;
+    int new_base = inner.baseline + 1;
+
+    String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
+    MathRowBuilder mb;
+    mb.init(512);
+    defer mb.free();
+
+    mb.len = 0;
+    mb.append_repeat("─", w);
+    r_buf[0] = mb.to_arena_string(arena);
+
+    for (int r = 0; r < inner.height; r++)
+    {
+        r_buf[r + 1] = inner.rows[r];
+    }
+
+    MathBox res;
+    res.width = w;
+    res.height = new_h;
+    res.baseline = new_base;
+    res.rows = r_buf[0 : (usz)new_h];
+    return res;
+}
+
+fn MathBox box_overbrace(ast::Arena* arena, MathBox inner, MathBox label)
+{
+    int max_w = inner.width > label.width ? inner.width : label.width;
+    int lab_h = label.width > 0 ? label.height : 0;
+    int total_h = lab_h + 1 + inner.height;
+    int base = lab_h + 1 + inner.baseline;
+
+    String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
+    MathRowBuilder mb;
+    mb.init(512);
+    defer mb.free();
+
+    int cur_r = 0;
+
+    // Label rows (centered)
+    if (label.width > 0)
+    {
+        for (int r = 0; r < label.height; r++)
+        {
+            mb.len = 0;
+            int rw = strutils::string_display_width(label.rows[r]);
+            int pad = (max_w - rw) / 2;
+            mb.append_spaces(pad);
+            mb.append_slice(label.rows[r]);
+            mb.append_spaces(max_w - rw - pad);
+            r_buf[cur_r++] = mb.to_arena_string(arena);
+        }
+    }
+
+    // Overbrace glyph: ⏞ or ───┴───
+    mb.len = 0;
+    int pad = (max_w - inner.width) / 2;
+    mb.append_spaces(pad);
+    mb.append_repeat("⏞", inner.width);
+    mb.append_spaces(max_w - inner.width - pad);
+    r_buf[cur_r++] = mb.to_arena_string(arena);
+
+    // Inner rows
+    for (int r = 0; r < inner.height; r++)
+    {
+        mb.len = 0;
+        int rw = strutils::string_display_width(inner.rows[r]);
+        int pad2 = (max_w - rw) / 2;
+        mb.append_spaces(pad2);
+        mb.append_slice(inner.rows[r]);
+        mb.append_spaces(max_w - rw - pad2);
+        r_buf[cur_r++] = mb.to_arena_string(arena);
+    }
+
+    MathBox res;
+    res.width = max_w;
+    res.height = total_h;
+    res.baseline = base;
+    res.rows = r_buf[0 : (usz)total_h];
+    return res;
+}
+
+fn MathBox box_underbrace(ast::Arena* arena, MathBox inner, MathBox label)
+{
+    int max_w = inner.width > label.width ? inner.width : label.width;
+    int lab_h = label.width > 0 ? label.height : 0;
+    int total_h = inner.height + 1 + lab_h;
+    int base = inner.baseline;
+
+    String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
+    MathRowBuilder mb;
+    mb.init(512);
+    defer mb.free();
+
+    int cur_r = 0;
+
+    // Inner rows
+    for (int r = 0; r < inner.height; r++)
+    {
+        mb.len = 0;
+        int rw = strutils::string_display_width(inner.rows[r]);
+        int pad = (max_w - rw) / 2;
+        mb.append_spaces(pad);
+        mb.append_slice(inner.rows[r]);
+        mb.append_spaces(max_w - rw - pad);
+        r_buf[cur_r++] = mb.to_arena_string(arena);
+    }
+
+    // Underbrace glyph: ⏟ or ───┬───
+    mb.len = 0;
+    int pad = (max_w - inner.width) / 2;
+    mb.append_spaces(pad);
+    mb.append_repeat("⏟", inner.width);
+    mb.append_spaces(max_w - inner.width - pad);
+    r_buf[cur_r++] = mb.to_arena_string(arena);
+
+    // Label rows (centered)
+    if (label.width > 0)
+    {
+        for (int r = 0; r < label.height; r++)
+        {
+            mb.len = 0;
+            int rw = strutils::string_display_width(label.rows[r]);
+            int pad2 = (max_w - rw) / 2;
+            mb.append_spaces(pad2);
+            mb.append_slice(label.rows[r]);
+            mb.append_spaces(max_w - rw - pad2);
+            r_buf[cur_r++] = mb.to_arena_string(arena);
+        }
+    }
+
+    MathBox res;
+    res.width = max_w;
+    res.height = total_h;
+    res.baseline = base;
+    res.rows = r_buf[0 : (usz)total_h];
+    return res;
+}
+
+fn MathBox box_grid_layout(ast::Arena* arena, MathBox[16][16]* grid, int num_rows, int num_cols, char align_mode, int col_gap = 2)
+{
+    if (num_rows <= 0 || num_cols <= 0) return box_empty(arena);
+
+    int[16] col_w;
+    for (int c = 0; c < num_cols; c++)
+    {
+        int max_cw = 0;
+        for (int r = 0; r < num_rows; r++)
+        {
+            if ((*grid)[r][c].width > max_cw) max_cw = (*grid)[r][c].width;
+        }
+        col_w[c] = max_cw;
+    }
+
+    int[16] row_above;
+    int[16] row_below;
+    int[16] row_h;
+    int total_h = 0;
+
+    for (int r = 0; r < num_rows; r++)
+    {
+        int max_above = 0;
+        int max_below = 0;
+        for (int c = 0; c < num_cols; c++)
+        {
+            MathBox cell = (*grid)[r][c];
+            if (cell.baseline > max_above) max_above = cell.baseline;
+            int below = cell.height - 1 - cell.baseline;
+            if (below > max_below) max_below = below;
+        }
+        row_above[r] = max_above;
+        row_below[r] = max_below;
+        row_h[r] = max_above + 1 + max_below;
+        total_h += row_h[r];
+    }
+
+    int total_w = 0;
+    for (int c = 0; c < num_cols; c++)
+    {
+        total_w += col_w[c];
+        if (c > 0) total_w += col_gap;
+    }
+
+    String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
+    MathRowBuilder mb;
+    mb.init(512);
+    defer mb.free();
+
+    int cur_r = 0;
+    for (int r = 0; r < num_rows; r++)
+    {
+        int rh = row_h[r];
+        int rabove = row_above[r];
+
+        for (int sub_r = 0; sub_r < rh; sub_r++)
+        {
+            mb.len = 0;
+
+            for (int c = 0; c < num_cols; c++)
+            {
+                if (c > 0) mb.append_spaces(col_gap);
+
+                MathBox cell = (*grid)[r][c];
+                int cell_r = sub_r - (rabove - cell.baseline);
+                int target_w = col_w[c];
+
+                if (cell_r >= 0 && cell_r < cell.height)
+                {
+                    String row_str = cell.rows[cell_r];
+                    int rw = strutils::string_display_width(row_str);
+                    int pad = target_w - rw;
+                    if (pad < 0) pad = 0;
+
+                    // Alignment mode:
+                    // 'A' = aligned/align* (even col right-aligned, odd col left-aligned)
+                    // 'C' = center-aligned (matrix)
+                    // 'L' = left-aligned (cases, array)
+                    // 'R' = right-aligned
+                    if (align_mode == 'A')
+                    {
+                        if (c % 2 == 0) // Right aligned
+                        {
+                            mb.append_spaces(pad);
+                            mb.append_slice(row_str);
+                        }
+                        else // Left aligned
+                        {
+                            mb.append_slice(row_str);
+                            mb.append_spaces(pad);
+                        }
+                    }
+                    else if (align_mode == 'C')
+                    {
+                        int lpad = pad / 2;
+                        int rpad = pad - lpad;
+                        mb.append_spaces(lpad);
+                        mb.append_slice(row_str);
+                        mb.append_spaces(rpad);
+                    }
+                    else if (align_mode == 'R')
+                    {
+                        mb.append_spaces(pad);
+                        mb.append_slice(row_str);
+                    }
+                    else // 'L'
+                    {
+                        mb.append_slice(row_str);
+                        mb.append_spaces(pad);
+                    }
+                }
+                else
+                {
+                    mb.append_spaces(target_w);
+                }
+            }
+
+            r_buf[cur_r++] = mb.to_arena_string(arena);
+        }
+    }
+
+    MathBox res;
+    res.width = total_w;
+    res.height = total_h;
+    res.baseline = total_h / 2;
+    res.rows = r_buf[0 : (usz)total_h];
+    return res;
+}

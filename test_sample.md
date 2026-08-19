@@ -46,6 +46,18 @@ $$ A = \begin{pmatrix} 1 & 0 & 0 \\ 0 & 1 & 0 \\ 0 & 0 & 1 \end{pmatrix} $$
 
 $$ f(x) = \begin{cases} \frac{x^2 - 1}{x - 1} & \text{if } x \neq 1 \\ 2 & \text{if } x = 1 \end{cases} $$
 
+$$
+\begin{align*}
+\nabla \times \vec{E} &= -\frac{\partial \vec{B}}{\partial t} \\
+\nabla \cdot \vec{B} &= 0 \\
+\nabla \times \vec{B} &= \mu_0 \vec{J} + \mu_0 \epsilon_0 \frac{\partial \vec{E}}{\partial t}
+\end{align*}
+$$
+
+$$ \boxed{e^{i\pi} + 1 = 0} $$
+
+$$ \overbrace{a_1 + a_2 + \cdots + a_k}^{\text{total mass}} = \underbrace{\sum_{i=1}^k a_i}_{M} $$
+
 ### Complex Equations
 - Gaussian integral: $\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}$
 - Summation formula: $\sum_{i=1}^n i = \frac{n(n+1)}{2}$

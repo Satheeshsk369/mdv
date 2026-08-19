@@ -4,6 +4,17 @@ import std::core::mem;
 import ast;
 import strutils;
 
+enum MathAtomKind {
+    ORD,    // Ordinary symbol or variable (x, 2, \alpha)
+    OP,     // Big operator or named function (\sum, \sin, \lim)
+    BIN,    // Binary operator (+, -, \times, \cdot, \pm)
+    REL,    // Relation (=, \le, \ge, \neq, \approx, \to)
+    OPEN,   // Open delimiter ((, [, {, \langle)
+    CLOSE,  // Close delimiter (), ], }, \rangle)
+    PUNCT,  // Punctuation (,, ;, :)
+    INNER   // Fractions, radicals, boxes
+}
+
 struct Math2DParser {
     ast::Arena* arena;
     String src;
@@ -35,15 +46,20 @@ fn void Math2DParser.skip_spaces(Math2DParser* p)
     }
 }
 
-fn bool is_relational_or_binary_sym(String name)
+fn bool is_relational_sym(String name)
 {
-    if (strutils::string_eq(name, "pm") || strutils::string_eq(name, "mp") || strutils::string_eq(name, "times") || strutils::string_eq(name, "cdot") || strutils::string_eq(name, "div") || strutils::string_eq(name, "oplus") || strutils::string_eq(name, "ominus") || strutils::string_eq(name, "otimes") || strutils::string_eq(name, "odot") || strutils::string_eq(name, "cap") || strutils::string_eq(name, "cup") || strutils::string_eq(name, "setminus")) return true;
     if (strutils::string_eq(name, "leq") || strutils::string_eq(name, "le") || strutils::string_eq(name, "geq") || strutils::string_eq(name, "ge") || strutils::string_eq(name, "neq") || strutils::string_eq(name, "ne") || strutils::string_eq(name, "approx") || strutils::string_eq(name, "equiv") || strutils::string_eq(name, "sim") || strutils::string_eq(name, "simeq") || strutils::string_eq(name, "cong") || strutils::string_eq(name, "propto") || strutils::string_eq(name, "ll") || strutils::string_eq(name, "gg") || strutils::string_eq(name, "subset") || strutils::string_eq(name, "supset") || strutils::string_eq(name, "subseteq") || strutils::string_eq(name, "supseteq") || strutils::string_eq(name, "in") || strutils::string_eq(name, "notin") || strutils::string_eq(name, "ni") || strutils::string_eq(name, "models") || strutils::string_eq(name, "vdash") || strutils::string_eq(name, "perp") || strutils::string_eq(name, "parallel")) return true;
     if (strutils::string_eq(name, "to") || strutils::string_eq(name, "rightarrow") || strutils::string_eq(name, "leftarrow") || strutils::string_eq(name, "uparrow") || strutils::string_eq(name, "downarrow") || strutils::string_eq(name, "leftrightarrow") || strutils::string_eq(name, "Rightarrow") || strutils::string_eq(name, "Leftarrow") || strutils::string_eq(name, "Leftrightarrow") || strutils::string_eq(name, "implies") || strutils::string_eq(name, "iff") || strutils::string_eq(name, "mapsto") || strutils::string_eq(name, "longrightarrow") || strutils::string_eq(name, "longleftarrow") || strutils::string_eq(name, "Longrightarrow") || strutils::string_eq(name, "Longleftrightarrow")) return true;
     return false;
 }
 
-fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
+fn bool is_binary_sym(String name)
+{
+    if (strutils::string_eq(name, "pm") || strutils::string_eq(name, "mp") || strutils::string_eq(name, "times") || strutils::string_eq(name, "cdot") || strutils::string_eq(name, "div") || strutils::string_eq(name, "oplus") || strutils::string_eq(name, "ominus") || strutils::string_eq(name, "otimes") || strutils::string_eq(name, "odot") || strutils::string_eq(name, "cap") || strutils::string_eq(name, "cup") || strutils::string_eq(name, "setminus") || strutils::string_eq(name, "ast") || strutils::string_eq(name, "star") || strutils::string_eq(name, "circ") || strutils::string_eq(name, "bullet")) return true;
+    return false;
+}
+
+fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
 {
     p.skip_spaces();
     if (p.eof()) return box_empty(p.arena);
@@ -57,6 +73,7 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
         MathBox grp = parse_math_expression(p, false, false);
         p.skip_spaces();
         if (p.peek() == '}') p.get();
+        *prev_atom = MathAtomKind.INNER;
         return grp;
     }
 
@@ -71,6 +88,7 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
         {
             p.get();
             char[2] ch; ch[0] = next_c; ch[1] = 0;
+            *prev_atom = MathAtomKind.ORD;
             return box_from_zstr(p.arena, &ch[0]);
         }
         if (next_c == ',') { p.get(); return box_from_zstr(p.arena, " "); }
@@ -78,6 +96,7 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
         if (next_c == ':') { p.get(); return box_from_zstr(p.arena, " "); }
         if (next_c == '!') { p.get(); return box_empty(p.arena); }
         if (next_c == ' ') { p.get(); return box_from_zstr(p.arena, " "); }
+        if (next_c == '|') { p.get(); *prev_atom = MathAtomKind.ORD; return box_from_zstr(p.arena, "║"); }
 
         // Read command name
         usz cmd_start = p.pos;
@@ -87,12 +106,21 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
         }
         String cmd = p.src[cmd_start : p.pos - cmd_start];
 
-        // ── Fractions: \frac{num}{den} ───────────────────────────────────────
-        if (strutils::string_eq(cmd, "frac") || strutils::string_eq(cmd, "dfrac") || strutils::string_eq(cmd, "tfrac"))
+        // ── Fractions: \frac{num}{den}, \dfrac, \tfrac, \cfrac ──────────────
+        if (strutils::string_eq(cmd, "frac") || strutils::string_eq(cmd, "dfrac") || strutils::string_eq(cmd, "tfrac") || strutils::string_eq(cmd, "cfrac"))
         {
             MathBox num = parse_math_group(p);
             MathBox den = parse_math_group(p);
+            *prev_atom = MathAtomKind.INNER;
             return box_fraction(p.arena, num, den);
+        }
+
+        // ── Boxed: \boxed{expr} ──────────────────────────────────────────────
+        if (strutils::string_eq(cmd, "boxed"))
+        {
+            MathBox inner = parse_math_group(p);
+            *prev_atom = MathAtomKind.INNER;
+            return box_boxed(p.arena, inner);
         }
 
         // ── Binomial: \binom{n}{k} ───────────────────────────────────────────
@@ -104,6 +132,7 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
             stack[0] = top_b;
             stack[1] = bot_b;
             MathBox inner = box_vconcat_list(p.arena, stack[0:2]);
+            *prev_atom = MathAtomKind.INNER;
             return box_delimiters(p.arena, inner, '(', ')');
         }
 
@@ -112,69 +141,93 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
         {
             MathBox top_b = parse_math_group(p);
             MathBox base_b = parse_math_group(p);
+            *prev_atom = MathAtomKind.ORD;
             return box_limits_op(p.arena, base_b, box_empty(p.arena), top_b);
         }
         if (strutils::string_eq(cmd, "underset"))
         {
             MathBox bot_b = parse_math_group(p);
             MathBox base_b = parse_math_group(p);
+            *prev_atom = MathAtomKind.ORD;
             return box_limits_op(p.arena, base_b, bot_b, box_empty(p.arena));
         }
 
-        // ── Modulo: \pmod{m} ─────────────────────────────────────────────────
-        if (strutils::string_eq(cmd, "pmod"))
+        // ── Overbrace & Underbrace ───────────────────────────────────────────
+        if (strutils::string_eq(cmd, "overbrace"))
         {
             MathBox inner = parse_math_group(p);
-            MathBox mod_txt = box_from_zstr(p.arena, " (mod ");
-            MathBox r_paren = box_from_zstr(p.arena, ")");
-            MathBox mid = box_hconcat(p.arena, mod_txt, inner, 0);
-            return box_hconcat(p.arena, mid, r_paren, 0);
+            MathBox label = box_empty(p.arena);
+            p.skip_spaces();
+            if (p.peek() == '^')
+            {
+                p.get();
+                label = parse_math_group(p);
+            }
+            *prev_atom = MathAtomKind.INNER;
+            return box_overbrace(p.arena, inner, label);
+        }
+        if (strutils::string_eq(cmd, "underbrace"))
+        {
+            MathBox inner = parse_math_group(p);
+            MathBox label = box_empty(p.arena);
+            p.skip_spaces();
+            if (p.peek() == '_')
+            {
+                p.get();
+                label = parse_math_group(p);
+            }
+            *prev_atom = MathAtomKind.INNER;
+            return box_underbrace(p.arena, inner, label);
         }
 
-        // ── Square Root: \sqrt[deg]{inner} ───────────────────────────────────
-        if (strutils::string_eq(cmd, "sqrt"))
+        // ── Substack: \substack{line1 \\ line2} ──────────────────────────────
+        if (strutils::string_eq(cmd, "substack"))
         {
             p.skip_spaces();
+            if (p.peek() == '{') p.get();
+            MathBox[8] lines;
+            int line_count = 0;
+            while (!p.eof() && line_count < 8)
+            {
+                lines[line_count++] = parse_math_expression(p, false, true);
+                p.skip_spaces();
+                if (p.peek() == '\\' && p.pos + 1 < (usz)p.src.len && p.src[p.pos + 1] == '\\')
+                {
+                    p.pos += 2;
+                }
+                else if (p.peek() == '}')
+                {
+                    p.get();
+                    break;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            *prev_atom = MathAtomKind.ORD;
+            return box_vconcat_list(p.arena, lines[: (usz)line_count]);
+        }
+
+        // ── Square Root: \sqrt[n]{expr} ──────────────────────────────────────
+        if (strutils::string_eq(cmd, "sqrt"))
+        {
             MathBox deg = box_empty(p.arena);
+            p.skip_spaces();
             if (p.peek() == '[')
             {
-                p.get(); // consume '['
-                usz d_start = p.pos;
-                while (!p.eof() && p.peek() != ']') p.pos++;
-                String d_str = p.src[d_start : p.pos - d_start];
+                p.get();
+                deg = parse_math_expression(p, false, false);
+                p.skip_spaces();
                 if (p.peek() == ']') p.get();
-                deg = box_from_string(p.arena, d_str);
             }
             MathBox inner = parse_math_group(p);
+            *prev_atom = MathAtomKind.INNER;
             return box_sqrt(p.arena, inner, deg);
         }
 
         // ── Summation: \sum ──────────────────────────────────────────────────
         if (strutils::string_eq(cmd, "sum"))
-        {
-            MathBox sub = box_empty(p.arena);
-            MathBox sup = box_empty(p.arena);
-
-            // Read attached _ and ^
-            for (int k = 0; k < 2; k++)
-            {
-                p.skip_spaces();
-                if (p.peek() == '_')
-                {
-                    p.get();
-                    sub = parse_math_group(p);
-                }
-                else if (p.peek() == '^')
-                {
-                    p.get();
-                    sup = parse_math_group(p);
-                }
-            }
-            return box_summation_op(p.arena, sub, sup);
-        }
-
-        // ── Product: \prod ───────────────────────────────────────────────────
-        if (strutils::string_eq(cmd, "prod"))
         {
             MathBox sub = box_empty(p.arena);
             MathBox sup = box_empty(p.arena);
@@ -184,6 +237,22 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
                 if (p.peek() == '_') { p.get(); sub = parse_math_group(p); }
                 else if (p.peek() == '^') { p.get(); sup = parse_math_group(p); }
             }
+            *prev_atom = MathAtomKind.OP;
+            return box_summation_op(p.arena, sub, sup);
+        }
+
+        // ── Product & Coproduct: \prod, \coprod ──────────────────────────────
+        if (strutils::string_eq(cmd, "prod") || strutils::string_eq(cmd, "coprod"))
+        {
+            MathBox sub = box_empty(p.arena);
+            MathBox sup = box_empty(p.arena);
+            for (int k = 0; k < 2; k++)
+            {
+                p.skip_spaces();
+                if (p.peek() == '_') { p.get(); sub = parse_math_group(p); }
+                else if (p.peek() == '^') { p.get(); sup = parse_math_group(p); }
+            }
+            *prev_atom = MathAtomKind.OP;
             return box_product_op(p.arena, sub, sup);
         }
 
@@ -202,10 +271,11 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
                 if (p.peek() == '_') { p.get(); sub = parse_math_group(p); }
                 else if (p.peek() == '^') { p.get(); sup = parse_math_group(p); }
             }
+            *prev_atom = MathAtomKind.OP;
             return box_integral_op(p.arena, sub, sup, order);
         }
 
-        // ── Limits: \lim, \max, \min, \sup, \inf ─────────────────────────────
+        // ── Limits: \lim, \max, \min, \sup, \inf, \argmax, \argmin ───────────
         if (strutils::string_eq(cmd, "lim") || strutils::string_eq(cmd, "liminf") || strutils::string_eq(cmd, "limsup") || strutils::string_eq(cmd, "max") || strutils::string_eq(cmd, "min") || strutils::string_eq(cmd, "sup") || strutils::string_eq(cmd, "inf") || strutils::string_eq(cmd, "argmax") || strutils::string_eq(cmd, "argmin"))
         {
             String op_name = cmd;
@@ -223,6 +293,7 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
                 if (p.peek() == '_') { p.get(); sub = parse_math_group(p); }
                 else if (p.peek() == '^') { p.get(); sup = parse_math_group(p); }
             }
+            *prev_atom = MathAtomKind.OP;
             return box_limits_op(p.arena, op_box, sub, sup);
         }
 
@@ -236,7 +307,8 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
                 char next_delim = p.get();
                 if (next_delim == '{') { open_ch = '{'; }
                 else if (next_delim == '}') { open_ch = '}'; }
-                else if (next_delim == '|') { open_ch = 'V'; } // norm \|
+                else if (next_delim == '|') { open_ch = 'V'; }
+                else if (next_delim == '<' || next_delim == 'l') { open_ch = '<'; }
             }
             if (open_ch == '.') open_ch = 0;
 
@@ -265,10 +337,11 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
                 }
             }
 
+            *prev_atom = MathAtomKind.INNER;
             return box_delimiters(p.arena, inner, open_ch, close_ch);
         }
 
-        // ── Environments: \begin{matrix}, \begin{cases}, etc. ────────────────
+        // ── Multi-Equation Environments & Matrices ───────────────────────────
         if (strutils::string_eq(cmd, "begin"))
         {
             p.skip_spaces();
@@ -277,6 +350,18 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
             while (!p.eof() && p.peek() != '}') p.pos++;
             String env_name = p.src[env_start : p.pos - env_start];
             if (p.peek() == '}') p.get();
+
+            // Optional array column format e.g. {c c c}
+            if (strutils::string_eq(env_name, "array"))
+            {
+                p.skip_spaces();
+                if (p.peek() == '{')
+                {
+                    p.get();
+                    while (!p.eof() && p.peek() != '}') p.pos++;
+                    if (p.peek() == '}') p.get();
+                }
+            }
 
             const usz MAX_ENV_ROWS = 16;
             const usz MAX_ENV_COLS = 16;
@@ -340,22 +425,28 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
                 }
             }
 
+            *prev_atom = MathAtomKind.INNER;
+
+            // 1. Cases
             if (strutils::string_eq(env_name, "cases"))
             {
-                MathBox[16] row_list;
-                for (int r = 0; r < num_rows; r++)
-                {
-                    MathBox rbox = box_empty(p.arena);
-                    for (int col_idx = 0; col_idx < num_cols; col_idx++)
-                    {
-                        rbox = box_hconcat(p.arena, rbox, grid[r][col_idx], col_idx > 0 ? 3 : 0);
-                    }
-                    row_list[r] = rbox;
-                }
-                MathBox inner = box_vconcat_list(p.arena, row_list[: (usz)num_rows]);
+                MathBox inner = box_grid_layout(p.arena, &grid, num_rows, num_cols, 'L', 3);
                 return box_delimiters(p.arena, inner, '{', (char)0);
             }
 
+            // 2. Align / Aligned / Split / Array
+            if (strutils::string_eq(env_name, "align") || strutils::string_eq(env_name, "align*") || strutils::string_eq(env_name, "aligned") || strutils::string_eq(env_name, "split") || strutils::string_eq(env_name, "array"))
+            {
+                return box_grid_layout(p.arena, &grid, num_rows, num_cols, 'A', 0);
+            }
+
+            // 3. Gather / Gather*
+            if (strutils::string_eq(env_name, "gather") || strutils::string_eq(env_name, "gather*"))
+            {
+                return box_grid_layout(p.arena, &grid, num_rows, num_cols, 'C', 0);
+            }
+
+            // 4. Matrices: matrix, pmatrix, bmatrix, vmatrix, Vmatrix, Bmatrix, smallmatrix
             char bracket_type = 'm';
             if (strutils::string_eq(env_name, "pmatrix")) { bracket_type = 'p'; }
             else if (strutils::string_eq(env_name, "bmatrix")) { bracket_type = 'b'; }
@@ -363,17 +454,7 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
             else if (strutils::string_eq(env_name, "Vmatrix")) { bracket_type = 'V'; }
             else if (strutils::string_eq(env_name, "Bmatrix")) { bracket_type = 'B'; }
 
-            MathBox[16] row_list;
-            for (int r = 0; r < num_rows; r++)
-            {
-                MathBox rbox = box_empty(p.arena);
-                for (int col_idx = 0; col_idx < num_cols; col_idx++)
-                {
-                    rbox = box_hconcat(p.arena, rbox, grid[r][col_idx], col_idx > 0 ? 2 : 0);
-                }
-                row_list[r] = rbox;
-            }
-            MathBox inner = box_vconcat_list(p.arena, row_list[: (usz)num_rows]);
+            MathBox inner = box_grid_layout(p.arena, &grid, num_rows, num_cols, 'C', 2);
 
             char open_b = '['; char close_b = ']';
             if (bracket_type == 'p') { open_b = '('; close_b = ')'; }
@@ -385,11 +466,9 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
             return box_delimiters(p.arena, inner, open_b, close_b);
         }
 
-        // ── Text / Style Wrappers: \mathbf, \mathbb, \text, \operatorname ───
-        if (strutils::string_eq(cmd, "mathbf") || strutils::string_eq(cmd, "mathrm") || strutils::string_eq(cmd, "text") || strutils::string_eq(cmd, "operatorname") || strutils::string_eq(cmd, "mathit") || strutils::string_eq(cmd, "mathsf") || strutils::string_eq(cmd, "mathtt"))
+        // ── Text / Style Wrappers: \text, \mathbf, \mathbb, \operatorname ───
+        if (strutils::string_eq(cmd, "text"))
         {
-            p.skip_spaces();
-            if (p.peek() == '*') p.get();
             p.skip_spaces();
             if (p.peek() == '{')
             {
@@ -398,8 +477,17 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
                 while (!p.eof() && p.peek() != '}') p.pos++;
                 String txt = p.src[t_start : p.pos - t_start];
                 if (p.peek() == '}') p.get();
+                *prev_atom = MathAtomKind.ORD;
                 return box_from_string(p.arena, txt);
             }
+        }
+        if (strutils::string_eq(cmd, "mathbf") || strutils::string_eq(cmd, "mathrm") || strutils::string_eq(cmd, "operatorname") || strutils::string_eq(cmd, "mathit") || strutils::string_eq(cmd, "mathsf") || strutils::string_eq(cmd, "mathtt"))
+        {
+            p.skip_spaces();
+            if (p.peek() == '*') p.get();
+            MathBox grp = parse_math_group(p);
+            *prev_atom = MathAtomKind.ORD;
+            return grp;
         }
         if (strutils::string_eq(cmd, "mathbb"))
         {
@@ -416,8 +504,15 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
                     if (bb != null) mb.append_zstr(bb);
                 }
                 if (p.peek() == '}') p.get();
+                *prev_atom = MathAtomKind.ORD;
                 return box_from_string(p.arena, mb.to_arena_string(p.arena));
             }
+            char single_c = p.get();
+            char* bb = get_mathbb_char(single_c);
+            *prev_atom = MathAtomKind.ORD;
+            if (bb != null) return box_from_zstr(p.arena, bb);
+            char[2] ch; ch[0] = single_c; ch[1] = 0;
+            return box_from_zstr(p.arena, &ch[0]);
         }
         if (strutils::string_eq(cmd, "mathcal") || strutils::string_eq(cmd, "mathscr"))
         {
@@ -434,17 +529,30 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
                     if (cal != null) mb.append_zstr(cal);
                 }
                 if (p.peek() == '}') p.get();
+                *prev_atom = MathAtomKind.ORD;
                 return box_from_string(p.arena, mb.to_arena_string(p.arena));
             }
+            char single_c = p.get();
+            char* cal = get_mathcal_char(single_c);
+            *prev_atom = MathAtomKind.ORD;
+            if (cal != null) return box_from_zstr(p.arena, cal);
+            char[2] ch; ch[0] = single_c; ch[1] = 0;
+            return box_from_zstr(p.arena, &ch[0]);
         }
 
-        // ── Accents: \vec, \hat, \bar, \dot, \ddot, \tilde ───────────────────
-        if (strutils::string_eq(cmd, "vec") || strutils::string_eq(cmd, "hat") || strutils::string_eq(cmd, "bar") || strutils::string_eq(cmd, "dot") || strutils::string_eq(cmd, "ddot") || strutils::string_eq(cmd, "tilde") || strutils::string_eq(cmd, "overline"))
+        // ── Accents: \vec, \hat, \bar, \dot, \ddot, \tilde, \overline ───────
+        if (strutils::string_eq(cmd, "overline"))
+        {
+            MathBox inner = parse_math_group(p);
+            *prev_atom = MathAtomKind.INNER;
+            return box_overline(p.arena, inner);
+        }
+        if (strutils::string_eq(cmd, "vec") || strutils::string_eq(cmd, "hat") || strutils::string_eq(cmd, "bar") || strutils::string_eq(cmd, "dot") || strutils::string_eq(cmd, "ddot") || strutils::string_eq(cmd, "tilde"))
         {
             MathBox inner = parse_math_group(p);
             char* combining = "⃗";
             if (strutils::string_eq(cmd, "hat")) { combining = "̂"; }
-            else if (strutils::string_eq(cmd, "bar") || strutils::string_eq(cmd, "overline")) { combining = "̄"; }
+            else if (strutils::string_eq(cmd, "bar")) { combining = "̄"; }
             else if (strutils::string_eq(cmd, "dot")) { combining = "̇"; }
             else if (strutils::string_eq(cmd, "ddot")) { combining = "̈"; }
             else if (strutils::string_eq(cmd, "tilde")) { combining = "̃"; }
@@ -457,6 +565,7 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
                 mb.append_slice(inner.rows[0]);
                 mb.append_zstr(combining);
             }
+            *prev_atom = MathAtomKind.ORD;
             return box_from_string(p.arena, mb.to_arena_string(p.arena));
         }
 
@@ -469,8 +578,9 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
         {
             if (strutils::string_eq(cmd, SYMBOLS[s].name))
             {
-                if (is_relational_or_binary_sym(cmd))
+                if (is_relational_sym(cmd))
                 {
+                    *prev_atom = MathAtomKind.REL;
                     MathRowBuilder mb;
                     mb.init(32);
                     defer mb.free();
@@ -479,10 +589,32 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
                     mb.append_char(' ');
                     return box_from_string(p.arena, mb.to_arena_string(p.arena));
                 }
+                if (is_binary_sym(cmd))
+                {
+                    // Optical unary vs binary distinction
+                    if (*prev_atom == MathAtomKind.ORD || *prev_atom == MathAtomKind.CLOSE || *prev_atom == MathAtomKind.INNER)
+                    {
+                        *prev_atom = MathAtomKind.BIN;
+                        MathRowBuilder mb;
+                        mb.init(32);
+                        defer mb.free();
+                        mb.append_char(' ');
+                        mb.append_slice(SYMBOLS[s].glyph);
+                        mb.append_char(' ');
+                        return box_from_string(p.arena, mb.to_arena_string(p.arena));
+                    }
+                    else
+                    {
+                        *prev_atom = MathAtomKind.ORD;
+                        return box_from_string(p.arena, SYMBOLS[s].glyph);
+                    }
+                }
+                *prev_atom = MathAtomKind.ORD;
                 return box_from_string(p.arena, SYMBOLS[s].glyph);
             }
         }
 
+        *prev_atom = MathAtomKind.ORD;
         return box_from_string(p.arena, cmd);
     }
 
@@ -495,30 +627,50 @@ fn MathBox parse_math_term(Math2DParser* p, bool is_first_term = false)
             p.pos++;
         }
         String num_str = p.src[num_start : p.pos - num_start];
+        *prev_atom = MathAtomKind.ORD;
         return box_from_string(p.arena, num_str);
     }
 
-    // 4. Multi-character operators and relations
-    if (c == '=') { p.get(); return box_from_zstr(p.arena, " = "); }
+    // 4. Optical Operators & Relations
+    if (c == '=')
+    {
+        p.get();
+        *prev_atom = MathAtomKind.REL;
+        return box_from_zstr(p.arena, " = ");
+    }
     if (c == '+')
     {
         p.get();
-        if (is_first_term) return box_from_zstr(p.arena, "+");
-        return box_from_zstr(p.arena, " + ");
+        if (*prev_atom == MathAtomKind.ORD || *prev_atom == MathAtomKind.CLOSE || *prev_atom == MathAtomKind.INNER)
+        {
+            *prev_atom = MathAtomKind.BIN;
+            return box_from_zstr(p.arena, " + ");
+        }
+        *prev_atom = MathAtomKind.ORD;
+        return box_from_zstr(p.arena, "+");
     }
     if (c == '-')
     {
         p.get();
-        if (is_first_term) return box_from_zstr(p.arena, "-");
-        return box_from_zstr(p.arena, " - ");
+        if (*prev_atom == MathAtomKind.ORD || *prev_atom == MathAtomKind.CLOSE || *prev_atom == MathAtomKind.INNER)
+        {
+            *prev_atom = MathAtomKind.BIN;
+            return box_from_zstr(p.arena, " - ");
+        }
+        *prev_atom = MathAtomKind.ORD;
+        return box_from_zstr(p.arena, "-");
     }
-    if (c == '<') { p.get(); return box_from_zstr(p.arena, " < "); }
-    if (c == '>') { p.get(); return box_from_zstr(p.arena, " > "); }
-    if (c == '*') { p.get(); return box_from_zstr(p.arena, " * "); }
-    if (c == ',') { p.get(); return box_from_zstr(p.arena, ", "); }
+    if (c == '<') { p.get(); *prev_atom = MathAtomKind.REL; return box_from_zstr(p.arena, " < "); }
+    if (c == '>') { p.get(); *prev_atom = MathAtomKind.REL; return box_from_zstr(p.arena, " > "); }
+    if (c == '*') { p.get(); *prev_atom = MathAtomKind.BIN; return box_from_zstr(p.arena, " * "); }
+    if (c == ',') { p.get(); *prev_atom = MathAtomKind.PUNCT; return box_from_zstr(p.arena, ", "); }
+    if (c == ';') { p.get(); *prev_atom = MathAtomKind.PUNCT; return box_from_zstr(p.arena, "; "); }
+    if (c == '(' || c == '[') { p.get(); *prev_atom = MathAtomKind.OPEN; char[2] ch; ch[0] = c; ch[1] = 0; return box_from_zstr(p.arena, &ch[0]); }
+    if (c == ')' || c == ']') { p.get(); *prev_atom = MathAtomKind.CLOSE; char[2] ch; ch[0] = c; ch[1] = 0; return box_from_zstr(p.arena, &ch[0]); }
 
     // 5. Normal character
     p.get();
+    *prev_atom = MathAtomKind.ORD;
     char[2] ch; ch[0] = c; ch[1] = 0;
     return box_from_zstr(p.arena, &ch[0]);
 }
@@ -537,13 +689,15 @@ fn MathBox parse_math_group(Math2DParser* p)
         return res;
     }
 
-    return parse_math_term(p, true);
+    // Single-token argument (e.g. \frac 1 2, \sqrt 2, \vec v, x^2)
+    MathAtomKind atom = MathAtomKind.ORD;
+    return parse_math_term(p, &atom);
 }
 
 fn MathBox parse_math_expression(Math2DParser* p, bool stop_at_amp = false, bool stop_at_bslash = false)
 {
     MathBox res = box_empty(p.arena);
-    bool first_term = true;
+    MathAtomKind prev_atom = MathAtomKind.OPEN; // Start of expression
 
     while (!p.eof())
     {
@@ -571,9 +725,8 @@ fn MathBox parse_math_expression(Math2DParser* p, bool stop_at_amp = false, bool
             }
         }
 
-        // Parse base term
-        MathBox term = parse_math_term(p, first_term);
-        first_term = false;
+        // Parse base term with optical atom tracking
+        MathBox term = parse_math_term(p, &prev_atom);
 
         // Check for superscripts and subscripts attached to term
         MathBox sup = box_empty(p.arena);
