@@ -12,7 +12,7 @@ $$ \Gamma(x) = \int_0^\infty e^x x^{n-1} dt$$
 - *Italic text* with `*italic*` or `_italic_`
 - ~~Strikethrough~~ with `~~strike~~`
 - Inline code like `fn int main()` with ` `code` `
-- Hyperlinks: [C3 Language Portal](https://c3-lang.org) and [Helix Editor](https://helix-editor.com)
+- Hyperlinks: [C3 Language Portal](https://c3-lang.org) and [GitHub Project](https://github.com)
 
 ---
 
@@ -66,9 +66,9 @@ $$ f(x) = \begin{cases} \frac{x^2 - 1}{x - 1} & \text{if } x \neq 1 \\ 2 & \text
 * Systems Programming
   * Low overhead & zero runtime cost
   * C ABI interop with `@export` and `extern`
-* Editor Integration
-  * Helix (`<Space> + p` split preview)
+* Terminal Integration
   * Ghostty terminal split & watch mode
+  * CLI pipelines and stdout streaming
 
 ---
 
@@ -78,7 +78,7 @@ $$ f(x) = \begin{cases} \frac{x^2 - 1}{x - 1} & \text{if } x \neq 1 \\ 2 & \text
 > This note callout provides helpful contextual info without interrupting your reading flow.
 
 > [!TIP]
-> Press `<Space> + p` in Helix to preview your document in a side-by-side vertical split!
+> Run `mdview --stdout file.md` in scripts or AI workflows to render full terminal previews instantly!
 
 > [!WARNING]
 > Keep your LaTeX brackets `{}` balanced so expressions transform cleanly.
@@ -124,7 +124,7 @@ def fibonacci(n: int) -> list[int]:
 | Math Engine | `unicodeit.c3` | $\int_0^1 x^2 dx = \frac{1}{3}$ | ✔ Ready |
 | Table Renderer | `table.c3` | $O(N \times M)$ | ✔ Active |
 | Terminal Output | ANSI / Unicode | $\nabla \cdot \vec{E} = \frac{\rho}{\epsilon_0}$ | ✔ Supported |
-| Editor Hook | Helix / Ghostty | $\lambda \to \infty$ | ✔ Integrated |
+| Terminal Viewer | ANSI / Unicode | $\lambda \to \infty$ | ✔ Integrated |
 
 ---
 
