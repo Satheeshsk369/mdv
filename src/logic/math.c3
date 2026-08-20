@@ -604,6 +604,14 @@ const SymbolEntry[] SYMBOLS = {
     { "daleth", "ℸ", MathAtomKind.ORD },
 
     // ── Calculus & Differential Symbols ──────────────────────────────────────
+    { "int", "∫", MathAtomKind.ORD },
+    { "iint", "∬", MathAtomKind.ORD },
+    { "iiint", "∭", MathAtomKind.ORD },
+    { "oint", "∮", MathAtomKind.ORD },
+    { "sum", "∑", MathAtomKind.ORD },
+    { "prod", "∏", MathAtomKind.ORD },
+    { "coprod", "∐", MathAtomKind.ORD },
+    { "sqrt", "√", MathAtomKind.ORD },
     { "partial", "∂", MathAtomKind.ORD },
     { "nabla", "∇", MathAtomKind.ORD },
     { "infty", "∞", MathAtomKind.ORD },
