@@ -18,6 +18,46 @@ struct WrappedCell {
     List{WrappedCellLine} lines;
 }
 
+fn void measure_cell_metrics(Span[] spans, int* out_min_w, int* out_max_w)
+{
+    if (spans.len == 0) return;
+    int total_w = 0;
+    int max_word_w = 0;
+
+    for (usz s = 0; s < spans.len; s++)
+    {
+        Span sp = spans[s];
+        String txt = sp.text;
+        usz p = 0;
+        usz tlen = (usz)txt.len;
+
+        while (p < tlen)
+        {
+            while (p < tlen && (txt[p] == ' ' || txt[p] == '\t')) p++;
+            if (p >= tlen) break;
+
+            usz w_start = p;
+            while (p < tlen && txt[p] != ' ' && txt[p] != '\t' && txt[p] != '\n') p++;
+            String word = txt[w_start : p - w_start];
+            int ww = strutils::string_display_width(word);
+            if (ww > max_word_w) max_word_w = ww;
+        }
+
+        int sw = strutils::string_display_width(txt);
+        total_w += sw;
+
+        if (sp.kind == SpanKind.LINK && sp.url.len > 0)
+        {
+            int uw = strutils::string_display_width(sp.url) + 3;
+            if (uw > max_word_w) max_word_w = uw;
+            total_w += uw;
+        }
+    }
+
+    if (total_w > *out_max_w) *out_max_w = total_w;
+    if (max_word_w > *out_min_w) *out_min_w = max_word_w;
+}
+
 fn void wrap_cell(logic::Arena* arena, Span[] spans, int max_w, bool plain, WrappedCell* out_cell)
 {
     out_cell.lines.init(mem, 4);
@@ -220,58 +260,170 @@ fn void render_table(TableBlock* table, int src_line, int term_width, bool plain
     logic::LocalScratchScope scope = logic::enter_scratch_scope(&logic::g_ctx.scratch_arena);
     defer scope.exit();
 
+    int* max_w_ptr = (int*)logic::g_ctx.scratch_arena.alloc((usz)cols * int::size);
+    int* min_w_ptr = (int*)logic::g_ctx.scratch_arena.alloc((usz)cols * int::size);
     int* col_widths_ptr = (int*)logic::g_ctx.scratch_arena.alloc((usz)cols * int::size);
+
+    int[] max_w = max_w_ptr[0 : (usz)cols];
+    int[] min_w = min_w_ptr[0 : (usz)cols];
     int[] col_widths = col_widths_ptr[0 : (usz)cols];
 
-    for (int c = 0; c < cols; c++) col_widths[c] = 3;
-
-    // 1. Measure natural column widths (from cell words / content)
-    for (int c = 0; c < cols && c < (int)table.headers.len; c++)
+    for (int c = 0; c < cols; c++)
     {
-        int w = 0;
-        for (usz s = 0; s < table.headers[c].len; s++)
-        {
-            w += strutils::string_display_width(table.headers[c][s].text);
-        }
-        if (w > col_widths[c]) col_widths[c] = w;
+        max_w[c] = 3;
+        min_w[c] = 3;
     }
 
+    // 1. Measure header cells
+    for (int c = 0; c < cols && c < (int)table.headers.len; c++)
+    {
+        measure_cell_metrics(table.headers[c], &min_w[c], &max_w[c]);
+    }
+
+    // 2. Measure body cells
     for (usz r = 0; r < table.rows.len; r++)
     {
         Span[][] row = table.rows[r];
         for (int c = 0; c < cols && c < (int)row.len; c++)
         {
-            int w = 0;
-            for (usz s = 0; s < row[c].len; s++)
-            {
-                w += strutils::string_display_width(row[c][s].text);
-            }
-            if (w > col_widths[c]) col_widths[c] = w;
+            measure_cell_metrics(row[c], &min_w[c], &max_w[c]);
         }
     }
 
-    // 2. Adjust widths to fit available terminal width if necessary
-    int gap = 2;
-    int total_width = 0;
     for (int c = 0; c < cols; c++)
     {
-        total_width += col_widths[c];
-        if (c < cols - 1) total_width += gap;
+        if (min_w[c] > max_w[c]) min_w[c] = max_w[c];
+        if (min_w[c] < 3) min_w[c] = 3;
     }
 
+    // 3. Compute available text width
+    int gap = 2;
     int max_avail = term_width > 20 ? term_width - 2 : 80;
-    if (total_width > max_avail)
+    int avail_budget = max_avail - (cols - 1) * gap;
+    if (avail_budget < cols * 3) avail_budget = cols * 3;
+
+    int sum_max = 0;
+    int sum_min = 0;
+    for (int c = 0; c < cols; c++)
     {
-        int avail_budget = max_avail - (cols - 1) * gap;
-        if (avail_budget < cols * 3) avail_budget = cols * 3;
-        int sum_w = 0;
-        for (int c = 0; c < cols; c++) sum_w += col_widths[c];
+        sum_max += max_w[c];
+        sum_min += min_w[c];
+    }
+
+    // 4. Intelligent column allocation:
+    if (sum_max <= avail_budget)
+    {
+        // Everything fits without wrapping!
+        for (int c = 0; c < cols; c++)
+        {
+            col_widths[c] = max_w[c];
+        }
+    }
+    else if (sum_min <= avail_budget)
+    {
+        // Start by giving each column its min_w (so words don't get broken)
+        for (int c = 0; c < cols; c++)
+        {
+            col_widths[c] = min_w[c];
+        }
+
+        int remaining_budget = avail_budget - sum_min;
+
+        // Iteratively satisfy short columns whose full max_w can be met
+        bool changed = true;
+        bool* satisfied_ptr = (bool*)logic::g_ctx.scratch_arena.alloc((usz)cols * bool::size);
+        bool[] satisfied = satisfied_ptr[0 : (usz)cols];
+        for (int c = 0; c < cols; c++) satisfied[c] = (col_widths[c] >= max_w[c]);
+
+        while (changed && remaining_budget > 0)
+        {
+            changed = false;
+            int best_c = -1;
+            int min_need = 999999;
+            for (int c = 0; c < cols; c++)
+            {
+                if (!satisfied[c])
+                {
+                    int need = max_w[c] - col_widths[c];
+                    if (need > 0 && need < min_need)
+                    {
+                        min_need = need;
+                        best_c = c;
+                    }
+                }
+            }
+
+            if (best_c >= 0 && min_need <= remaining_budget)
+            {
+                col_widths[best_c] += min_need;
+                remaining_budget -= min_need;
+                satisfied[best_c] = true;
+                changed = true;
+            }
+        }
+
+        // If there is still budget left, distribute it proportionally among remaining columns
+        if (remaining_budget > 0)
+        {
+            int sum_unsatisfied_need = 0;
+            for (int c = 0; c < cols; c++)
+            {
+                if (!satisfied[c])
+                {
+                    sum_unsatisfied_need += (max_w[c] - col_widths[c]);
+                }
+            }
+
+            if (sum_unsatisfied_need > 0)
+            {
+                int allocated = 0;
+                for (int c = 0; c < cols; c++)
+                {
+                    if (!satisfied[c])
+                    {
+                        int need = max_w[c] - col_widths[c];
+                        int add = (remaining_budget * need) / sum_unsatisfied_need;
+                        col_widths[c] += add;
+                        allocated += add;
+                    }
+                }
+
+                int rem = remaining_budget - allocated;
+                while (rem > 0)
+                {
+                    int best_c = -1;
+                    int best_need = 0;
+                    for (int c = 0; c < cols; c++)
+                    {
+                        int need = max_w[c] - col_widths[c];
+                        if (need > best_need)
+                        {
+                            best_need = need;
+                            best_c = c;
+                        }
+                    }
+                    if (best_c >= 0)
+                    {
+                        col_widths[best_c]++;
+                        rem--;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        // Extremely narrow terminal: scale min_w down proportionally
         int distributed = 0;
         for (int c = 0; c < cols; c++)
         {
-            if (sum_w > 0)
+            if (sum_min > 0)
             {
-                col_widths[c] = (col_widths[c] * avail_budget) / sum_w;
+                col_widths[c] = (min_w[c] * avail_budget) / sum_min;
             }
             else
             {
@@ -291,17 +443,38 @@ fn void render_table(TableBlock* table, int src_line, int term_width, bool plain
     tb.init(4096);
     defer tb.free();
 
-    // 3. Render and wrap header row
+    // 5. Wrap header row
+    bool any_wrapped = false;
     WrappedCell* hcells = (WrappedCell*)logic::g_ctx.scratch_arena.alloc((usz)cols * WrappedCell::size);
     for (int c = 0; c < cols; c++)
     {
         Span[] hspans = (c < (int)table.headers.len) ? table.headers[c] : {};
         wrap_cell(&logic::g_ctx.scratch_arena, hspans, col_widths[c], plain, &hcells[c]);
+        if (hcells[c].lines.size > 1) any_wrapped = true;
     }
+
+    // 6. Wrap all body rows and detect if any row wrapped
+    usz num_rows = table.rows.len;
+    WrappedCell[]* all_body_rows = (WrappedCell[]*)logic::g_ctx.scratch_arena.alloc(num_rows * WrappedCell[]::size);
+
+    for (usz r = 0; r < num_rows; r++)
+    {
+        Span[][] row = table.rows[r];
+        WrappedCell* rcells = (WrappedCell*)logic::g_ctx.scratch_arena.alloc((usz)cols * WrappedCell::size);
+        for (int c = 0; c < cols; c++)
+        {
+            Span[] cspans = (c < (int)row.len) ? row[c] : {};
+            wrap_cell(&logic::g_ctx.scratch_arena, cspans, col_widths[c], plain, &rcells[c]);
+            if (rcells[c].lines.size > 1) any_wrapped = true;
+        }
+        all_body_rows[r] = rcells[0 : (usz)cols];
+    }
+
+    // 7. Emit header row
     emit_wrapped_row(&tb, hcells[0 : (usz)cols], table.alignments, col_widths, cols, gap, true, plain, src_line, ctx, emit_fn);
     for (int c = 0; c < cols; c++) hcells[c].lines.free();
 
-    // 4. Separator line under header
+    // 8. Separator line under header
     tb.reset();
     if (!plain) tb.append_zstr((char*)ansi::FG_MUTED);
     for (int c = 0; c < cols; c++)
@@ -312,22 +485,14 @@ fn void render_table(TableBlock* table, int src_line, int term_width, bool plain
     if (!plain) tb.append_zstr((char*)ansi::RESET);
     emit_fn(ctx, tb.to_string(), src_line + 1);
 
-    // 5. Render body rows with one line separation between each row
-    for (usz r = 0; r < table.rows.len; r++)
+    // 9. Emit body rows (with 1 blank line between rows ONLY if at least one row wrapped)
+    for (usz r = 0; r < num_rows; r++)
     {
-        Span[][] row = table.rows[r];
-        WrappedCell* rcells = (WrappedCell*)logic::g_ctx.scratch_arena.alloc((usz)cols * WrappedCell::size);
-        for (int c = 0; c < cols; c++)
-        {
-            Span[] cspans = (c < (int)row.len) ? row[c] : {};
-            wrap_cell(&logic::g_ctx.scratch_arena, cspans, col_widths[c], plain, &rcells[c]);
-        }
-
-        emit_wrapped_row(&tb, rcells[0 : (usz)cols], table.alignments, col_widths, cols, gap, false, plain, src_line + 2 + (int)r, ctx, emit_fn);
+        WrappedCell[] rcells = all_body_rows[r];
+        emit_wrapped_row(&tb, rcells, table.alignments, col_widths, cols, gap, false, plain, src_line + 2 + (int)r, ctx, emit_fn);
         for (int c = 0; c < cols; c++) rcells[c].lines.free();
 
-        // One line separation between each row (except after the last row)
-        if (r + 1 < table.rows.len)
+        if (any_wrapped && r + 1 < num_rows)
         {
             emit_fn(ctx, "", src_line + 2 + (int)r);
         }
