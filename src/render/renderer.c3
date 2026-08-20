@@ -529,51 +529,29 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                 emit_rendered_line(&ctx, &lb, b.src_line_start);
 
             case BlockKind.CODE_BLOCK:
-                // Top border ╭── lang ───────────────────╮
-                if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
-                lb.append_zstr("╭── ");
                 if (b.code.language.len > 0)
                 {
+                    lb.reset();
                     if (!plain)
                     {
                         lb.append_zstr((char*)ansi::FG_CYAN);
                         lb.append_zstr((char*)ansi::BOLD);
                     }
+                    lb.append_zstr("[");
                     lb.append_slice(b.code.language);
-                    if (!plain)
-                    {
-                        lb.append_zstr((char*)ansi::RESET);
-                        lb.append_zstr((char*)ansi::FG_MUTED);
-                    }
-                    lb.append_char(' ');
+                    lb.append_zstr("]");
+                    if (!plain) lb.append_zstr((char*)ansi::RESET);
+                    emit_rendered_line(&ctx, &lb, b.src_line_start);
                 }
-                int used_w = 4 + (b.code.language.len > 0 ? (int)b.code.language.len + 1 : 0) + 1;
-                int cbar_len = width - 4 - used_w;
-                if (cbar_len < 4) cbar_len = 4;
-                lb.append_repeat("─", cbar_len);
-                lb.append_zstr("╮");
-                if (!plain) lb.append_zstr((char*)ansi::RESET);
-                emit_rendered_line(&ctx, &lb, b.src_line_start);
 
                 // Code block lines
                 for (usz l = 0; l < b.code.lines.len; l++)
                 {
-                    if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
-                    lb.append_zstr("│ ");
-                    if (!plain) lb.append_zstr((char*)ansi::RESET);
+                    lb.reset();
+                    lb.append_zstr("  ");
                     highlight_code_line(&lb, b.code.lines[l], b.code.language, plain);
                     emit_rendered_line(&ctx, &lb, b.src_line_start + 1 + (int)l);
                 }
-
-                // Bottom border ╰────────────────────────╯
-                if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
-                lb.append_zstr("╰");
-                int bbar_len = width - 6;
-                if (bbar_len < 8) bbar_len = 8;
-                lb.append_repeat("─", bbar_len);
-                lb.append_zstr("╯");
-                if (!plain) lb.append_zstr((char*)ansi::RESET);
-                emit_rendered_line(&ctx, &lb, b.src_line_end);
 
             case BlockKind.CALLOUT:
                 // Title line

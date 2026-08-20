@@ -1,200 +1,29 @@
 module layout;
 
 import std::core::mem;
-import std::collections::list;
 import logic;
 import ansi;
 import strutils;
 import buffer;
+import render;
 
 alias EmitLineFn = fn void(void* ctx, String text, int src_line);
 
-struct WrappedCellLine {
-    buffer::ByteBuffer text;
-    int display_width;
-}
-
-struct WrappedCell {
-    List{WrappedCellLine} lines;
-}
-
-fn void WrappedCell.init(WrappedCell* cell)
+fn String render_cell_text(logic::Arena* arena, Span[] spans, bool plain, int* out_display_w)
 {
-    cell.lines.init(mem, 4);
-}
-
-fn void WrappedCell.free(WrappedCell* cell)
-{
-    for (sz i = 0; i < cell.lines.size; i++)
+    if (spans.len == 0)
     {
-        cell.lines.entries[i].text.free();
+        *out_display_w = 0;
+        return "";
     }
-    cell.lines.free();
-}
+    buffer::ByteBuffer b;
+    b.init(256);
+    defer b.free();
 
-fn void wrap_cell(Span[] spans, int max_w, WrappedCell* out_cell)
-{
-    out_cell.init();
-
-    if (spans.len == 0 || max_w <= 0)
-    {
-        WrappedCellLine first_line;
-        first_line.text.init(32);
-        first_line.display_width = 0;
-        out_cell.lines.push(first_line);
-        return;
-    }
-
-    WrappedCellLine cur_line;
-    cur_line.text.init(64);
-    cur_line.display_width = 0;
-
-    for (usz s = 0; s < spans.len; s++)
-    {
-        String txt = spans[s].text;
-        usz p = 0;
-        usz tlen = (usz)txt.len;
-
-        while (p < tlen)
-        {
-            while (p < tlen && (txt[p] == ' ' || txt[p] == '\t'))
-            {
-                p++;
-            }
-            if (p >= tlen) break;
-
-            usz w_start = p;
-            while (p < tlen && txt[p] != ' ' && txt[p] != '\t' && txt[p] != '\n')
-            {
-                p++;
-            }
-            String word = txt[w_start : p - w_start];
-            int word_w = strutils::string_display_width(word);
-
-            if (cur_line.display_width > 0 && cur_line.display_width + 1 + word_w > max_w)
-            {
-                out_cell.lines.push(cur_line);
-                cur_line.text.init(64);
-                cur_line.display_width = 0;
-            }
-            else if (cur_line.display_width > 0)
-            {
-                cur_line.text.append_char(' ');
-                cur_line.display_width++;
-            }
-
-            cur_line.text.append_slice(word);
-            cur_line.display_width += word_w;
-        }
-    }
-
-    out_cell.lines.push(cur_line);
-}
-
-fn void render_single_row(
-    buffer::ByteBuffer* tb,
-    TableBlock* table,
-    Span[][] cells,
-    int[] col_widths,
-    int cols,
-    bool is_header,
-    bool plain,
-    int src_line,
-    void* ctx,
-    EmitLineFn emit_fn
-)
-{
-    WrappedCell* wrapped_ptr = (WrappedCell*)logic::g_ctx.scratch_arena.alloc((usz)cols * WrappedCell::size);
-    WrappedCell[] wrapped = wrapped_ptr[0 : (usz)cols];
-    for (int c = 0; c < cols; c++) wrapped[c].init();
-    defer {
-        for (int c = 0; c < cols; c++) wrapped[c].free();
-    }
-
-    int max_lines = 1;
-
-    for (int c = 0; c < cols; c++)
-    {
-        int w = col_widths[c];
-        Span[] cspans = (c < (int)cells.len) ? cells[c] : {};
-        wrap_cell(cspans, w, &wrapped[c]);
-        if ((int)wrapped[c].lines.size > max_lines)
-        {
-            max_lines = (int)wrapped[c].lines.size;
-        }
-    }
-
-    for (int line_idx = 0; line_idx < max_lines; line_idx++)
-    {
-        tb.reset();
-
-        if (!plain) tb.append_zstr((char*)ansi::FG_MUTED);
-        tb.append_zstr("│");
-        if (!plain) tb.append_zstr((char*)ansi::RESET);
-
-        for (int c = 0; c < cols; c++)
-        {
-            int w = col_widths[c];
-            Alignment align = (c < (int)table.alignments.len) ? table.alignments[c] : Alignment.LEFT;
-
-            tb.append_zstr(" ");
-            if (!plain)
-            {
-                if (is_header)
-                {
-                    tb.append_zstr((char*)ansi::FG_CYAN);
-                    tb.append_zstr((char*)ansi::BOLD);
-                }
-                else
-                {
-                    tb.append_zstr((char*)ansi::FG_TEXT);
-                }
-            }
-
-            if (line_idx < (int)wrapped[c].lines.size)
-            {
-                WrappedCellLine* cl = &wrapped[c].lines.entries[(usz)line_idx];
-                int dw = cl.display_width;
-                int pad = w - dw;
-                if (pad < 0) pad = 0;
-
-                String cell_text = cl.text.to_string();
-
-                if (align == Alignment.CENTER)
-                {
-                    int lpad = pad / 2;
-                    int rpad = pad - lpad;
-                    tb.append_spaces(lpad);
-                    tb.append_slice(cell_text);
-                    tb.append_spaces(rpad);
-                }
-                else if (align == Alignment.RIGHT)
-                {
-                    tb.append_spaces(pad);
-                    tb.append_slice(cell_text);
-                }
-                else // Left
-                {
-                    tb.append_slice(cell_text);
-                    tb.append_spaces(pad);
-                }
-            }
-            else
-            {
-                tb.append_spaces(w);
-            }
-
-            if (!plain) tb.append_zstr((char*)ansi::RESET);
-            tb.append_zstr(" ");
-
-            if (!plain) tb.append_zstr((char*)ansi::FG_MUTED);
-            tb.append_zstr("│");
-            if (!plain) tb.append_zstr((char*)ansi::RESET);
-        }
-
-        String str_line = tb.to_string();
-        emit_fn(ctx, str_line, src_line);
-    }
+    render::render_spans(&b, spans, plain);
+    String res = b.to_string();
+    *out_display_w = strutils::string_display_width(res);
+    return arena.dup_string(res);
 }
 
 fn void render_table(TableBlock* table, int src_line, int term_width, bool plain, void* ctx, EmitLineFn emit_fn)
@@ -213,68 +42,74 @@ fn void render_table(TableBlock* table, int src_line, int term_width, bool plain
         col_widths[c] = 3;
     }
 
-    // Measure headers
-    for (int c = 0; c < cols && c < (int)table.headers.len; c++)
-    {
-        Span[] hspans = table.headers[c];
-        int w = 0;
-        for (usz s = 0; s < hspans.len; s++)
-        {
-            w += strutils::string_display_width(hspans[s].text);
-        }
-        if (w > col_widths[c]) col_widths[c] = w;
-    }
+    // Pre-render and measure headers
+    String* header_texts_ptr = (String*)logic::g_ctx.scratch_arena.alloc((usz)cols * String::size);
+    int* header_widths_ptr = (int*)logic::g_ctx.scratch_arena.alloc((usz)cols * int::size);
 
-    // Measure body rows
-    for (usz r = 0; r < table.rows.len; r++)
-    {
-        Span[][] row = table.rows[r];
-        for (int c = 0; c < cols && c < (int)row.len; c++)
-        {
-            Span[] cspans = row[c];
-            int w = 0;
-            for (usz s = 0; s < cspans.len; s++)
-            {
-                w += strutils::string_display_width(cspans[s].text);
-            }
-            if (w > col_widths[c]) col_widths[c] = w;
-        }
-    }
-
-    // Adjust for terminal width
-    int total_nat = 1;
-    int sum_col_w = 0;
     for (int c = 0; c < cols; c++)
     {
-        sum_col_w += col_widths[c];
-        total_nat += col_widths[c] + 3;
+        Span[] hspans = (c < (int)table.headers.len) ? table.headers[c] : {};
+        int dw = 0;
+        header_texts_ptr[c] = render_cell_text(&logic::g_ctx.scratch_arena, hspans, plain, &dw);
+        header_widths_ptr[c] = dw;
+        if (dw > col_widths[c]) col_widths[c] = dw;
     }
 
-    int max_avail_table = term_width - 2;
-    if (max_avail_table < 20) max_avail_table = 20;
+    // Pre-render and measure body rows
+    usz num_rows = table.rows.len;
+    String[]* body_cells_ptr = (String[]*)logic::g_ctx.scratch_arena.alloc(num_rows * String[]::size);
+    int[]* body_widths_ptr = (int[]*)logic::g_ctx.scratch_arena.alloc(num_rows * int[]::size);
 
-    if (total_nat > max_avail_table)
+    for (usz r = 0; r < num_rows; r++)
     {
-        int avail_text_budget = max_avail_table - (cols * 3 + 1);
-        if (avail_text_budget < cols * 3) avail_text_budget = cols * 3;
+        Span[][] row = table.rows[r];
+        String* r_texts = (String*)logic::g_ctx.scratch_arena.alloc((usz)cols * String::size);
+        int* r_widths = (int*)logic::g_ctx.scratch_arena.alloc((usz)cols * int::size);
 
+        for (int c = 0; c < cols; c++)
+        {
+            Span[] cspans = (c < (int)row.len) ? row[c] : {};
+            int dw = 0;
+            r_texts[c] = render_cell_text(&logic::g_ctx.scratch_arena, cspans, plain, &dw);
+            r_widths[c] = dw;
+            if (dw > col_widths[c]) col_widths[c] = dw;
+        }
+
+        body_cells_ptr[r] = r_texts[0 : (usz)cols];
+        body_widths_ptr[r] = r_widths[0 : (usz)cols];
+    }
+
+    // Adjust for terminal width if needed (2 spaces gap between columns)
+    int gap = 2;
+    int total_width = 0;
+    for (int c = 0; c < cols; c++)
+    {
+        total_width += col_widths[c];
+        if (c < cols - 1) total_width += gap;
+    }
+
+    int max_avail = term_width > 20 ? term_width - 2 : 80;
+    if (total_width > max_avail)
+    {
+        int avail_budget = max_avail - (cols - 1) * gap;
+        if (avail_budget < cols * 3) avail_budget = cols * 3;
+        int sum_w = 0;
+        for (int c = 0; c < cols; c++) sum_w += col_widths[c];
         int distributed = 0;
         for (int c = 0; c < cols; c++)
         {
-            if (sum_col_w > 0)
+            if (sum_w > 0)
             {
-                col_widths[c] = (col_widths[c] * avail_text_budget) / sum_col_w;
+                col_widths[c] = (col_widths[c] * avail_budget) / sum_w;
             }
             else
             {
-                col_widths[c] = avail_text_budget / cols;
+                col_widths[c] = avail_budget / cols;
             }
             if (col_widths[c] < 3) col_widths[c] = 3;
             distributed += col_widths[c];
         }
-
-        // Fix rounding drift on the last column
-        int diff = avail_text_budget - distributed;
+        int diff = avail_budget - distributed;
         if (cols > 0 && col_widths[cols - 1] + diff >= 3)
         {
             col_widths[cols - 1] += diff;
@@ -285,64 +120,94 @@ fn void render_table(TableBlock* table, int src_line, int term_width, bool plain
     tb.init(4096);
     defer tb.free();
 
-    // Top border: ┌──────┬──────┐
-    if (!plain) tb.append_zstr((char*)ansi::FG_MUTED);
-    tb.append_zstr("┌");
+    // 1. Header row
     for (int c = 0; c < cols; c++)
     {
-        tb.append_repeat("─", col_widths[c] + 2);
-        if (c < cols - 1) tb.append_zstr("┬");
-    }
-    tb.append_zstr("┐");
-    if (!plain) tb.append_zstr((char*)ansi::RESET);
-    emit_fn(ctx, tb.to_string(), src_line);
+        int w = col_widths[c];
+        int dw = header_widths_ptr[c];
+        int pad = w - dw;
+        if (pad < 0) pad = 0;
+        String text = header_texts_ptr[c];
+        Alignment align = (c < (int)table.alignments.len) ? table.alignments[c] : Alignment.LEFT;
 
-    // Header row
-    render_single_row(&tb, table, table.headers, col_widths, cols, true, plain, src_line, ctx, emit_fn);
-
-    // Middle border: ├──────┼──────┤
-    tb.reset();
-    if (!plain) tb.append_zstr((char*)ansi::FG_MUTED);
-    tb.append_zstr("├");
-    for (int c = 0; c < cols; c++)
-    {
-        tb.append_repeat("─", col_widths[c] + 2);
-        if (c < cols - 1) tb.append_zstr("┼");
-    }
-    tb.append_zstr("┤");
-    if (!plain) tb.append_zstr((char*)ansi::RESET);
-    emit_fn(ctx, tb.to_string(), src_line);
-
-    // Body rows
-    for (usz r = 0; r < table.rows.len; r++)
-    {
-        render_single_row(&tb, table, table.rows[r], col_widths, cols, false, plain, src_line, ctx, emit_fn);
-        if (r + 1 < table.rows.len)
+        if (!plain)
         {
-            tb.reset();
-            if (!plain) tb.append_zstr((char*)ansi::FG_MUTED);
-            tb.append_zstr("├");
-            for (int c = 0; c < cols; c++)
-            {
-                tb.append_repeat("─", col_widths[c] + 2);
-                if (c < cols - 1) tb.append_zstr("┼");
-            }
-            tb.append_zstr("┤");
-            if (!plain) tb.append_zstr((char*)ansi::RESET);
-            emit_fn(ctx, tb.to_string(), src_line);
+            tb.append_zstr((char*)ansi::FG_CYAN);
+            tb.append_zstr((char*)ansi::BOLD);
         }
-    }
 
-    // Bottom border: └──────┴──────┘
+        if (align == Alignment.CENTER)
+        {
+            int lpad = pad / 2;
+            int rpad = pad - lpad;
+            tb.append_spaces(lpad);
+            tb.append_slice(text);
+            tb.append_spaces(rpad);
+        }
+        else if (align == Alignment.RIGHT)
+        {
+            tb.append_spaces(pad);
+            tb.append_slice(text);
+        }
+        else // LEFT
+        {
+            tb.append_slice(text);
+            tb.append_spaces(pad);
+        }
+
+        if (!plain) tb.append_zstr((char*)ansi::RESET);
+        if (c < cols - 1) tb.append_spaces(gap);
+    }
+    emit_fn(ctx, tb.to_string(), src_line);
+
+    // 2. Separator line
     tb.reset();
     if (!plain) tb.append_zstr((char*)ansi::FG_MUTED);
-    tb.append_zstr("└");
     for (int c = 0; c < cols; c++)
     {
-        tb.append_repeat("─", col_widths[c] + 2);
-        if (c < cols - 1) tb.append_zstr("┴");
+        tb.append_repeat("─", col_widths[c]);
+        if (c < cols - 1) tb.append_spaces(gap);
     }
-    tb.append_zstr("┘");
     if (!plain) tb.append_zstr((char*)ansi::RESET);
     emit_fn(ctx, tb.to_string(), src_line);
+
+    // 3. Body rows
+    for (usz r = 0; r < num_rows; r++)
+    {
+        tb.reset();
+        String[] r_texts = body_cells_ptr[r];
+        int[] r_widths = body_widths_ptr[r];
+
+        for (int c = 0; c < cols; c++)
+        {
+            int w = col_widths[c];
+            int dw = r_widths[c];
+            int pad = w - dw;
+            if (pad < 0) pad = 0;
+            String text = r_texts[c];
+            Alignment align = (c < (int)table.alignments.len) ? table.alignments[c] : Alignment.LEFT;
+
+            if (align == Alignment.CENTER)
+            {
+                int lpad = pad / 2;
+                int rpad = pad - lpad;
+                tb.append_spaces(lpad);
+                tb.append_slice(text);
+                tb.append_spaces(rpad);
+            }
+            else if (align == Alignment.RIGHT)
+            {
+                tb.append_spaces(pad);
+                tb.append_slice(text);
+            }
+            else // LEFT
+            {
+                tb.append_slice(text);
+                tb.append_spaces(pad);
+            }
+
+            if (c < cols - 1) tb.append_spaces(gap);
+        }
+        emit_fn(ctx, tb.to_string(), src_line + 2 + (int)r);
+    }
 }

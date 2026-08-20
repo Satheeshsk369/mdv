@@ -64,33 +64,7 @@ fn void render_file_stdout(char* filename, int width, bool no_wrap)
 
 fn void read_and_render_stdin(int width, bool no_wrap)
 {
-    const usz MAX_TOTAL = 4 * 1024 * 1024; // 4MB
-    char[] buf_slice = mem::alloc_array(char, (sz)MAX_TOTAL);
-    defer mem::free(buf_slice);
-    int total = 0;
-    const int CHUNK = 65536;
-
-    while (total < (int)MAX_TOTAL - CHUNK - 1)
-    {
-        int bytes = read(0, (void*)(buf_slice.ptr + total), (ulong)CHUNK);
-        if (bytes <= 0) break;
-        total += bytes;
-    }
-    buf_slice[total] = 0;
-
-    if (total > 0)
-    {
-        RenderConfig config;
-        config.width = width;
-        config.plain = ansi::plain_mode;
-        config.no_wrap = no_wrap;
-
-        String content_str = (String)buf_slice[:total];
-        Document doc = parser::parse_document(content_str);
-        defer doc.free();
-
-        render::render_to_stdout(&doc, config);
-    }
+    render::render_and_stream_stdin(width, no_wrap);
 }
 
 fn int main(String[] args)
