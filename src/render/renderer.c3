@@ -101,7 +101,6 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
             if (!plain)
             {
                 b.append_zstr((char*)ansi::FG_CYAN);
-                b.append_zstr((char*)ansi::UNDERLINE);
             }
             if (span.children.len > 0)
             {
@@ -127,15 +126,17 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
             }
 
         case SpanKind.IMAGE:
+            b.append_zstr("🖼  ");
             if (!plain)
             {
                 b.append_zstr((char*)ansi::FG_CYAN);
-                b.append_zstr((char*)ansi::ITALIC);
+                b.append_zstr((char*)ansi::BOLD);
             }
-            b.append_zstr("🖼  [Image: ");
+            b.append_char('[');
             b.append_slice(span.text);
-            b.append_zstr("]");
+            b.append_char(']');
             if (!plain) b.append_zstr((char*)ansi::RESET);
+
             if (span.url.len > 0)
             {
                 b.append_char(' ');
@@ -156,16 +157,6 @@ fn void render_spans(buffer::ByteBuffer* b, Span[] spans, bool plain)
     }
 }
 
-fn void emit_rendered_line(DocRenderContext* ctx, buffer::ByteBuffer* lb, int src_line)
-{
-    String s = lb.to_string();
-    VisualLine vl;
-    vl.text = ctx.arena.dup_string(s);
-    vl.display_width = strutils::string_display_width(s);
-    ctx.list.push(vl);
-    lb.reset();
-}
-
 fn void emit_table_line_cb(void* ctx_ptr, String text, int src_line)
 {
     DocRenderContext* ctx = (DocRenderContext*)ctx_ptr;
@@ -177,7 +168,8 @@ fn void emit_table_line_cb(void* ctx_ptr, String text, int src_line)
 }
 
 fn void render_wrapped_spans(
-    DocRenderContext* ctx,
+    void* emit_ctx,
+    layout::EmitLineFn emit_fn,
     Span[] spans,
     int src_line,
     int max_w,
@@ -189,11 +181,10 @@ fn void render_wrapped_spans(
 {
     if (spans.len == 0)
     {
-        buffer::ByteBuffer lb;
-        lb.init(512);
-        defer lb.free();
-        if (first_prefix_str.len > 0) lb.append_slice(first_prefix_str);
-        emit_rendered_line(ctx, &lb, src_line);
+        if (first_prefix_str.len > 0)
+        {
+            emit_fn(emit_ctx, first_prefix_str, src_line);
+        }
         return;
     }
 
@@ -204,7 +195,7 @@ fn void render_wrapped_spans(
         defer lb.free();
         if (first_prefix_str.len > 0) lb.append_slice(first_prefix_str);
         render_spans(&lb, spans, plain);
-        emit_rendered_line(ctx, &lb, src_line);
+        emit_fn(emit_ctx, lb.to_string(), src_line);
         return;
     }
 
@@ -268,7 +259,8 @@ fn void render_wrapped_spans(
 
             if (cur_w + 1 + word_w > max_w && cur_w > (prefix_str.len > 0 ? cont_prefix_w : 0))
             {
-                emit_rendered_line(ctx, &cur_line, src_line);
+                emit_fn(emit_ctx, cur_line.to_string(), src_line);
+                cur_line.reset();
                 if (prefix_str.len > 0)
                 {
                     cur_line.append_slice(prefix_str);
@@ -296,7 +288,8 @@ fn void render_wrapped_spans(
             int url_w = strutils::string_display_width(sp.url) + 3;
             if (cur_w + url_w > max_w && cur_w > cont_prefix_w)
             {
-                emit_rendered_line(ctx, &cur_line, src_line);
+                emit_fn(emit_ctx, cur_line.to_string(), src_line);
+                cur_line.reset();
                 if (prefix_str.len > 0)
                 {
                     cur_line.append_slice(prefix_str);
@@ -323,7 +316,7 @@ fn void render_wrapped_spans(
 
     if (cur_line.len > 0)
     {
-        emit_rendered_line(ctx, &cur_line, src_line);
+        emit_fn(emit_ctx, cur_line.to_string(), src_line);
     }
 }
 
@@ -353,30 +346,6 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
         switch (b.kind)
         {
             case BlockKind.FRONTMATTER:
-                // Top border ╭── Document Info ──────────────────────────╮
-                if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
-                lb.append_zstr("╭── ");
-                if (!plain)
-                {
-                    lb.append_zstr((char*)ansi::FG_CYAN);
-                    lb.append_zstr((char*)ansi::BOLD);
-                }
-                lb.append_zstr("Document Metadata");
-                if (!plain)
-                {
-                    lb.append_zstr((char*)ansi::RESET);
-                    lb.append_zstr((char*)ansi::FG_MUTED);
-                }
-                lb.append_char(' ');
-                int used_w = 4 + 17 + 1;
-                int cbar_len = width - 4 - used_w;
-                if (cbar_len < 4) cbar_len = 4;
-                lb.append_repeat("─", cbar_len);
-                lb.append_zstr("╮");
-                if (!plain) lb.append_zstr((char*)ansi::RESET);
-                emit_rendered_line(&ctx, &lb, b.src_line_start);
-
-                // Find max key length for clean alignment
                 int max_klen = 0;
                 for (usz e = 0; e < b.frontmatter.entries.len; e++)
                 {
@@ -385,7 +354,6 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                 }
                 if (max_klen < 5) max_klen = 5;
 
-                // Frontmatter entries with word wrapping
                 for (usz e = 0; e < b.frontmatter.entries.len; e++)
                 {
                     FrontmatterEntry entry = b.frontmatter.entries[e];
@@ -393,13 +361,10 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                     int pad_spaces = max_klen - key_len;
                     if (pad_spaces < 0) pad_spaces = 0;
 
-                    // Build first line
                     lb.reset();
-                    if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
-                    lb.append_zstr("│ ");
                     if (!plain)
                     {
-                        lb.append_zstr((char*)ansi::FG_YELLOW);
+                        lb.append_zstr((char*)ansi::FG_CYAN);
                         lb.append_zstr((char*)ansi::BOLD);
                     }
                     lb.append_slice(entry.key);
@@ -407,69 +372,19 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                     lb.append_zstr(":");
                     for (int s = 0; s < pad_spaces + 1; s++) lb.append_char(' ');
 
-                    int pfx_w = 2 + max_klen + 2; // "│ " + key (padded) + ": "
-                    int cur_w = pfx_w;
-                    int max_w = width - 4;
-                    if (max_w < pfx_w + 10) max_w = pfx_w + 10;
-
-                    String val = entry.value;
-                    usz p = 0;
-                    usz vlen = (usz)val.len;
-
-                    if (config.no_wrap)
-                    {
-                        if (!plain) lb.append_zstr((char*)ansi::FG_TEXT);
-                        lb.append_slice(val);
-                        if (!plain) lb.append_zstr((char*)ansi::RESET);
-                        emit_rendered_line(&ctx, &lb, b.src_line_start + 1 + (int)e);
-                    }
-                    else
-                    {
-                        while (p < vlen)
-                        {
-                            while (p < vlen && (val[p] == ' ' || val[p] == '\t')) p++;
-                            if (p >= vlen) break;
-
-                            usz w_start = p;
-                            while (p < vlen && val[p] != ' ' && val[p] != '\t' && val[p] != '\n') p++;
-                            String word = val[w_start : p - w_start];
-                            int word_w = strutils::string_display_width(word);
-
-                            if (cur_w + 1 + word_w > max_w && cur_w > pfx_w)
-                            {
-                                emit_rendered_line(&ctx, &lb, b.src_line_start + 1 + (int)e);
-                                lb.reset();
-                                if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
-                                lb.append_zstr("│ ");
-                                if (!plain) lb.append_zstr((char*)ansi::RESET);
-                                for (int s = 0; s < max_klen + 2; s++) lb.append_char(' ');
-                                cur_w = pfx_w;
-                            }
-                            else if (cur_w > pfx_w)
-                            {
-                                lb.append_char(' ');
-                                cur_w++;
-                            }
-
-                            if (!plain) lb.append_zstr((char*)ansi::FG_TEXT);
-                            lb.append_slice(word);
-                            if (!plain) lb.append_zstr((char*)ansi::RESET);
-                            cur_w += word_w;
-                        }
-
-                        emit_rendered_line(&ctx, &lb, b.src_line_start + 1 + (int)e);
-                    }
+                    if (!plain) lb.append_zstr((char*)ansi::FG_TEXT);
+                    lb.append_slice(entry.value);
+                    if (!plain) lb.append_zstr((char*)ansi::RESET);
+                    emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start + 1 + (int)e);
                 }
 
-                // Bottom border ╰────────────────────────╯
+                // Divider line below metadata
+                lb.reset();
                 if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
-                lb.append_zstr("╰");
-                int bbar_len = width - 6;
-                if (bbar_len < 8) bbar_len = 8;
-                lb.append_repeat("─", bbar_len);
-                lb.append_zstr("╯");
+                int mbar_len = width > 20 ? width - 4 : 76;
+                lb.append_repeat("─", mbar_len);
                 if (!plain) lb.append_zstr((char*)ansi::RESET);
-                emit_rendered_line(&ctx, &lb, b.src_line_end);
+                emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_end);
 
             case BlockKind.FOOTNOTE_DEF:
                 buffer::ByteBuffer fn_pfx;
@@ -486,36 +401,35 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                 defer fn_cont.free();
                 fn_cont.append_spaces(fn_w);
 
-                render_wrapped_spans(&ctx, b.footnote_def.spans, b.src_line_start, width - 4, fn_cont.to_string(), fn_pfx.to_string(), plain, config.no_wrap);
+                render_wrapped_spans((void*)&ctx, &emit_table_line_cb, b.footnote_def.spans, b.src_line_start, width - 4, fn_cont.to_string(), fn_pfx.to_string(), plain, config.no_wrap);
 
             case BlockKind.BLANK:
-                emit_rendered_line(&ctx, &lb, b.src_line_start);
+                emit_table_line_cb((void*)&ctx, "", b.src_line_start);
 
             case BlockKind.THEMATIC_BREAK:
+                lb.reset();
                 if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
-                int bar_len = width - 4;
-                if (bar_len < 10) bar_len = 10;
+                int bar_len = width > 20 ? width - 4 : 76;
                 lb.append_repeat("─", bar_len);
                 if (!plain) lb.append_zstr((char*)ansi::RESET);
-                emit_rendered_line(&ctx, &lb, b.src_line_start);
+                emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start);
 
             case BlockKind.HEADING:
                 if (b_idx > 0)
                 {
-                    lb.reset();
-                    emit_rendered_line(&ctx, &lb, b.src_line_start > 0 ? b.src_line_start - 1 : 0);
+                    emit_table_line_cb((void*)&ctx, "", b.src_line_start > 0 ? b.src_line_start - 1 : 0);
                 }
 
+                lb.reset();
                 if (!plain)
                 {
                     switch (b.heading.level)
                     {
-                        case 1: lb.append_zstr((char*)ansi::FG_H1); lb.append_zstr("█ ");
-                        case 2: lb.append_zstr((char*)ansi::FG_H2); lb.append_zstr("▊ ");
-                        case 3: lb.append_zstr((char*)ansi::FG_H3); lb.append_zstr("▋ ");
-                        case 4: lb.append_zstr((char*)ansi::FG_H4); lb.append_zstr("▌ ");
-                        case 5: lb.append_zstr((char*)ansi::FG_H5); lb.append_zstr("▍ ");
-                        default: lb.append_zstr((char*)ansi::FG_H6); lb.append_zstr("▎ ");
+                        case 1: lb.append_zstr((char*)ansi::FG_PINK); lb.append_zstr((char*)ansi::BOLD); lb.append_zstr("█ ");
+                        case 2: lb.append_zstr((char*)ansi::FG_GREEN); lb.append_zstr((char*)ansi::BOLD); lb.append_zstr("▊ ");
+                        case 3: lb.append_zstr((char*)ansi::FG_ORANGE); lb.append_zstr((char*)ansi::BOLD); lb.append_zstr("▋ ");
+                        case 4: lb.append_zstr((char*)ansi::FG_PURPLE); lb.append_zstr((char*)ansi::BOLD); lb.append_zstr("▌ ");
+                        default: lb.append_zstr((char*)ansi::FG_CYAN); lb.append_zstr((char*)ansi::BOLD); lb.append_zstr("▍ ");
                     }
                 }
                 else
@@ -526,7 +440,7 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
 
                 render_spans(&lb, b.heading.spans, plain);
                 if (!plain) lb.append_zstr((char*)ansi::RESET);
-                emit_rendered_line(&ctx, &lb, b.src_line_start);
+                emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start);
 
             case BlockKind.CODE_BLOCK:
                 if (b.code.language.len > 0)
@@ -541,20 +455,21 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                     lb.append_slice(b.code.language);
                     lb.append_zstr("]");
                     if (!plain) lb.append_zstr((char*)ansi::RESET);
-                    emit_rendered_line(&ctx, &lb, b.src_line_start);
+                    emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start);
                 }
 
-                // Code block lines
+                // Code block lines with 2-space indent
                 for (usz l = 0; l < b.code.lines.len; l++)
                 {
                     lb.reset();
                     lb.append_zstr("  ");
                     highlight_code_line(&lb, b.code.lines[l], b.code.language, plain);
-                    emit_rendered_line(&ctx, &lb, b.src_line_start + 1 + (int)l);
+                    emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start + 1 + (int)l);
                 }
 
             case BlockKind.CALLOUT:
                 // Title line
+                lb.reset();
                 if (!plain)
                 {
                     logic::CalloutTheme theme = logic::CALLOUT_THEMES[(int)b.callout.kind];
@@ -572,16 +487,15 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                     lb.append_slice(b.callout.title);
                     lb.append_zstr("]");
                 }
-                emit_rendered_line(&ctx, &lb, b.src_line_start);
+                emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start);
 
-                // Body lines
                 if (b.callout.spans.len > 0)
                 {
-                    render_wrapped_spans(&ctx, b.callout.spans, b.src_line_end, width - 6, "│ ", "│ ", plain, config.no_wrap);
+                    render_wrapped_spans((void*)&ctx, &emit_table_line_cb, b.callout.spans, b.src_line_end, width - 6, "│ ", "│ ", plain, config.no_wrap);
                 }
 
             case BlockKind.BLOCKQUOTE:
-                render_wrapped_spans(&ctx, b.blockquote.spans, b.src_line_start, width - 6, "│ ", "│ ", plain, config.no_wrap);
+                render_wrapped_spans((void*)&ctx, &emit_table_line_cb, b.blockquote.spans, b.src_line_start, width - 6, "│ ", "│ ", plain, config.no_wrap);
 
             case BlockKind.LIST_ITEM:
                 buffer::ByteBuffer pfx_indent;
@@ -633,7 +547,7 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                         cont_full.append_zstr("  ");
                 }
 
-                render_wrapped_spans(&ctx, b.list_item.spans, b.src_line_start, width - 4, cont_full.to_string(), first_full.to_string(), plain, config.no_wrap);
+                render_wrapped_spans((void*)&ctx, &emit_table_line_cb, b.list_item.spans, b.src_line_start, width - 4, cont_full.to_string(), first_full.to_string(), plain, config.no_wrap);
 
             case BlockKind.TABLE:
                 layout::render_table(&b.table, b.src_line_start, width, plain, (void*)&ctx, &emit_table_line_cb);
@@ -642,8 +556,7 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                 MathBox mbox = math::render_latex_to_box(ctx.arena, b.math_block.latex);
                 int pad_left = 4;
 
-                lb.reset();
-                emit_rendered_line(&ctx, &lb, b.src_line_start);
+                emit_table_line_cb((void*)&ctx, "", b.src_line_start);
 
                 for (int r = 0; r < mbox.height; r++)
                 {
@@ -658,61 +571,36 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                     {
                         lb.append_zstr((char*)ansi::RESET);
                     }
-                    emit_rendered_line(&ctx, &lb, b.src_line_start);
+                    emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start);
                 }
 
-                lb.reset();
-                emit_rendered_line(&ctx, &lb, b.src_line_end);
+                emit_table_line_cb((void*)&ctx, "", b.src_line_end);
 
             case BlockKind.IMAGE_BLOCK:
-                if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
-                lb.append_zstr("╭── ");
-                if (!plain)
-                {
-                    lb.append_zstr((char*)ansi::FG_CYAN);
-                    lb.append_zstr((char*)ansi::BOLD);
-                }
-                lb.append_zstr("Image");
+                lb.reset();
+                lb.append_zstr("🖼  ");
                 if (b.image_block.alt.len > 0)
                 {
-                    lb.append_zstr(": ");
+                    if (!plain)
+                    {
+                        lb.append_zstr((char*)ansi::FG_CYAN);
+                        lb.append_zstr((char*)ansi::BOLD);
+                    }
+                    lb.append_char('[');
                     lb.append_slice(b.image_block.alt);
+                    lb.append_char(']');
+                    if (!plain) lb.append_zstr((char*)ansi::RESET);
+                    lb.append_char(' ');
                 }
-                if (!plain)
-                {
-                    lb.append_zstr((char*)ansi::RESET);
-                    lb.append_zstr((char*)ansi::FG_MUTED);
-                }
-                lb.append_char(' ');
-                int used_w = 4 + 6 + (b.image_block.alt.len > 0 ? (int)b.image_block.alt.len + 2 : 0) + 1;
-                int cbar_len = width - 4 - used_w;
-                if (cbar_len < 4) cbar_len = 4;
-                lb.append_repeat("─", cbar_len);
-                lb.append_zstr("╮");
-                if (!plain) lb.append_zstr((char*)ansi::RESET);
-                emit_rendered_line(&ctx, &lb, b.src_line_start);
-
-                // Body
                 if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
-                lb.append_zstr("│ ");
-                if (!plain) lb.append_zstr((char*)ansi::FG_CYAN);
-                lb.append_zstr("🖼  ");
+                lb.append_char('(');
                 lb.append_slice(b.image_block.url);
+                lb.append_char(')');
                 if (!plain) lb.append_zstr((char*)ansi::RESET);
-                emit_rendered_line(&ctx, &lb, b.src_line_start);
-
-                // Bottom border
-                if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
-                lb.append_zstr("╰");
-                int bbar_len = width - 6;
-                if (bbar_len < 8) bbar_len = 8;
-                lb.append_repeat("─", bbar_len);
-                lb.append_zstr("╯");
-                if (!plain) lb.append_zstr((char*)ansi::RESET);
-                emit_rendered_line(&ctx, &lb, b.src_line_end);
+                emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start);
 
             case BlockKind.PARAGRAPH:
-                render_wrapped_spans(&ctx, b.paragraph.spans, b.src_line_start, width - 2, "", "", plain, config.no_wrap);
+                render_wrapped_spans((void*)&ctx, &emit_table_line_cb, b.paragraph.spans, b.src_line_start, width - 2, "", "", plain, config.no_wrap);
         }
     }
 

@@ -53,151 +53,9 @@ struct StreamContext {
     buffer::ByteBuffer para_buf;
 }
 
-fn void stream_render_wrapped_spans(
-    Span[] spans,
-    int max_w,
-    String prefix_str,
-    String first_prefix_str,
-    bool plain,
-    bool no_wrap
-)
+fn void emit_stream_line_cb(void* ctx_ptr, String text, int src_line)
 {
-    if (spans.len == 0)
-    {
-        if (first_prefix_str.len > 0) io::printn(first_prefix_str);
-        return;
-    }
-
-    if (no_wrap || max_w <= 20)
-    {
-        buffer::ByteBuffer lb;
-        lb.init(4096);
-        defer lb.free();
-        if (first_prefix_str.len > 0) lb.append_slice(first_prefix_str);
-        render_spans(&lb, spans, plain);
-        io::printn(lb.to_string());
-        return;
-    }
-
-    buffer::ByteBuffer cur_line;
-    cur_line.init(4096);
-    defer cur_line.free();
-
-    int cur_w = 0;
-    if (first_prefix_str.len > 0)
-    {
-        cur_line.append_slice(first_prefix_str);
-        cur_w = strutils::string_display_width(first_prefix_str);
-    }
-
-    int cont_prefix_w = 0;
-    if (prefix_str.len > 0)
-    {
-        cont_prefix_w = strutils::string_display_width(prefix_str);
-    }
-
-    for (usz s_idx = 0; s_idx < spans.len; s_idx++)
-    {
-        Span sp = spans[s_idx];
-
-        char* style_start = "";
-        char* style_end = "";
-        if (!plain)
-        {
-            switch (sp.kind)
-            {
-                case SpanKind.BOLD: style_start = (char*)ansi::BOLD; style_end = (char*)ansi::RESET;
-                case SpanKind.ITALIC: style_start = (char*)ansi::ITALIC; style_end = (char*)ansi::RESET;
-                case SpanKind.STRIKETHROUGH: style_start = (char*)ansi::STRIKE; style_end = (char*)ansi::RESET;
-                case SpanKind.CODE_INLINE: style_start = (char*)ansi::CODE_INLINE; style_end = (char*)ansi::RESET;
-                case SpanKind.MATH_INLINE: style_start = (char*)ansi::FG_MATH; style_end = (char*)ansi::RESET;
-                case SpanKind.FOOTNOTE_REF: style_start = (char*)ansi::FG_CYAN; style_end = (char*)ansi::RESET;
-                case SpanKind.LINK: style_start = (char*)ansi::FG_CYAN; style_end = (char*)ansi::RESET;
-                default: style_start = ""; style_end = "";
-            }
-        }
-
-        String txt = sp.text;
-        usz p = 0;
-        usz tlen = (usz)txt.len;
-
-        while (p < tlen)
-        {
-            while (p < tlen && (txt[p] == ' ' || txt[p] == '\t'))
-            {
-                p++;
-            }
-            if (p >= tlen) break;
-
-            usz w_start = p;
-            while (p < tlen && txt[p] != ' ' && txt[p] != '\t' && txt[p] != '\n')
-            {
-                p++;
-            }
-            String word = txt[w_start : p - w_start];
-            int word_w = strutils::string_display_width(word);
-
-            if (cur_w + 1 + word_w > max_w && cur_w > (prefix_str.len > 0 ? cont_prefix_w : 0))
-            {
-                io::printn(cur_line.to_string());
-                cur_line.reset();
-                if (prefix_str.len > 0)
-                {
-                    cur_line.append_slice(prefix_str);
-                    cur_w = cont_prefix_w;
-                }
-                else
-                {
-                    cur_w = 0;
-                }
-            }
-            else if (cur_w > (prefix_str.len > 0 ? cont_prefix_w : (first_prefix_str.len > 0 ? cont_prefix_w : 0)))
-            {
-                cur_line.append_char(' ');
-                cur_w++;
-            }
-
-            if (style_start[0] != 0) cur_line.append_zstr(style_start);
-            cur_line.append_slice(word);
-            if (style_end[0] != 0) cur_line.append_zstr(style_end);
-            cur_w += word_w;
-        }
-
-        if (sp.kind == SpanKind.LINK && sp.url.len > 0)
-        {
-            int url_w = strutils::string_display_width(sp.url) + 3;
-            if (cur_w + url_w > max_w && cur_w > cont_prefix_w)
-            {
-                io::printn(cur_line.to_string());
-                cur_line.reset();
-                if (prefix_str.len > 0)
-                {
-                    cur_line.append_slice(prefix_str);
-                    cur_w = cont_prefix_w;
-                }
-                else
-                {
-                    cur_w = 0;
-                }
-            }
-            else
-            {
-                cur_line.append_char(' ');
-                cur_w++;
-            }
-            if (!plain) cur_line.append_zstr((char*)ansi::FG_MUTED);
-            cur_line.append_char('(');
-            cur_line.append_slice(sp.url);
-            cur_line.append_char(')');
-            if (!plain) cur_line.append_zstr((char*)ansi::RESET);
-            cur_w += url_w;
-        }
-    }
-
-    if (cur_line.len > 0)
-    {
-        io::printn(cur_line.to_string());
-    }
+    io::printn(text);
 }
 
 fn void flush_paragraph(StreamContext* ctx, logic::Arena* scratch)
@@ -210,7 +68,7 @@ fn void flush_paragraph(StreamContext* ctx, logic::Arena* scratch)
     if (spans.len == 0) return;
 
     int max_w = ctx.width > 20 ? ctx.width - 2 : 80;
-    stream_render_wrapped_spans(spans, max_w, "", "", ctx.plain, ctx.no_wrap);
+    render_wrapped_spans(null, &emit_stream_line_cb, spans, 0, max_w, "", "", ctx.plain, ctx.no_wrap);
 }
 
 fn void flush_math_block(StreamContext* ctx, logic::Arena* scratch)
@@ -266,7 +124,7 @@ fn void flush_callout(StreamContext* ctx, logic::Arena* scratch)
     if (spans.len > 0)
     {
         int max_w = ctx.width > 20 ? ctx.width - 6 : 76;
-        stream_render_wrapped_spans(spans, max_w, "│ ", "│ ", ctx.plain, ctx.no_wrap);
+        render_wrapped_spans(null, &emit_stream_line_cb, spans, 0, max_w, "│ ", "│ ", ctx.plain, ctx.no_wrap);
     }
 }
 
@@ -280,7 +138,7 @@ fn void flush_blockquote(StreamContext* ctx, logic::Arena* scratch)
     if (spans.len > 0)
     {
         int max_w = ctx.width > 20 ? ctx.width - 6 : 76;
-        stream_render_wrapped_spans(spans, max_w, "│ ", "│ ", ctx.plain, ctx.no_wrap);
+        render_wrapped_spans(null, &emit_stream_line_cb, spans, 0, max_w, "│ ", "│ ", ctx.plain, ctx.no_wrap);
     }
 }
 
@@ -293,7 +151,7 @@ fn void flush_table(StreamContext* ctx, logic::Arena* scratch)
     if (ctx.table_lines.size == 1)
     {
         Span[] spans = parser::parse_inline(scratch, ctx.table_lines.entries[0]);
-        stream_render_wrapped_spans(spans, ctx.width > 20 ? ctx.width - 2 : 80, "", "", ctx.plain, ctx.no_wrap);
+        render_wrapped_spans(null, &emit_stream_line_cb, spans, 0, ctx.width > 20 ? ctx.width - 2 : 80, "", "", ctx.plain, ctx.no_wrap);
         ctx.table_lines.clear();
         ctx.table_arena.reset();
         return;
@@ -636,7 +494,7 @@ fn void process_stream_line(StreamContext* ctx, String line, logic::Arena* scrat
             cpfx.append_spaces((int)indent + 3);
 
             int max_w = ctx.width > 20 ? ctx.width - (int)indent - 4 : 76;
-            stream_render_wrapped_spans(tspans, max_w, cpfx.to_string(), pfx.to_string(), ctx.plain, ctx.no_wrap);
+            render_wrapped_spans(null, &emit_stream_line_cb, tspans, 0, max_w, cpfx.to_string(), pfx.to_string(), ctx.plain, ctx.no_wrap);
             return;
         }
         if (strutils::string_starts_with(sub, "- [x] ") || strutils::string_starts_with(sub, "- [X] ") || strutils::string_starts_with(sub, "* [x] ") || strutils::string_starts_with(sub, "* [X] "))
@@ -659,7 +517,7 @@ fn void process_stream_line(StreamContext* ctx, String line, logic::Arena* scrat
             cpfx.append_spaces((int)indent + 3);
 
             int max_w = ctx.width > 20 ? ctx.width - (int)indent - 4 : 76;
-            stream_render_wrapped_spans(tspans, max_w, cpfx.to_string(), pfx.to_string(), ctx.plain, ctx.no_wrap);
+            render_wrapped_spans(null, &emit_stream_line_cb, tspans, 0, max_w, cpfx.to_string(), pfx.to_string(), ctx.plain, ctx.no_wrap);
             return;
         }
     }
@@ -693,7 +551,7 @@ fn void process_stream_line(StreamContext* ctx, String line, logic::Arena* scrat
         cpfx.append_spaces((int)indent + 2);
 
         int max_w = ctx.width > 20 ? ctx.width - (int)indent - 4 : 76;
-        stream_render_wrapped_spans(spans, max_w, cpfx.to_string(), pfx.to_string(), ctx.plain, ctx.no_wrap);
+        render_wrapped_spans(null, &emit_stream_line_cb, spans, 0, max_w, cpfx.to_string(), pfx.to_string(), ctx.plain, ctx.no_wrap);
         return;
     }
 
@@ -720,7 +578,7 @@ fn void process_stream_line(StreamContext* ctx, String line, logic::Arena* scrat
         cpfx.append_spaces(pfx_w);
 
         int max_w = ctx.width > 20 ? ctx.width - pfx_w - 2 : 76;
-        stream_render_wrapped_spans(spans, max_w, cpfx.to_string(), pfx.to_string(), ctx.plain, ctx.no_wrap);
+        render_wrapped_spans(null, &emit_stream_line_cb, spans, 0, max_w, cpfx.to_string(), pfx.to_string(), ctx.plain, ctx.no_wrap);
         return;
     }
 
