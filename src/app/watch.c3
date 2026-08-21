@@ -86,6 +86,112 @@ fn void extract_toc(Document* doc, VisualDocument* vdoc, List{TocItem}* toc)
     }
 }
 
+struct PresentationStep {
+    String title;
+    int h_level;
+    int src_line_start;
+    Block[] blocks;
+}
+
+fn bool has_meaningful_blocks(List{Block}* list)
+{
+    for (sz k = 0; k < list.size; k++)
+    {
+        if (list.entries[(usz)k].kind != BlockKind.BLANK) return true;
+    }
+    return false;
+}
+
+fn void extract_presentation_steps(Document* doc, List{PresentationStep}* steps, Arena* arena)
+{
+    steps.clear();
+    if (doc == null || doc.blocks.len == 0) return;
+
+    List{Block} cur_blocks;
+    cur_blocks.init(mem, 32);
+    defer cur_blocks.free();
+
+    String cur_title = "Overview";
+    int cur_level = 1;
+    int cur_src_line = 0;
+
+    for (usz i = 0; i < doc.blocks.len; i++)
+    {
+        Block* b = &doc.blocks[i];
+
+        bool is_step_boundary = false;
+        if (b.kind == BlockKind.THEMATIC_BREAK)
+        {
+            is_step_boundary = true;
+        }
+        else if (b.kind == BlockKind.HEADING && b.heading.level <= 2)
+        {
+            is_step_boundary = true;
+        }
+
+        if (is_step_boundary && has_meaningful_blocks(&cur_blocks))
+        {
+            PresentationStep step;
+            step.title = cur_title;
+            step.h_level = cur_level;
+            step.src_line_start = cur_src_line;
+
+            Block* block_buf = (Block*)arena.alloc((usz)cur_blocks.size * Block::size);
+            for (sz k = 0; k < cur_blocks.size; k++)
+            {
+                block_buf[k] = cur_blocks.entries[(usz)k];
+            }
+            step.blocks = block_buf[0 : (usz)cur_blocks.size];
+            steps.push(step);
+
+            cur_blocks.clear();
+        }
+
+        if (b.kind == BlockKind.HEADING && b.heading.level <= 2)
+        {
+            cur_title = logic::get_spans_plain_text(b.heading.spans, arena);
+            cur_level = b.heading.level;
+            cur_src_line = b.src_line_start;
+            cur_blocks.push(*b);
+        }
+        else if (b.kind == BlockKind.THEMATIC_BREAK)
+        {
+            cur_src_line = b.src_line_start;
+        }
+        else
+        {
+            if (cur_blocks.size == 0 && b.kind != BlockKind.BLANK) cur_src_line = b.src_line_start;
+            cur_blocks.push(*b);
+        }
+    }
+
+    if (has_meaningful_blocks(&cur_blocks))
+    {
+        PresentationStep step;
+        step.title = cur_title;
+        step.h_level = cur_level;
+        step.src_line_start = cur_src_line;
+
+        Block* block_buf = (Block*)arena.alloc((usz)cur_blocks.size * Block::size);
+        for (sz k = 0; k < cur_blocks.size; k++)
+        {
+            block_buf[k] = cur_blocks.entries[(usz)k];
+        }
+        step.blocks = block_buf[0 : (usz)cur_blocks.size];
+        steps.push(step);
+    }
+
+    if (steps.size == 0)
+    {
+        PresentationStep step;
+        step.title = "Document";
+        step.h_level = 1;
+        step.src_line_start = 0;
+        step.blocks = doc.blocks;
+        steps.push(step);
+    }
+}
+
 fn void copy_to_clipboard_osc52(char* text, int len)
 {
     if (text == null || len <= 0) return;
@@ -265,6 +371,163 @@ fn void append_horizontal_slice(buffer::ByteBuffer* fb, String line, int scroll_
     }
 }
 
+fn void draw_presentation_viewport(
+    buffer::ByteBuffer* fb,
+    PresentationStep* step,
+    int step_idx,
+    int total_steps,
+    RenderConfig config,
+    int term_width,
+    int term_height,
+    char* filename,
+    int scroll_top = 0
+)
+{
+    fb.reset();
+
+    // Disable line wrap and move cursor to top-left (1,1)
+    fb.append_zstr("\x1b[?7l\x1b[H");
+
+    // 1. Top Header Bar (row 1)
+    fb.append_zstr(ansi::ui_top_badge);
+    fb.append_zstr(" mdv ");
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr(ansi::ui_top_path);
+    fb.append_zstr(" ");
+    fb.append_zstr(filename);
+    fb.append_zstr(" ");
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr(ansi::ui_top_div);
+    fb.append_zstr("│");
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr(" ");
+
+    // Step Badge: [Step X of Y]
+    fb.append_zstr("\x1b[48;2;166;226;46m\x1b[38;2;39;40;34m\x1b[1m Step ");
+    fb.append_int(step_idx + 1);
+    fb.append_zstr(" of ");
+    fb.append_int(total_steps);
+    fb.append_zstr(" \x1b[0m ");
+
+    // Step Title
+    fb.append_zstr(ansi::BOLD);
+    fb.append_zstr(ansi::fg_cyan);
+    fb.append_slice(step.title);
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr("\x1b[K\n");
+
+    // Separator line (row 2)
+    fb.append_zstr(ansi::ui_border);
+    int bar_w = term_width - 2;
+    if (bar_w < 10) bar_w = 10;
+    fb.append_repeat("─", bar_w);
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr("\x1b[K\n");
+
+    // 2. Render Step AST into lines
+    Document step_doc;
+    step_doc.blocks = step.blocks;
+    VisualDocument step_vdoc = render::render_document(&step_doc, config);
+    defer step_vdoc.free();
+
+    int total_lines = step_vdoc.get_total_lines();
+    int content_rows = term_height - 3;
+    if (content_rows < 2) content_rows = 2;
+
+    int top_pad = 0;
+    if (total_lines < content_rows - 4)
+    {
+        top_pad = (content_rows - total_lines) / 3;
+        if (top_pad > 3) top_pad = 3;
+    }
+
+    int emitted_lines = 0;
+    for (int p = 0; p < top_pad && emitted_lines < content_rows; p++)
+    {
+        fb.append_zstr("\x1b[K\n");
+        emitted_lines++;
+    }
+
+    for (int r = 0; r < content_rows - top_pad; r++)
+    {
+        int line_idx = scroll_top + r;
+        if (line_idx < total_lines)
+        {
+            String l_text = step_vdoc.lines[line_idx].text;
+            append_horizontal_slice(fb, l_text, 0, term_width - 1);
+        }
+        fb.append_zstr("\x1b[K\n");
+        emitted_lines++;
+    }
+
+    // 3. Footer Bar (row term_height)
+    fb.append_zstr(ansi::ui_top_badge);
+    fb.append_zstr(" [");
+    fb.append_int(step_idx + 1);
+    fb.append_char('/');
+    fb.append_int(total_steps);
+    fb.append_zstr("] ");
+    fb.append_zstr(ansi::RESET);
+
+    // Progress dots
+    fb.append_zstr(" ");
+    for (int s = 0; s < total_steps && s < 15; s++)
+    {
+        if (s == step_idx)
+        {
+            fb.append_zstr(ansi::fg_green);
+            fb.append_zstr("● ");
+            fb.append_zstr(ansi::RESET);
+        }
+        else if (s < step_idx)
+        {
+            fb.append_zstr(ansi::fg_cyan);
+            fb.append_zstr("• ");
+            fb.append_zstr(ansi::RESET);
+        }
+        else
+        {
+            fb.append_zstr(ansi::fg_muted);
+            fb.append_zstr("○ ");
+            fb.append_zstr(ansi::RESET);
+        }
+    }
+
+    fb.append_zstr(" ");
+    fb.append_zstr(ansi::ui_border);
+    fb.append_zstr("──");
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr(" ");
+
+    // Key hints
+    fb.append_zstr(ansi::fg_yellow);
+    fb.append_zstr("[Space/→ Next]");
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr(" ");
+    fb.append_zstr(ansi::fg_yellow);
+    fb.append_zstr("[← Prev]");
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr(" ");
+    fb.append_zstr(ansi::fg_cyan);
+    fb.append_zstr("[p Normal View]");
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr(" ");
+    fb.append_zstr(ansi::fg_muted);
+    fb.append_zstr("[1..9 Jump]");
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr(" ");
+    fb.append_zstr(ansi::fg_muted);
+    fb.append_zstr("[r Reload]");
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr(" ");
+    fb.append_zstr(ansi::fg_pink);
+    fb.append_zstr("[q Exit]");
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr("\x1b[K");
+
+    flush_fb(fb);
+}
+
 fn void draw_viewport(
     buffer::ByteBuffer* fb,
     VisualDocument* vdoc,
@@ -326,7 +589,7 @@ fn void draw_viewport(
         fb.append_zstr(ansi::RESET);
         fb.append_zstr("\x1b[K\n");
 
-        char*[19] help_rows = {
+        char*[20] help_rows = {
             "\x1b[38;2;102;217;239m\x1b[1mVertical Navigation:\x1b[0m",
             "  \x1b[38;2;230;219;116mj / ↓\x1b[0m                 Scroll down (accelerated)",
             "  \x1b[38;2;230;219;116mk / ↑\x1b[0m                 Scroll up (accelerated)",
@@ -340,6 +603,7 @@ fn void draw_viewport(
             "  \x1b[38;2;230;219;116mh / l / ← / →\x1b[0m         Horizontal scroll (accelerated)",
             "",
             "\x1b[38;2;102;217;239m\x1b[1mFeatures & Actions:\x1b[0m",
+            "  \x1b[38;2;166;226;46mp / P\x1b[0m                 Toggle Presentation / Story Mode (--play)",
             "  \x1b[38;2;166;226;46mTab / t\x1b[0m               Toggle Document Outline (Table of Contents)",
             "  \x1b[38;2;166;226;46mo\x1b[0m                     Switch Document (Markdown File Tree)",
             "  \x1b[38;2;166;226;46m/\x1b[0m                     In-document search (n next, N prev)",
@@ -350,7 +614,7 @@ fn void draw_viewport(
 
         for (int r = 0; r < view_height; r++)
         {
-            if (r < 19)
+            if (r < 20)
             {
                 fb.append_zstr("  ");
                 fb.append_zstr(help_rows[r]);
@@ -841,7 +1105,7 @@ fn void draw_viewport(
     flush_fb(fb);
 }
 
-fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false, bool initial_file_picker = false)
+fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false, bool initial_file_picker = false, bool initial_present = false)
 {
     terminal::enable_raw_mode();
     terminal::enter_alt_screen();
@@ -890,6 +1154,19 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     defer toc.free();
     extract_toc(&doc, &vdoc, &toc);
 
+    logic::Arena present_arena;
+    present_arena.init(65536);
+    defer present_arena.free();
+
+    List{PresentationStep} present_steps;
+    present_steps.init(mem, 32);
+    defer present_steps.free();
+    extract_presentation_steps(&doc, &present_steps, &present_arena);
+
+    bool presentation_mode = initial_present;
+    int present_step_idx = 0;
+    int present_scroll_top = 0;
+
     int total_lines = vdoc.get_total_lines();
     int max_scroll = total_lines > 0 ? total_lines - 1 : 0;
 
@@ -902,6 +1179,14 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
         scroll_top = v_line - context_offset;
         if (scroll_top < 0) scroll_top = 0;
         if (scroll_top > max_scroll) scroll_top = max_scroll;
+
+        for (sz s = 0; s < present_steps.size; s++)
+        {
+            if (present_steps.entries[(usz)s].src_line_start <= initial_line - 1)
+            {
+                present_step_idx = (int)s;
+            }
+        }
     }
 
     // TUI state
@@ -955,7 +1240,17 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     int status_ticks = 0;
 
     int cur_match_line = (match_lines.size > 0 && cur_match_idx < (int)match_lines.size) ? match_lines.entries[cur_match_idx] : -1;
-    draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, &cur_filename[0], last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], (int)match_lines.size, cur_match_idx, cur_match_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line, show_files, &file_tree, file_cursor);
+    if (presentation_mode)
+    {
+        if (present_steps.size > 0 && present_step_idx < (int)present_steps.size)
+        {
+            draw_presentation_viewport(&fb, &present_steps.entries[present_step_idx], present_step_idx, (int)present_steps.size, config, width, height, &cur_filename[0], present_scroll_top);
+        }
+    }
+    else
+    {
+        draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, &cur_filename[0], last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], (int)match_lines.size, cur_match_idx, cur_match_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line, show_files, &file_tree, file_cursor);
+    }
     prev_content = content;
     terminal::get_file_state(filename, &prev_state);
 
@@ -996,6 +1291,136 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 if (key == 27 || key == 'q' || key == 'Q' || key == '?' || key == 31 || key == 0x1F || key == 10 || key == 9 || key == 1006 || key == 'h' || key == 'H')
                 {
                     show_help = false;
+                    need_redraw = true;
+                }
+                continue;
+            }
+
+            // ── Presentation Mode Navigation ──────────────────────────────
+            if (presentation_mode)
+            {
+                if (key == 'p' || key == 'P') // Toggle presentation mode off
+                {
+                    presentation_mode = false;
+                    if (present_step_idx < (int)present_steps.size)
+                    {
+                        int s_line = present_steps.entries[present_step_idx].src_line_start;
+                        cursor_line = vdoc.find_visual_line(s_line);
+                        scroll_top = cursor_line;
+                        if (scroll_top > max_scroll) scroll_top = max_scroll;
+                    }
+                    need_redraw = true;
+                }
+                else if (key == ' ' || key == 1007 || key == 'l' || key == 'L' || key == 10 || key == 13 || key == 1002 || key == 'n') // Next step
+                {
+                    if (present_step_idx + 1 < (int)present_steps.size)
+                    {
+                        present_step_idx++;
+                        present_scroll_top = 0;
+                        need_redraw = true;
+                    }
+                }
+                else if (key == 127 || key == 0x08 || key == 1006 || key == 'h' || key == 'H' || key == 1003 || key == 'N') // Prev step
+                {
+                    if (present_step_idx > 0)
+                    {
+                        present_step_idx--;
+                        present_scroll_top = 0;
+                        need_redraw = true;
+                    }
+                }
+                else if (key == 'j' || key == 1000) // Scroll within step
+                {
+                    present_scroll_top++;
+                    need_redraw = true;
+                }
+                else if (key == 'k' || key == 1001) // Scroll up within step
+                {
+                    if (present_scroll_top > 0) present_scroll_top--;
+                    need_redraw = true;
+                }
+                else if (key == 'g' || key == 1008) // First step
+                {
+                    present_step_idx = 0;
+                    present_scroll_top = 0;
+                    need_redraw = true;
+                }
+                else if (key == 'G' || key == 1009) // Last step
+                {
+                    present_step_idx = (int)present_steps.size > 0 ? (int)present_steps.size - 1 : 0;
+                    present_scroll_top = 0;
+                    need_redraw = true;
+                }
+                else if (key >= '1' && key <= '9')
+                {
+                    int target_s = key - '1';
+                    if (target_s < (int)present_steps.size)
+                    {
+                        present_step_idx = target_s;
+                        present_scroll_top = 0;
+                        need_redraw = true;
+                    }
+                }
+                else if (key == 'w' || key == 'W')
+                {
+                    no_wrap = !no_wrap;
+                    config.no_wrap = no_wrap;
+                    need_redraw = true;
+                }
+                else if (key == 'r' || key == 'R')
+                {
+                    char* new_c = strutils::load_file_string(filename);
+                    if (new_c != null)
+                    {
+                        if (prev_content != null) mem::free(prev_content);
+                        prev_content = new_c;
+                        doc.free();
+                        vdoc.free();
+                        content_str = (String)new_c[:strutils::str_len(new_c)];
+                        doc = parser::parse_document(content_str);
+                        vdoc = render::render_document(&doc, config);
+                        extract_toc(&doc, &vdoc, &toc);
+                        extract_presentation_steps(&doc, &present_steps, &present_arena);
+                        if (present_step_idx >= (int)present_steps.size)
+                        {
+                            present_step_idx = (int)present_steps.size > 0 ? (int)present_steps.size - 1 : 0;
+                        }
+                        need_redraw = true;
+                    }
+                }
+                else if (key == 'q' || key == 'Q' || key == 0x03)
+                {
+                    if (initial_present)
+                    {
+                        if (prev_content != null) mem::free(prev_content);
+                        doc.free();
+                        vdoc.free();
+                        return;
+                    }
+                    else
+                    {
+                        presentation_mode = false;
+                        need_redraw = true;
+                    }
+                }
+                else if (key == 27) // Esc
+                {
+                    if (initial_present)
+                    {
+                        if (prev_content != null) mem::free(prev_content);
+                        doc.free();
+                        vdoc.free();
+                        return;
+                    }
+                    else
+                    {
+                        presentation_mode = false;
+                        need_redraw = true;
+                    }
+                }
+                else if (key == '?')
+                {
+                    show_help = true;
                     need_redraw = true;
                 }
                 continue;
@@ -1630,6 +2055,20 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 status_ticks = 40;
                 need_redraw = true;
             }
+            else if (key == 'p' || key == 'P') // Toggle presentation mode
+            {
+                presentation_mode = true;
+                int cur_src = (cursor_line >= 0 && cursor_line < (int)vdoc.lines.len && vdoc.lines[cursor_line].src_line >= 0) ? vdoc.lines[cursor_line].src_line : 0;
+                for (sz s = 0; s < present_steps.size; s++)
+                {
+                    if (present_steps.entries[(usz)s].src_line_start <= cur_src)
+                    {
+                        present_step_idx = (int)s;
+                    }
+                }
+                present_scroll_top = 0;
+                need_redraw = true;
+            }
             else if (key == 'y' || key == 'Y') // Copy document to clipboard
             {
                 if (prev_content != null)
@@ -1690,6 +2129,11 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 doc = parser::parse_document(new_str);
                 vdoc = render::render_document(&doc, config);
                 extract_toc(&doc, &vdoc, &toc);
+                extract_presentation_steps(&doc, &present_steps, &present_arena);
+                if (present_step_idx >= (int)present_steps.size)
+                {
+                    present_step_idx = (int)present_steps.size > 0 ? (int)present_steps.size - 1 : 0;
+                }
 
                 total_lines = vdoc.get_total_lines();
                 max_scroll = total_lines > 0 ? total_lines - 1 : 0;
@@ -1713,8 +2157,18 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
 
         if (need_redraw)
         {
-            int active_line = (match_lines.size > 0 && cur_match_idx < (int)match_lines.size) ? match_lines.entries[cur_match_idx] : -1;
-            draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, &cur_filename[0], last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], (int)match_lines.size, cur_match_idx, active_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line, show_files, &file_tree, file_cursor);
+            if (presentation_mode && !show_help)
+            {
+                if (present_steps.size > 0 && present_step_idx < (int)present_steps.size)
+                {
+                    draw_presentation_viewport(&fb, &present_steps.entries[present_step_idx], present_step_idx, (int)present_steps.size, config, width, height, &cur_filename[0], present_scroll_top);
+                }
+            }
+            else
+            {
+                int active_line = (match_lines.size > 0 && cur_match_idx < (int)match_lines.size) ? match_lines.entries[cur_match_idx] : -1;
+                draw_viewport(&fb, &vdoc, scroll_top, scroll_left, view_height, &cur_filename[0], last_changed_line, width, &status_msg_buf[0], search_mode, &search_buf[0], (int)match_lines.size, cur_match_idx, active_line, show_toc, &toc, toc_cursor, show_help, no_wrap, goto_mode, &goto_buf[0], cursor_line, show_files, &file_tree, file_cursor);
+            }
         }
 
         // Wait up to 30ms for keyboard/terminal input event; if timeout, loop checks file state

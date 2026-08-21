@@ -59,6 +59,7 @@ fn void print_help()
     io::printn("    --csv                            Emit table directly as CSV");
     io::printn("");
     io::printn("Viewer & Rendering Options:");
+    io::printn("    -P, --play, --present            Interactive step-by-step presentation / story mode");
     io::printn("    -s, --stdout                     Print rendered text directly to stdout and exit");
     io::printn("    -p, --plain                      Print plain text without ANSI formatting");
     io::printn("    -nw, --no-wrap                   Disable line wrapping");
@@ -190,6 +191,7 @@ fn int main(String[] args)
     mutation_target[0] = 0;
     char* mutation_content = null;
     bool write_in_place = false;
+    bool play_mode = false;
 
     for (int i = 1; i < (int)args.len; i++)
     {
@@ -220,7 +222,12 @@ fn int main(String[] args)
             force_stdout = true;
             continue;
         }
-        if (arg == "-p" || arg == "-P" || arg == "--plain")
+        if (arg == "-P" || arg == "--play" || arg == "--present" || arg == "--slides")
+        {
+            play_mode = true;
+            continue;
+        }
+        if (arg == "-p" || arg == "--plain")
         {
             ansi::set_plain(true);
             force_stdout = true;
@@ -615,7 +622,7 @@ fn int main(String[] args)
         }
 
         // Default: Live watch viewer with auto line sync, scroll retention & accelerated navigation
-        app::run_watch(target_file, target_line, no_wrap);
+        app::run_watch(target_file, target_line, no_wrap, false, play_mode);
         return 0;
     }
 
@@ -689,7 +696,7 @@ fn int main(String[] args)
             }
             if (first_file != null)
             {
-                app::run_watch(first_file, 0, no_wrap, true);
+                app::run_watch(first_file, 0, no_wrap, true, play_mode);
                 return 0;
             }
         }

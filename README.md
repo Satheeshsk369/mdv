@@ -7,6 +7,11 @@ A standalone, high-performance Markdown, AST query, and 2D LaTeX math terminal v
 ## Features
 
 - **Blazing Fast Native C3:** Instant parsing, Truecolor ANSI formatting, and AST querying with zero external runtime dependencies.
+- **Interactive Step-by-Step Story & Presentation Mode (`--play` / `-P`):**
+  - Splits documents into focused cards/slides by heading (`#` / `##`) or thematic breaks (`---`).
+  - Zero-scroll cognitive viewport locking 1 concept to the screen at a time.
+  - Seamlessly toggle between normal document viewer and presentation mode on `p` / `P`.
+  - Advance with `Space` / `→`, step back with `Backspace` / `←`, jump with `1`..`9`, live hot-reload on `r`.
 - **Vim-Style CRUD Mutation Grammar:**
   - Full support for `[Verb] + [Noun]` operations (`-y` yank, `-d` delete, `-c` change body, `-a` append, `-i` insert, `--rename` title, `-w` save in-place).
 - **Fuzzy & Number-Insensitive Heading Matching:**
@@ -53,6 +58,34 @@ A standalone, high-performance Markdown, AST query, and 2D LaTeX math terminal v
 c3c run install
 ```
 This compiles the native executable and installs the `mdv` binary globally to `~/.local/bin/mdv` (with a symlink from `mdview`).
+
+---
+
+## Interactive Step-by-Step Presentation / Story Mode (`--play` / `-P`)
+
+Turn any Markdown file into an interactive slide deck or progressive mental model tutorial:
+
+```bash
+mdv lecture.md --play
+mdv document.md -P
+```
+
+* **Step Splitting:** Auto-splits document into focused cards by `#` / `##` headings or horizontal dividing rules (`---`).
+* **Zero Scroll Clutter:** Each step is framed cleanly on screen without distractions.
+* **Seamless Mode Switching:** Press `p` / `P` at any time while browsing in normal viewer mode to enter presentation mode at your current reading position, or press `p` to return to normal continuous scroll.
+
+### Presentation Controls
+| Key | Action |
+| :--- | :--- |
+| `Space` / `→` / `l` / `Enter` / `n` | Advance to the **Next Step** |
+| `Backspace` / `←` / `h` / `p` / `N` | Go back to the **Previous Step** |
+| `1` .. `9` | Jump directly to step 1 through 9 |
+| `g` / `G` | Jump to **First / Last Step** |
+| `j` / `k` / `↓` / `↑` | Scroll within taller step cards |
+| `p` / `P` | Toggle between **Presentation Mode** and **Normal Viewer** |
+| `r` | Live re-parse and reload from disk |
+| `w` | Toggle Wrap / No-Wrap mode |
+| `q` / `Esc` | Cleanly exit presentation mode |
 
 ---
 
@@ -164,6 +197,7 @@ When running `mdv file.md` interactively, the viewer features sub-millisecond re
 
 | Key | Action |
 | :--- | :--- |
+| `p` / `P` | **Toggle Presentation / Story Mode (`--play`)** |
 | `j` / `↓` | Scroll down (accelerates with rapid key repeat up to terminal velocity) |
 | `k` / `↑` | Scroll up (accelerates with rapid key repeat up to terminal velocity) |
 | `d` / `Ctrl+D` / `Space` | Half-page scroll down |
@@ -188,6 +222,10 @@ When running `mdv file.md` interactively, the viewer features sub-millisecond re
 # Open file in live watch mode with auto line sync (Default)
 mdv document.md
 mdv document.md:45
+
+# Open file directly in step-by-step presentation mode
+mdv document.md --play
+mdv document.md -P
 
 # Print rendered Markdown directly to stdout and exit immediately
 mdv -s document.md

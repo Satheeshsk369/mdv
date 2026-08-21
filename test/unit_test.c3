@@ -2,6 +2,7 @@ module unit_test;
 
 import std::core::test;
 import std::core::mem;
+import std::io;
 import std::collections::list;
 import logic;
 import strutils;
@@ -10,6 +11,7 @@ import parser;
 import math;
 import render;
 import ansi;
+import app;
 
 fn void test_unicode_display_width() @test
 {
@@ -537,5 +539,28 @@ fn void test_word_count_calculation() @test
         total_words += logic::count_words_in_block(&doc.blocks[i], &arena);
     }
     test::gt(total_words, 5);
+}
+
+fn void test_presentation_step_splitting() @test
+{
+    String sample_md = "# Step 1: Introduction\n\nIntro text.\n\n---\n\n## Step 2: The Core Concept\n\nCore details.\n\n---\n\n## Step 3: Conclusion\n\nFinal thoughts.\n";
+    Document doc = parser::parse_document(sample_md);
+    defer doc.free();
+
+    logic::Arena arena;
+    arena.init(16384);
+    defer arena.free();
+
+    List{app::PresentationStep} steps;
+    steps.init(mem, 16);
+    defer steps.free();
+
+    app::extract_presentation_steps(&doc, &steps, &arena);
+    test::eq((int)steps.size, 3);
+    test::eq(strutils::string_contains(steps.entries[0].title, "Step 1"), true);
+    test::eq(strutils::string_contains(steps.entries[1].title, "Step 2"), true);
+    test::eq(strutils::string_contains(steps.entries[2].title, "Step 3"), true);
+    test::eq(strutils::string_contains(steps.entries[1].title, "Step 2"), true);
+    test::eq(strutils::string_contains(steps.entries[2].title, "Step 3"), true);
 }
 
