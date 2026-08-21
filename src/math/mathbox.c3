@@ -179,9 +179,11 @@ fn MathBox box_fraction(logic::Arena* arena, MathBox num, MathBox den)
 fn MathBox box_sqrt(logic::Arena* arena, MathBox inner, MathBox degree)
 {
     int deg_w = degree.width;
-    int prefix_w = deg_w + 2;
+    int h = inner.height;
+    int slant = h > 1 ? (h - 1) : 0;
+    int prefix_w = (deg_w > 0 ? deg_w : 1) + slant + 1;
     int w = prefix_w + inner.width;
-    int new_h = inner.height + 1;
+    int new_h = h + 1;
     int new_base = inner.baseline + 1;
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
@@ -190,30 +192,56 @@ fn MathBox box_sqrt(logic::Arena* arena, MathBox inner, MathBox degree)
     mb.init(512);
     defer mb.free();
 
-    // Top row 0 (vinculum overline): [deg] ┌───
+    // Top row 0 (vinculum overline): [deg] spaces + ╭ + ───
     mb.reset();
     if (deg_w > 0)
     {
         mb.append_slice(degree.rows[0]);
     }
-    mb.append_char(' ');
-    mb.append_zstr("┌");
+    else
+    {
+        mb.append_char(' ');
+    }
+    if (slant > 0) mb.append_spaces(slant);
+    mb.append_zstr("╭");
     mb.append_repeat("─", inner.width);
     r_buf[0] = mb.to_arena_string(arena);
 
     // Inner rows (1 .. inner.height)
-    for (int r = 0; r < inner.height; r++)
+    for (int r = 0; r < h; r++)
     {
         mb.reset();
-        if (deg_w > 0) mb.append_spaces(deg_w);
-
-        if (r == inner.height - 1)
+        if (deg_w > 0)
         {
-            mb.append_zstr("√ ");
+            mb.append_spaces(deg_w);
+        }
+
+        if (h == 1)
+        {
+            if (deg_w > 0)
+            {
+                mb.append_zstr("√");
+            }
+            else
+            {
+                mb.append_zstr("√ ");
+            }
         }
         else
         {
-            mb.append_zstr("│ ");
+            int indent = (h - 1 - r);
+            if (indent > 0) mb.append_spaces(indent);
+
+            if (r == h - 1)
+            {
+                mb.append_zstr("√ ");
+            }
+            else
+            {
+                mb.append_zstr("╱ ");
+            }
+
+            if (r > 0) mb.append_spaces(r);
         }
 
         mb.append_slice(inner.rows[r]);
