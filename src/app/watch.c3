@@ -107,6 +107,20 @@ fn void extract_presentation_steps(Document* doc, List{PresentationStep}* steps,
     steps.clear();
     if (doc == null || doc.blocks.len == 0) return;
 
+    // Detect minimum heading level in document (strictly Level 1 '#' when present)
+    int min_heading_level = 6;
+    for (usz i = 0; i < doc.blocks.len; i++)
+    {
+        if (doc.blocks[i].kind == BlockKind.HEADING)
+        {
+            if (doc.blocks[i].heading.level < min_heading_level)
+            {
+                min_heading_level = doc.blocks[i].heading.level;
+            }
+        }
+    }
+    if (min_heading_level > 6) min_heading_level = 1;
+
     List{Block} cur_blocks;
     cur_blocks.init(mem, 32);
     defer cur_blocks.free();
@@ -124,7 +138,7 @@ fn void extract_presentation_steps(Document* doc, List{PresentationStep}* steps,
         {
             is_step_boundary = true;
         }
-        else if (b.kind == BlockKind.HEADING && b.heading.level <= 2)
+        else if (b.kind == BlockKind.HEADING && b.heading.level <= min_heading_level)
         {
             is_step_boundary = true;
         }
@@ -147,7 +161,7 @@ fn void extract_presentation_steps(Document* doc, List{PresentationStep}* steps,
             cur_blocks.clear();
         }
 
-        if (b.kind == BlockKind.HEADING && b.heading.level <= 2)
+        if (b.kind == BlockKind.HEADING && b.heading.level <= min_heading_level)
         {
             cur_title = logic::get_spans_plain_text(b.heading.spans, arena);
             cur_level = b.heading.level;
@@ -1439,14 +1453,25 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                         need_redraw = true;
                     }
                 }
-                else if (key == 'j' || key == 1000 || key == 1013) // Scroll within step / Mouse wheel down
+                else if (key == 'j' || key == 1000 || key == 1013) // Scroll down within slide / Mouse wheel down
                 {
                     present_scroll_top++;
                     need_redraw = true;
                 }
-                else if (key == 'k' || key == 1001 || key == 1012) // Scroll up within step / Mouse wheel up
+                else if (key == 'k' || key == 1001 || key == 1012) // Scroll up within slide / Mouse wheel up
                 {
                     if (present_scroll_top > 0) present_scroll_top--;
+                    need_redraw = true;
+                }
+                else if (key == 'd' || key == 'D' || key == 1004) // Half-page scroll down within slide
+                {
+                    present_scroll_top += (view_height / 2);
+                    need_redraw = true;
+                }
+                else if (key == 'u' || key == 'U' || key == 1005) // Half-page scroll up within slide
+                {
+                    present_scroll_top -= (view_height / 2);
+                    if (present_scroll_top < 0) present_scroll_top = 0;
                     need_redraw = true;
                 }
                 else if (key == 'g' || key == 1008) // First step

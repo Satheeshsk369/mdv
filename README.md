@@ -70,7 +70,7 @@ mdv lecture.md --play
 mdv document.md -P
 ```
 
-* **Step Splitting:** Auto-splits document into focused cards by `#` / `##` headings or horizontal dividing rules (`---`).
+* **Step Splitting:** Auto-splits document into focused slides strictly by `#` (Heading 1) or horizontal dividing rules (`---`). Subheadings (`##`, `###`) stay inside the slide and scroll smoothly (`j`/`k`, `d`/`u`, mouse wheel).
 * **Zero Scroll Clutter:** Each step is framed cleanly on screen without distractions.
 * **Seamless Mode Switching:** Press `p` / `P` at any time while browsing in normal viewer mode to enter presentation mode at your current reading position, or press `p` to return to normal continuous scroll.
 

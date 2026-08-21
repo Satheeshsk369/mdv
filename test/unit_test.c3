@@ -543,7 +543,7 @@ fn void test_word_count_calculation() @test
 
 fn void test_presentation_step_splitting() @test
 {
-    String sample_md = "# Step 1: Introduction\n\nIntro text.\n\n---\n\n## Step 2: The Core Concept\n\nCore details.\n\n---\n\n## Step 3: Conclusion\n\nFinal thoughts.\n";
+    String sample_md = "# Slide 1: Introduction\n\n## Subheading 1.1\n\nIntro text.\n\n### Sub-subheading\n\nDeep details.\n\n# Slide 2: The Core Concept\n\n## Implementation\n\nCore details.\n\n# Slide 3: Conclusion\n\nFinal thoughts.\n";
     Document doc = parser::parse_document(sample_md);
     defer doc.free();
 
@@ -557,10 +557,8 @@ fn void test_presentation_step_splitting() @test
 
     app::extract_presentation_steps(&doc, &steps, &arena);
     test::eq((int)steps.size, 3);
-    test::eq(strutils::string_contains(steps.entries[0].title, "Step 1"), true);
-    test::eq(strutils::string_contains(steps.entries[1].title, "Step 2"), true);
-    test::eq(strutils::string_contains(steps.entries[2].title, "Step 3"), true);
-    test::eq(strutils::string_contains(steps.entries[1].title, "Step 2"), true);
-    test::eq(strutils::string_contains(steps.entries[2].title, "Step 3"), true);
+    test::eq(strutils::string_contains(steps.entries[0].title, "Slide 1"), true);
+    test::eq(strutils::string_contains(steps.entries[1].title, "Slide 2"), true);
+    test::eq(strutils::string_contains(steps.entries[2].title, "Slide 3"), true);
 }
 
