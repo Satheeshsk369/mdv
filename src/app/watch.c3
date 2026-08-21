@@ -386,35 +386,48 @@ fn void draw_presentation_viewport(
     fb.reset();
     if (step == null || step_idx < 0 || total_steps <= 0) return;
 
+    if (term_width < 20) term_width = 20;
+    if (term_height < 6) term_height = 6;
+
     // Disable line wrap and move cursor to top-left (1,1)
     fb.append_zstr("\x1b[?7l\x1b[H");
 
     // 1. Top Header Bar (row 1)
-    fb.append_zstr(ansi::ui_top_badge);
-    fb.append_zstr(" mdv ");
-    fb.append_zstr(ansi::RESET);
-    fb.append_zstr(ansi::ui_top_path);
-    fb.append_zstr(" ");
-    fb.append_zstr(filename);
-    fb.append_zstr(" ");
-    fb.append_zstr(ansi::RESET);
-    fb.append_zstr(ansi::ui_top_div);
-    fb.append_zstr("│");
-    fb.append_zstr(ansi::RESET);
-    fb.append_zstr(" ");
+    buffer::ByteBuffer hb;
+    hb.init(256);
+    defer hb.free();
+
+    hb.append_zstr(ansi::ui_top_badge);
+    hb.append_zstr(" mdv ");
+    hb.append_zstr(ansi::RESET);
+
+    if (term_width >= 80)
+    {
+        hb.append_zstr(ansi::ui_top_path);
+        hb.append_zstr(" ");
+        hb.append_zstr(filename);
+        hb.append_zstr(" ");
+        hb.append_zstr(ansi::RESET);
+        hb.append_zstr(ansi::ui_top_div);
+        hb.append_zstr("│");
+        hb.append_zstr(ansi::RESET);
+        hb.append_zstr(" ");
+    }
 
     // Step Badge: [Step X of Y]
-    fb.append_zstr("\x1b[48;2;166;226;46m\x1b[38;2;39;40;34m\x1b[1m Step ");
-    fb.append_int(step_idx + 1);
-    fb.append_zstr(" of ");
-    fb.append_int(total_steps);
-    fb.append_zstr(" \x1b[0m ");
+    hb.append_zstr("\x1b[48;2;166;226;46m\x1b[38;2;39;40;34m\x1b[1m Step ");
+    hb.append_int(step_idx + 1);
+    hb.append_zstr(" of ");
+    hb.append_int(total_steps);
+    hb.append_zstr(" \x1b[0m ");
 
     // Step Title
-    fb.append_zstr(ansi::BOLD);
-    fb.append_zstr(ansi::fg_cyan);
-    fb.append_slice(step.title);
-    fb.append_zstr(ansi::RESET);
+    hb.append_zstr(ansi::BOLD);
+    hb.append_zstr(ansi::fg_cyan);
+    hb.append_slice(step.title);
+    hb.append_zstr(ansi::RESET);
+
+    append_horizontal_slice(fb, hb.to_string(), 0, term_width - 1);
     fb.append_zstr("\x1b[K\n");
 
     // Separator line (row 2)
@@ -425,13 +438,20 @@ fn void draw_presentation_viewport(
     fb.append_zstr(ansi::RESET);
     fb.append_zstr("\x1b[K\n");
 
-    // 2. Render Step AST into lines
+    // 2. Render Step AST into lines with adaptive width and margins
+    int margin_left = (term_width >= 120) ? 4 : (term_width >= 80 ? 2 : 0);
+    int usable_w = term_width - (margin_left * 2);
+    if (usable_w < 20) usable_w = 20;
+
+    RenderConfig step_config = config;
+    step_config.width = usable_w;
+
     Document step_doc;
     step_doc.blocks = step.blocks;
     VisualDocument step_vdoc;
     if (step.blocks.len > 0)
     {
-        step_vdoc = render::render_document(&step_doc, config);
+        step_vdoc = render::render_document(&step_doc, step_config);
     }
     else
     {
@@ -443,11 +463,12 @@ fn void draw_presentation_viewport(
     int content_rows = term_height - 3;
     if (content_rows < 2) content_rows = 2;
 
+    // True adaptive vertical centering
     int top_pad = 0;
-    if (total_lines < content_rows - 4)
+    if (total_lines < content_rows)
     {
-        top_pad = (content_rows - total_lines) / 3;
-        if (top_pad > 3) top_pad = 3;
+        top_pad = (content_rows - total_lines) / 2;
+        if (top_pad > 8) top_pad = 8;
     }
 
     int emitted_lines = 0;
@@ -462,76 +483,156 @@ fn void draw_presentation_viewport(
         int line_idx = scroll_top + r;
         if (line_idx < total_lines)
         {
+            if (margin_left > 0) fb.append_spaces(margin_left);
             String l_text = step_vdoc.lines[line_idx].text;
-            append_horizontal_slice(fb, l_text, 0, term_width - 1);
+            append_horizontal_slice(fb, l_text, 0, usable_w);
         }
         fb.append_zstr("\x1b[K\n");
         emitted_lines++;
     }
 
-    // 3. Footer Bar (row term_height)
-    fb.append_zstr(ansi::ui_top_badge);
-    fb.append_zstr(" [");
-    fb.append_int(step_idx + 1);
-    fb.append_char('/');
-    fb.append_int(total_steps);
-    fb.append_zstr("] ");
-    fb.append_zstr(ansi::RESET);
+    // 3. Adaptive Footer Bar (row term_height) - guarantee single-line fit
+    buffer::ByteBuffer foot;
+    foot.init(256);
+    defer foot.free();
 
-    // Progress dots
-    fb.append_zstr(" ");
-    for (int s = 0; s < total_steps && s < 15; s++)
+    foot.append_zstr(ansi::ui_top_badge);
+    foot.append_zstr(" [");
+    foot.append_int(step_idx + 1);
+    foot.append_char('/');
+    foot.append_int(total_steps);
+    foot.append_zstr("] ");
+    foot.append_zstr(ansi::RESET);
+
+    // Dynamic progress dots based on terminal width
+    int max_dots = (term_width > 100) ? 12 : ((term_width > 70) ? 6 : 0);
+    if (max_dots > 0 && total_steps <= 20)
     {
-        if (s == step_idx)
+        foot.append_zstr(" ");
+        int start_d = 0;
+        int end_d = total_steps;
+        if (total_steps > max_dots)
         {
-            fb.append_zstr(ansi::fg_green);
-            fb.append_zstr("● ");
-            fb.append_zstr(ansi::RESET);
+            start_d = step_idx - max_dots / 2;
+            if (start_d < 0) start_d = 0;
+            end_d = start_d + max_dots;
+            if (end_d > total_steps)
+            {
+                end_d = total_steps;
+                start_d = end_d - max_dots;
+                if (start_d < 0) start_d = 0;
+            }
         }
-        else if (s < step_idx)
+        for (int s = start_d; s < end_d; s++)
         {
-            fb.append_zstr(ansi::fg_cyan);
-            fb.append_zstr("• ");
-            fb.append_zstr(ansi::RESET);
-        }
-        else
-        {
-            fb.append_zstr(ansi::fg_muted);
-            fb.append_zstr("○ ");
-            fb.append_zstr(ansi::RESET);
+            if (s == step_idx)
+            {
+                foot.append_zstr(ansi::fg_green);
+                foot.append_zstr("● ");
+                foot.append_zstr(ansi::RESET);
+            }
+            else if (s < step_idx)
+            {
+                foot.append_zstr(ansi::fg_cyan);
+                foot.append_zstr("• ");
+                foot.append_zstr(ansi::RESET);
+            }
+            else
+            {
+                foot.append_zstr(ansi::fg_muted);
+                foot.append_zstr("○ ");
+                foot.append_zstr(ansi::RESET);
+            }
         }
     }
 
-    fb.append_zstr(" ");
-    fb.append_zstr(ansi::ui_border);
-    fb.append_zstr("──");
-    fb.append_zstr(ansi::RESET);
-    fb.append_zstr(" ");
+    // Slide scroll indicator if card exceeds screen height
+    if (total_lines > content_rows)
+    {
+        foot.append_zstr(" ");
+        foot.append_zstr(ansi::fg_yellow);
+        foot.append_zstr("↕ [Line ");
+        foot.append_int(scroll_top + 1);
+        foot.append_char('-');
+        int end_line = scroll_top + content_rows < total_lines ? scroll_top + content_rows : total_lines;
+        foot.append_int(end_line);
+        foot.append_char('/');
+        foot.append_int(total_lines);
+        foot.append_zstr("] ");
+        foot.append_zstr(ansi::RESET);
+    }
 
-    // Key hints
-    fb.append_zstr(ansi::fg_yellow);
-    fb.append_zstr("[Space/→ Next]");
-    fb.append_zstr(ansi::RESET);
-    fb.append_zstr(" ");
-    fb.append_zstr(ansi::fg_yellow);
-    fb.append_zstr("[← Prev]");
-    fb.append_zstr(ansi::RESET);
-    fb.append_zstr(" ");
-    fb.append_zstr(ansi::fg_cyan);
-    fb.append_zstr("[p Normal View]");
-    fb.append_zstr(ansi::RESET);
-    fb.append_zstr(" ");
-    fb.append_zstr(ansi::fg_muted);
-    fb.append_zstr("[1..9 Jump]");
-    fb.append_zstr(ansi::RESET);
-    fb.append_zstr(" ");
-    fb.append_zstr(ansi::fg_muted);
-    fb.append_zstr("[r Reload]");
-    fb.append_zstr(ansi::RESET);
-    fb.append_zstr(" ");
-    fb.append_zstr(ansi::fg_pink);
-    fb.append_zstr("[q Exit]");
-    fb.append_zstr(ansi::RESET);
+    foot.append_zstr(" ");
+    foot.append_zstr(ansi::ui_border);
+    foot.append_zstr("──");
+    foot.append_zstr(ansi::RESET);
+    foot.append_zstr(" ");
+
+    // Responsive Key hints based on screen width
+    if (term_width >= 100)
+    {
+        foot.append_zstr(ansi::fg_yellow);
+        foot.append_zstr("[Space/→ Next]");
+        foot.append_zstr(ansi::RESET);
+        foot.append_zstr(" ");
+        foot.append_zstr(ansi::fg_yellow);
+        foot.append_zstr("[← Prev]");
+        foot.append_zstr(ansi::RESET);
+        foot.append_zstr(" ");
+        foot.append_zstr(ansi::fg_cyan);
+        foot.append_zstr("[p Normal View]");
+        foot.append_zstr(ansi::RESET);
+        foot.append_zstr(" ");
+        foot.append_zstr(ansi::fg_muted);
+        foot.append_zstr("[1..9 Jump]");
+        foot.append_zstr(ansi::RESET);
+        foot.append_zstr(" ");
+        foot.append_zstr(ansi::fg_muted);
+        foot.append_zstr("[r Reload]");
+        foot.append_zstr(ansi::RESET);
+        foot.append_zstr(" ");
+        foot.append_zstr(ansi::fg_pink);
+        foot.append_zstr("[q Exit]");
+        foot.append_zstr(ansi::RESET);
+    }
+    else if (term_width >= 75)
+    {
+        foot.append_zstr(ansi::fg_yellow);
+        foot.append_zstr("[Space Next]");
+        foot.append_zstr(ansi::RESET);
+        foot.append_zstr(" ");
+        foot.append_zstr(ansi::fg_yellow);
+        foot.append_zstr("[← Prev]");
+        foot.append_zstr(ansi::RESET);
+        foot.append_zstr(" ");
+        foot.append_zstr(ansi::fg_cyan);
+        foot.append_zstr("[p View]");
+        foot.append_zstr(ansi::RESET);
+        foot.append_zstr(" ");
+        foot.append_zstr(ansi::fg_pink);
+        foot.append_zstr("[q Exit]");
+        foot.append_zstr(ansi::RESET);
+    }
+    else
+    {
+        foot.append_zstr(ansi::fg_yellow);
+        foot.append_zstr("[Space]");
+        foot.append_zstr(ansi::RESET);
+        foot.append_zstr(" ");
+        foot.append_zstr(ansi::fg_yellow);
+        foot.append_zstr("[←]");
+        foot.append_zstr(ansi::RESET);
+        foot.append_zstr(" ");
+        foot.append_zstr(ansi::fg_cyan);
+        foot.append_zstr("[p]");
+        foot.append_zstr(ansi::RESET);
+        foot.append_zstr(" ");
+        foot.append_zstr(ansi::fg_pink);
+        foot.append_zstr("[q]");
+        foot.append_zstr(ansi::RESET);
+    }
+
+    append_horizontal_slice(fb, foot.to_string(), 0, term_width - 1);
     fb.append_zstr("\x1b[K");
 
     flush_fb(fb);
@@ -1338,12 +1439,12 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                         need_redraw = true;
                     }
                 }
-                else if (key == 'j' || key == 1000) // Scroll within step
+                else if (key == 'j' || key == 1000 || key == 1013) // Scroll within step / Mouse wheel down
                 {
                     present_scroll_top++;
                     need_redraw = true;
                 }
-                else if (key == 'k' || key == 1001) // Scroll up within step
+                else if (key == 'k' || key == 1001 || key == 1012) // Scroll up within step / Mouse wheel up
                 {
                     if (present_scroll_top > 0) present_scroll_top--;
                     need_redraw = true;
