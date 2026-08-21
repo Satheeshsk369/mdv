@@ -284,13 +284,13 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                     String c_name = p.src[c_start : p.pos - c_start];
                     if (p.peek() == '}') p.get();
 
-                    char* ansi_col = (char*)ansi::FG_CYAN;
-                    if (c_name == "red" || c_name == "pink") { ansi_col = (char*)ansi::FG_PINK; }
-                    else if (c_name == "green") { ansi_col = (char*)ansi::FG_GREEN; }
-                    else if (c_name == "orange") { ansi_col = (char*)ansi::FG_ORANGE; }
-                    else if (c_name == "yellow") { ansi_col = (char*)ansi::FG_YELLOW; }
-                    else if (c_name == "purple" || c_name == "magenta") { ansi_col = (char*)ansi::FG_PURPLE; }
-                    else if (c_name == "gray" || c_name == "grey") { ansi_col = (char*)ansi::FG_MUTED; }
+                    char* ansi_col = ansi::fg_cyan;
+                    if (c_name == "red" || c_name == "pink") { ansi_col = ansi::fg_pink; }
+                    else if (c_name == "green") { ansi_col = ansi::fg_green; }
+                    else if (c_name == "orange") { ansi_col = ansi::fg_orange; }
+                    else if (c_name == "yellow") { ansi_col = ansi::fg_yellow; }
+                    else if (c_name == "purple" || c_name == "magenta") { ansi_col = ansi::fg_purple; }
+                    else if (c_name == "gray" || c_name == "grey") { ansi_col = ansi::fg_muted; }
 
                     MathBox col_inner = parse_math_group(p);
                     *prev_atom = MathAtomKind.INNER;

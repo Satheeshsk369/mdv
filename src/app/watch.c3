@@ -301,32 +301,47 @@ fn void draw_viewport(
     // ── Help Modal View ───────────────────────────────────────────────
     if (show_help)
     {
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdv \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+        fb.append_zstr(ansi::ui_top_badge);
+        fb.append_zstr(" mdv ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(ansi::ui_top_path);
+        fb.append_zstr(" ");
         fb.append_zstr(filename);
-        fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;253;151;31m\x1b[1mKeyboard Controls & Keybindings\x1b[0m\x1b[K\n");
+        fb.append_zstr(" ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(ansi::ui_top_div);
+        fb.append_zstr("│");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(" ");
+        fb.append_zstr(ansi::ui_title);
+        fb.append_zstr("Keyboard Controls & Keybindings");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr("\x1b[K\n");
 
         // Separator line
-        fb.append_zstr("\x1b[38;2;117;113;94m");
+        fb.append_zstr(ansi::ui_border);
         int bar_w = term_width - 2;
         if (bar_w < 10) bar_w = 10;
         fb.append_repeat("─", bar_w);
-        fb.append_zstr("\x1b[0m\x1b[K\n");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr("\x1b[K\n");
 
-        char*[19] help_rows = {
+        char*[20] help_rows = {
             "\x1b[38;2;102;217;239m\x1b[1mVertical Navigation:\x1b[0m",
-            "  \x1b[38;2;230;219;116mj / ↓\x1b[0m                 Scroll down 1 line",
-            "  \x1b[38;2;230;219;116mk / ↑\x1b[0m                 Scroll up 1 line",
-            "  \x1b[38;2;230;219;116mSpace / Ctrl+D\x1b[0m        Scroll down",
-            "  \x1b[38;2;230;219;116mShift+Sp / b / Ctrl+U\x1b[0m Scroll up",
+            "  \x1b[38;2;230;219;116mj / ↓\x1b[0m                 Scroll down (accelerated)",
+            "  \x1b[38;2;230;219;116mk / ↑\x1b[0m                 Scroll up (accelerated)",
+            "  \x1b[38;2;230;219;116md / Ctrl+D / Space\x1b[0m    Half-page scroll down",
+            "  \x1b[38;2;230;219;116mu / Ctrl+U / Shift+Sp\x1b[0m Half-page scroll up",
             "  \x1b[38;2;230;219;116mg / G\x1b[0m                 Jump to Top / Bottom",
             "  \x1b[38;2;230;219;116m: <line>\x1b[0m              Goto line number (e.g. :42)",
             "",
             "\x1b[38;2;102;217;239m\x1b[1mHorizontal & Layout:\x1b[0m",
             "  \x1b[38;2;230;219;116mw\x1b[0m                     Toggle Wrap / No-Wrap mode",
-            "  \x1b[38;2;230;219;116mh / l / ← / →\x1b[0m         Horizontal scroll in no-wrap mode",
+            "  \x1b[38;2;230;219;116mh / l / ← / →\x1b[0m         Horizontal scroll (accelerated)",
             "",
             "\x1b[38;2;102;217;239m\x1b[1mFeatures & Actions:\x1b[0m",
-            "  \x1b[38;2;166;226;46mTab / t\x1b[0m               Document Outline (Table of Contents)",
+            "  \x1b[38;2;166;226;46mTab\x1b[0m                   Toggle Document Outline (Table of Contents)",
+            "  \x1b[38;2;166;226;46mt\x1b[0m                     Toggle Theme (Dark / Light)",
             "  \x1b[38;2;166;226;46mo\x1b[0m                     Switch Document (Markdown File Tree)",
             "  \x1b[38;2;166;226;46m/\x1b[0m                     In-document search (n next, N prev)",
             "  \x1b[38;2;166;226;46me\x1b[0m                     Open $EDITOR at current line",
@@ -336,14 +351,16 @@ fn void draw_viewport(
 
         for (int r = 0; r < view_height; r++)
         {
-            if (r < 19)
+            if (r < 20)
             {
                 fb.append_zstr("  ");
                 fb.append_zstr(help_rows[r]);
             }
             else
             {
-                fb.append_zstr("\x1b[38;2;60;60;50m~\x1b[0m");
+                fb.append_zstr(ansi::ui_tilde);
+                fb.append_zstr("~");
+                fb.append_zstr(ansi::RESET);
             }
             fb.append_zstr("\x1b[K");
             if (r < view_height - 1) fb.append_char('\n');
@@ -356,16 +373,30 @@ fn void draw_viewport(
     // ── Table of Contents (Outline) View ──────────────────────────────
     if (show_toc)
     {
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdv \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+        fb.append_zstr(ansi::ui_top_badge);
+        fb.append_zstr(" mdv ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(ansi::ui_top_path);
+        fb.append_zstr(" ");
         fb.append_zstr(filename);
-        fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;166;226;46m\x1b[1mDocument Outline (Table of Contents)\x1b[0m\x1b[K\n");
+        fb.append_zstr(" ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(ansi::ui_top_div);
+        fb.append_zstr("│");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(" ");
+        fb.append_zstr(ansi::ui_title);
+        fb.append_zstr("Document Outline (Table of Contents)");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr("\x1b[K\n");
 
         // Separator line
-        fb.append_zstr("\x1b[38;2;117;113;94m");
+        fb.append_zstr(ansi::ui_border);
         int bar_w = term_width - 2;
         if (bar_w < 10) bar_w = 10;
         fb.append_repeat("─", bar_w);
-        fb.append_zstr("\x1b[0m\x1b[K\n");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr("\x1b[K\n");
 
         int toc_total = (toc != null) ? (int)toc.size : 0;
 
@@ -378,7 +409,9 @@ fn void draw_viewport(
 
                 if (is_cur)
                 {
-                    fb.append_zstr("  \x1b[48;2;49;50;68m\x1b[38;2;166;226;46m\x1b[1m▶ ");
+                    fb.append_zstr("  ");
+                    fb.append_zstr(ansi::ui_active_bg);
+                    fb.append_zstr("▶ ");
                 }
                 else
                 {
@@ -390,30 +423,35 @@ fn void draw_viewport(
 
                 if (is_cur)
                 {
-                    fb.append_zstr("\x1b[38;2;248;248;242m\x1b[1m");
+                    fb.append_zstr(ansi::BOLD);
                 }
                 else
                 {
                     switch (item.level)
                     {
-                        case 1: fb.append_zstr("\x1b[38;2;249;38;114m\x1b[1m");
-                        case 2: fb.append_zstr("\x1b[38;2;166;226;46m\x1b[1m");
-                        case 3: fb.append_zstr("\x1b[38;2;253;151;31m\x1b[1m");
-                        case 4: fb.append_zstr("\x1b[38;2;230;219;116m\x1b[1m");
-                        default: fb.append_zstr("\x1b[38;2;102;217;239m\x1b[1m");
+                        case 1: fb.append_zstr(ansi::fg_h1);
+                        case 2: fb.append_zstr(ansi::fg_h2);
+                        case 3: fb.append_zstr(ansi::fg_h3);
+                        case 4: fb.append_zstr(ansi::fg_h4);
+                        default: fb.append_zstr(ansi::fg_h5);
                     }
                 }
 
                 fb.append_slice(item.title);
-                fb.append_zstr("\x1b[0m");
+                fb.append_zstr(ansi::RESET);
 
-                fb.append_zstr(" \x1b[38;2;117;113;94m(Line ");
+                fb.append_zstr(" ");
+                fb.append_zstr(ansi::fg_muted);
+                fb.append_zstr("(Line ");
                 fb.append_int(item.src_line + 1);
-                fb.append_zstr(")\x1b[0m");
+                fb.append_zstr(")");
+                fb.append_zstr(ansi::RESET);
             }
             else
             {
-                fb.append_zstr("\x1b[38;2;60;60;50m~\x1b[0m");
+                fb.append_zstr(ansi::ui_tilde);
+                fb.append_zstr("~");
+                fb.append_zstr(ansi::RESET);
             }
             fb.append_zstr("\x1b[K");
             if (r < view_height - 1) fb.append_char('\n');
@@ -430,18 +468,34 @@ fn void draw_viewport(
         char* cwd = terminal::getcwd(&cwd_buf[0], 256);
         if (cwd == null) cwd = ".";
 
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdv \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+        fb.append_zstr(ansi::ui_top_badge);
+        fb.append_zstr(" mdv ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(ansi::ui_top_path);
+        fb.append_zstr(" ");
         fb.append_zstr(filename);
-        fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m \x1b[38;2;166;226;46m\x1b[1mTree: \x1b[0m\x1b[38;2;248;248;242m");
+        fb.append_zstr(" ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(ansi::ui_top_div);
+        fb.append_zstr("│");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(" ");
+        fb.append_zstr(ansi::fg_green);
+        fb.append_zstr(ansi::BOLD);
+        fb.append_zstr("Tree: ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(ansi::fg_text);
         fb.append_zstr(cwd);
-        fb.append_zstr("\x1b[0m\x1b[K\n");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr("\x1b[K\n");
 
         // Separator line
-        fb.append_zstr("\x1b[38;2;117;113;94m");
+        fb.append_zstr(ansi::ui_border);
         int bar_w = term_width - 2;
         if (bar_w < 10) bar_w = 10;
         fb.append_repeat("─", bar_w);
-        fb.append_zstr("\x1b[0m\x1b[K\n");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr("\x1b[K\n");
 
         // Compute visible nodes
         int[128] vis_idx;
@@ -486,7 +540,9 @@ fn void draw_viewport(
 
                 if (is_cur)
                 {
-                    fb.append_zstr("  \x1b[48;2;49;50;68m\x1b[38;2;166;226;46m\x1b[1m▶ ");
+                    fb.append_zstr("  ");
+                    fb.append_zstr(ansi::ui_active_bg);
+                    fb.append_zstr("▶ ");
                 }
                 else
                 {
@@ -497,11 +553,21 @@ fn void draw_viewport(
                 {
                     if (is_cur)
                     {
-                        fb.append_zstr("\x1b[48;2;49;50;68m\x1b[38;2;253;151;31m\x1b[1m📁 ../ \x1b[38;2;248;248;242m(Parent Directory)\x1b[0m");
+                        fb.append_zstr(ansi::ui_active_bg);
+                        fb.append_zstr(ansi::fg_orange);
+                        fb.append_zstr(ansi::BOLD);
+                        fb.append_zstr("📁 ../ (Parent Directory)");
+                        fb.append_zstr(ansi::RESET);
                     }
                     else
                     {
-                        fb.append_zstr("\x1b[38;2;253;151;31m\x1b[1m📁 ../ \x1b[0m\x1b[38;2;117;113;94m(Parent Directory)\x1b[0m");
+                        fb.append_zstr(ansi::fg_orange);
+                        fb.append_zstr(ansi::BOLD);
+                        fb.append_zstr("📁 ../ ");
+                        fb.append_zstr(ansi::RESET);
+                        fb.append_zstr(ansi::fg_muted);
+                        fb.append_zstr("(Parent Directory)");
+                        fb.append_zstr(ansi::RESET);
                     }
                 }
                 else
@@ -509,63 +575,85 @@ fn void draw_viewport(
                     // Indentation
                     for (int d = 0; d < item.depth && d < 6; d++)
                     {
-                        fb.append_zstr("\x1b[38;2;117;113;94m│   \x1b[0m");
+                        fb.append_zstr(ansi::fg_muted);
+                        fb.append_zstr("│   ");
+                        fb.append_zstr(ansi::RESET);
                     }
 
                     if (item.is_dir)
                     {
                         if (item.is_expanded)
                         {
-                            fb.append_zstr("\x1b[38;2;253;151;31m\x1b[1m▾ \x1b[0m");
+                            fb.append_zstr(ansi::fg_orange);
+                            fb.append_zstr(ansi::BOLD);
+                            fb.append_zstr("▾ ");
+                            fb.append_zstr(ansi::RESET);
                         }
                         else
                         {
-                            fb.append_zstr("\x1b[38;2;253;151;31m\x1b[1m▸ \x1b[0m");
+                            fb.append_zstr(ansi::fg_orange);
+                            fb.append_zstr(ansi::BOLD);
+                            fb.append_zstr("▸ ");
+                            fb.append_zstr(ansi::RESET);
                         }
 
                         if (is_cur)
                         {
-                            fb.append_zstr("\x1b[48;2;49;50;68m\x1b[38;2;102;217;239m\x1b[1m");
+                            fb.append_zstr(ansi::ui_active_tree);
+                            fb.append_zstr(ansi::fg_cyan);
+                            fb.append_zstr(ansi::BOLD);
                         }
                         else
                         {
-                            fb.append_zstr("\x1b[38;2;102;217;239m\x1b[1m");
+                            fb.append_zstr(ansi::fg_cyan);
+                            fb.append_zstr(ansi::BOLD);
                         }
                         fb.append_zstr(&item.name[0]);
-                        fb.append_zstr("/\x1b[0m");
+                        fb.append_zstr("/");
+                        fb.append_zstr(ansi::RESET);
                     }
                     else
                     {
                         if (item.is_last)
                         {
-                            fb.append_zstr("\x1b[38;2;117;113;94m└── \x1b[0m");
+                            fb.append_zstr(ansi::fg_muted);
+                            fb.append_zstr("└── ");
+                            fb.append_zstr(ansi::RESET);
                         }
                         else
                         {
-                            fb.append_zstr("\x1b[38;2;117;113;94m├── \x1b[0m");
+                            fb.append_zstr(ansi::fg_muted);
+                            fb.append_zstr("├── ");
+                            fb.append_zstr(ansi::RESET);
                         }
 
                         if (is_cur)
                         {
-                            fb.append_zstr("\x1b[48;2;49;50;68m\x1b[38;2;248;248;242m\x1b[1m");
+                            fb.append_zstr(ansi::ui_active_tree);
+                            fb.append_zstr(ansi::BOLD);
                         }
                         else
                         {
-                            fb.append_zstr("\x1b[38;2;248;248;242m");
+                            fb.append_zstr(ansi::fg_text);
                         }
                         fb.append_zstr(&item.name[0]);
-                        fb.append_zstr("\x1b[0m");
+                        fb.append_zstr(ansi::RESET);
 
                         if (item.is_current)
                         {
-                            fb.append_zstr(" \x1b[38;2;166;226;46m[Active]\x1b[0m");
+                            fb.append_zstr(" ");
+                            fb.append_zstr(ansi::fg_green);
+                            fb.append_zstr("[Active]");
+                            fb.append_zstr(ansi::RESET);
                         }
                     }
                 }
             }
             else
             {
-                fb.append_zstr("\x1b[38;2;60;60;50m~\x1b[0m");
+                fb.append_zstr(ansi::ui_tilde);
+                fb.append_zstr("~");
+                fb.append_zstr(ansi::RESET);
             }
             fb.append_zstr("\x1b[K");
             if (r < view_height - 1) fb.append_char('\n');
@@ -587,46 +675,76 @@ fn void draw_viewport(
     header_left.init(256);
     defer header_left.free();
 
-    header_left.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdv \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+    header_left.append_zstr(ansi::ui_top_badge);
+    header_left.append_zstr(" mdv ");
+    header_left.append_zstr(ansi::RESET);
+    header_left.append_zstr(ansi::ui_top_path);
+    header_left.append_zstr(" ");
     header_left.append_zstr(filename);
-    header_left.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m ");
+    header_left.append_zstr(" ");
+    header_left.append_zstr(ansi::RESET);
+    header_left.append_zstr(ansi::ui_top_div);
+    header_left.append_zstr("│");
+    header_left.append_zstr(ansi::RESET);
+    header_left.append_zstr(" ");
 
     if (changed_src_line >= 0)
     {
-        header_left.append_zstr("\x1b[38;2;166;226;46m\x1b[1m⚡ Sync L");
+        header_left.append_zstr(ansi::fg_green);
+        header_left.append_zstr(ansi::BOLD);
+        header_left.append_zstr("⚡ Sync L");
         header_left.append_int(changed_src_line + 1);
-        header_left.append_zstr("\x1b[0m \x1b[38;2;117;113;94m│\x1b[0m ");
+        header_left.append_zstr(ansi::RESET);
+        header_left.append_zstr(" ");
+        header_left.append_zstr(ansi::ui_top_div);
+        header_left.append_zstr("│");
+        header_left.append_zstr(ansi::RESET);
+        header_left.append_zstr(" ");
     }
 
-    header_left.append_zstr("\x1b[38;2;166;226;46m\x1b[1mLn ");
+    header_left.append_zstr(ansi::fg_green);
+    header_left.append_zstr(ansi::BOLD);
+    header_left.append_zstr("Ln ");
     header_left.append_int(cur_src);
-    header_left.append_zstr("\x1b[0m \x1b[38;2;117;113;94m(");
+    header_left.append_zstr(ansi::RESET);
+    header_left.append_zstr(" ");
+    header_left.append_zstr(ansi::fg_muted);
+    header_left.append_zstr("(");
     header_left.append_int(cursor_line + 1);
     header_left.append_zstr("/");
     header_left.append_int(total);
     header_left.append_zstr(" · ");
     header_left.append_int(pct);
-    header_left.append_zstr("%)\x1b[0m");
+    header_left.append_zstr("%");
+    if (ansi::current_theme == ansi::Theme.LIGHT)
+    {
+        header_left.append_zstr(" · Light");
+    }
+    header_left.append_zstr(")");
+    header_left.append_zstr(ansi::RESET);
 
     int left_w = strutils::string_display_width(header_left.to_string());
     fb.append_slice(header_left.to_string());
 
-    String help_text = "[? Help │ q Quit]";
+    String help_text = "[? Help │ Tab TOC │ t Theme │ q Quit]";
     int help_w = strutils::string_display_width(help_text);
     int pad = term_width - left_w - help_w - 1;
     if (pad > 0)
     {
         fb.append_spaces(pad);
-        fb.append_zstr("\x1b[38;2;117;113;94m[? Help │ q Quit]\x1b[0m");
+        fb.append_zstr(ansi::fg_muted);
+        fb.append_zstr("[? Help │ Tab TOC │ t Theme │ q Quit]");
+        fb.append_zstr(ansi::RESET);
     }
     fb.append_zstr("\x1b[K\n");
 
     // Separator line
-    fb.append_zstr("\x1b[38;2;117;113;94m");
+    fb.append_zstr(ansi::ui_border);
     int bar_w = term_width - 2;
     if (bar_w < 10) bar_w = 10;
     fb.append_repeat("─", bar_w);
-    fb.append_zstr("\x1b[0m\x1b[K\n");
+    fb.append_zstr(ansi::RESET);
+    fb.append_zstr("\x1b[K\n");
 
     // Visual document lines
     String q_str = (search_query != null) ? (String)search_query[:strutils::str_len(search_query)] : "";
@@ -640,11 +758,13 @@ fn void draw_viewport(
 
             if (is_cursor)
             {
-                fb.append_zstr("\x1b[38;2;102;217;239m\x1b[1m▌\x1b[0m");
+                fb.append_zstr(ansi::ui_cursor_bar);
+                fb.append_zstr("▌");
+                fb.append_zstr(ansi::RESET);
             }
             else
             {
-                fb.append_zstr(" ");
+                fb.append_char(' ');
             }
 
             if (q_str.len > 0 && (search_active || match_count > 0))
@@ -660,7 +780,11 @@ fn void draw_viewport(
         }
         else
         {
-            fb.append_zstr(" \x1b[38;2;60;60;50m~\x1b[0m\x1b[K");
+            fb.append_zstr(" ");
+            fb.append_zstr(ansi::ui_tilde);
+            fb.append_zstr("~");
+            fb.append_zstr(ansi::RESET);
+            fb.append_zstr("\x1b[K");
             if (i < scroll_top + view_height - 1) fb.append_char('\n');
         }
     }
@@ -668,29 +792,56 @@ fn void draw_viewport(
     // Bottom Status / Search Bar
     if (goto_active)
     {
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;253;151;31m\x1b[1m : \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m ");
+        fb.append_zstr(ansi::ui_status_bg);
+        fb.append_zstr(" : ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(ansi::ui_top_path);
+        fb.append_zstr(" ");
         if (goto_query != null) fb.append_zstr(goto_query);
-        fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m (Enter: Goto line, Esc: Cancel)\x1b[0m\x1b[K");
+        fb.append_zstr(" ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(ansi::fg_muted);
+        fb.append_zstr(" (Enter: Goto line, Esc: Cancel)");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr("\x1b[K");
     }
     else if (search_active)
     {
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;253;151;31m\x1b[1m / \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m ");
+        fb.append_zstr(ansi::ui_status_bg);
+        fb.append_zstr(" / ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(ansi::ui_top_path);
+        fb.append_zstr(" ");
         fb.append_zstr(search_query);
-        fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m (Enter: Search, Esc: Cancel)\x1b[0m\x1b[K");
+        fb.append_zstr(" ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(ansi::fg_muted);
+        fb.append_zstr(" (Enter: Search, Esc: Cancel)");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr("\x1b[K");
     }
     else if (match_count > 0)
     {
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;166;226;46m\x1b[1m Match ");
+        fb.append_zstr(ansi::ui_status_bg);
+        fb.append_zstr(" Match ");
         fb.append_int(cur_match_idx + 1);
         fb.append_zstr(" of ");
         fb.append_int(match_count);
-        fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m (n: Next, N: Prev, Esc: Clear)\x1b[0m\x1b[K");
+        fb.append_zstr(" ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr(ansi::fg_muted);
+        fb.append_zstr(" (n: Next, N: Prev, Esc: Clear)");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr("\x1b[K");
     }
     else if (status_msg != null && status_msg[0] != 0)
     {
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;166;226;46m\x1b[1m ");
+        fb.append_zstr(ansi::ui_status_bg);
+        fb.append_zstr(" ");
         fb.append_zstr(status_msg);
-        fb.append_zstr(" \x1b[0m\x1b[K");
+        fb.append_zstr(" ");
+        fb.append_zstr(ansi::RESET);
+        fb.append_zstr("\x1b[K");
     }
 
     flush_fb(fb);
@@ -1355,22 +1506,20 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 status_ticks = 40;
                 need_redraw = true;
             }
-            else if (key == 1002 || key == ' ' || key == 1004) // Space / Ctrl+D / PgDn -> Scroll down
+            else if (key == 1002 || key == ' ' || key == 1004 || key == 'd' || key == 'D') // Space / Ctrl+D / PgDn / 'd' -> Half-page scroll down
             {
-                int scroll_step = view_height / 3;
+                int scroll_step = view_height / 2;
                 if (scroll_step < 3) scroll_step = 3;
-                if (scroll_step > 8) scroll_step = 8;
                 cursor_line += scroll_step;
                 if (cursor_line >= total_lines) cursor_line = total_lines > 0 ? total_lines - 1 : 0;
                 scroll_top += scroll_step;
                 if (scroll_top > max_scroll) scroll_top = max_scroll;
                 need_redraw = true;
             }
-            else if (key == 1003 || key == 1014 || key == 1005 || key == 'b' || key == 'B') // Shift+Space / 'b' / Ctrl+U / PgUp -> Scroll up
+            else if (key == 1003 || key == 1014 || key == 1005 || key == 'b' || key == 'B' || key == 'u' || key == 'U') // Shift+Space / 'b' / Ctrl+U / PgUp / 'u' -> Half-page scroll up
             {
-                int scroll_step = view_height / 3;
+                int scroll_step = view_height / 2;
                 if (scroll_step < 3) scroll_step = 3;
-                if (scroll_step > 8) scroll_step = 8;
                 cursor_line -= scroll_step;
                 if (cursor_line < 0) cursor_line = 0;
                 scroll_top -= scroll_step;
@@ -1394,9 +1543,21 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 show_help = true;
                 need_redraw = true;
             }
-            else if (key == 9 || key == 't' || key == 'T') // Tab / 't' -> Open TOC outline
+            else if (key == 't' || key == 'T') // 't' -> Toggle Theme (Dark / Light)
             {
-                show_toc = true;
+                ansi::toggle_theme();
+                strutils::copy_str(&status_msg_buf[0], ansi::current_theme == ansi::Theme.LIGHT ? "✔ Switched to Light Theme" : "✔ Switched to Dark Theme", 128);
+                status_ticks = 40;
+                vdoc.free();
+                vdoc = render::render_document(&doc, config);
+                extract_toc(&doc, &vdoc, &toc);
+                total_lines = vdoc.get_total_lines();
+                max_scroll = total_lines > 0 ? total_lines - 1 : 0;
+                need_redraw = true;
+            }
+            else if (key == 9) // Tab -> Toggle Document Outline (TOC)
+            {
+                show_toc = !show_toc;
                 need_redraw = true;
             }
             else if (key == 'o' || key == 'O') // 'o' -> Open File Tree Switcher

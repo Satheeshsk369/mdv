@@ -212,10 +212,14 @@ struct CalloutTheme {
     char* color;
 }
 
-const CalloutTheme[5] CALLOUT_THEMES = {
-    { "ℹ", "NOTE", (char*)ansi::FG_CYAN },
-    { "", "TIP", (char*)ansi::FG_GREEN },
-    { "⚠", "WARNING", (char*)ansi::FG_ORANGE },
-    { "", "IMPORTANT", (char*)ansi::FG_PURPLE },
-    { "⛔", "CAUTION", (char*)ansi::FG_PINK }
-};
+fn CalloutTheme get_callout_theme(CalloutKind kind)
+{
+    switch (kind)
+    {
+        case NOTE: return { "ℹ", "NOTE", ansi::fg_cyan };
+        case TIP: return { "💡", "TIP", ansi::fg_green };
+        case WARNING: return { "⚠", "WARNING", ansi::fg_orange };
+        case IMPORTANT: return { "🔔", "IMPORTANT", ansi::fg_purple };
+        case CAUTION: return { "⛔", "CAUTION", ansi::fg_pink };
+    }
+}

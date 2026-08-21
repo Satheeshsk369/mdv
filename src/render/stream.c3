@@ -97,7 +97,7 @@ fn void flush_callout(StreamContext* ctx, logic::Arena* scratch)
     if (ctx.callout_buf.len == 0) return;
     String ctext = ctx.callout_buf.to_string();
 
-    CalloutTheme theme = logic::CALLOUT_THEMES[(int)ctx.callout_kind];
+    CalloutTheme theme = logic::get_callout_theme(ctx.callout_kind);
     String title = (String)(&ctx.callout_title[0])[:strutils::str_len(&ctx.callout_title[0])];
 
     if (!ctx.plain)
@@ -406,10 +406,10 @@ fn void process_stream_line(StreamContext* ctx, String line, logic::Arena* scrat
         buffer::ByteBuffer tb;
         tb.init(256);
         defer tb.free();
-        if (!ctx.plain) tb.append_zstr((char*)ansi::FG_MUTED);
+        if (!ctx.plain) tb.append_zstr(ansi::fg_muted);
         int bar_len = ctx.width > 20 ? ctx.width - 4 : 76;
         tb.append_repeat("─", bar_len);
-        if (!ctx.plain) tb.append_zstr((char*)ansi::RESET);
+        if (!ctx.plain) tb.append_zstr(ansi::RESET);
         io::printn(tb.to_string());
         return;
     }
@@ -430,11 +430,12 @@ fn void process_stream_line(StreamContext* ctx, String line, logic::Arena* scrat
         {
             switch (hlevel)
             {
-                case 1: hb.append_zstr((char*)ansi::FG_PINK); hb.append_zstr((char*)ansi::BOLD);
-                case 2: hb.append_zstr((char*)ansi::FG_GREEN); hb.append_zstr((char*)ansi::BOLD);
-                case 3: hb.append_zstr((char*)ansi::FG_ORANGE); hb.append_zstr((char*)ansi::BOLD);
-                case 4: hb.append_zstr((char*)ansi::FG_PURPLE); hb.append_zstr((char*)ansi::BOLD);
-                default: hb.append_zstr((char*)ansi::FG_CYAN); hb.append_zstr((char*)ansi::BOLD);
+                case 1: hb.append_zstr(ansi::fg_h1);
+                case 2: hb.append_zstr(ansi::fg_h2);
+                case 3: hb.append_zstr(ansi::fg_h3);
+                case 4: hb.append_zstr(ansi::fg_h4);
+                case 5: hb.append_zstr(ansi::fg_h5);
+                default: hb.append_zstr(ansi::fg_h6);
             }
         }
         else
@@ -444,7 +445,7 @@ fn void process_stream_line(StreamContext* ctx, String line, logic::Arena* scrat
         }
         Span[] hspans = parser::parse_inline(scratch, htext);
         render_spans(&hb, hspans, ctx.plain);
-        if (!ctx.plain) hb.append_zstr((char*)ansi::RESET);
+        if (!ctx.plain) hb.append_zstr(ansi::RESET);
         io::printn(hb.to_string());
         return;
     }
@@ -486,9 +487,9 @@ fn void process_stream_line(StreamContext* ctx, String line, logic::Arena* scrat
             pfx.init(32);
             defer pfx.free();
             pfx.append_spaces((int)indent);
-            if (!ctx.plain) pfx.append_zstr((char*)ansi::FG_GREEN);
+            if (!ctx.plain) pfx.append_zstr(ansi::fg_green);
             pfx.append_zstr("✔  ");
-            if (!ctx.plain) pfx.append_zstr((char*)ansi::RESET);
+            if (!ctx.plain) pfx.append_zstr(ansi::RESET);
 
             buffer::ByteBuffer cpfx;
             cpfx.init(32);

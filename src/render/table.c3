@@ -87,13 +87,13 @@ fn void wrap_cell(logic::Arena* arena, Span[] spans, int max_w, bool plain, Wrap
         {
             switch (sp.kind)
             {
-                case SpanKind.BOLD: style_start = (char*)ansi::BOLD; style_end = (char*)ansi::RESET;
-                case SpanKind.ITALIC: style_start = (char*)ansi::ITALIC; style_end = (char*)ansi::RESET;
-                case SpanKind.STRIKETHROUGH: style_start = (char*)ansi::STRIKE; style_end = (char*)ansi::RESET;
-                case SpanKind.CODE_INLINE: style_start = (char*)ansi::CODE_INLINE; style_end = (char*)ansi::RESET;
+                case SpanKind.BOLD: style_start = ansi::BOLD; style_end = ansi::RESET;
+                case SpanKind.ITALIC: style_start = ansi::ITALIC; style_end = ansi::RESET;
+                case SpanKind.STRIKETHROUGH: style_start = ansi::STRIKE; style_end = ansi::RESET;
+                case SpanKind.CODE_INLINE: style_start = ansi::code_inline; style_end = ansi::RESET;
                 case SpanKind.MATH_INLINE: style_start = ""; style_end = "";
-                case SpanKind.FOOTNOTE_REF: style_start = (char*)ansi::FG_CYAN; style_end = (char*)ansi::RESET;
-                case SpanKind.LINK: style_start = (char*)ansi::FG_CYAN; style_end = (char*)ansi::RESET;
+                case SpanKind.FOOTNOTE_REF: style_start = ansi::fg_cyan; style_end = ansi::RESET;
+                case SpanKind.LINK: style_start = ansi::fg_cyan; style_end = ansi::RESET;
                 default: style_start = ""; style_end = "";
             }
         }
@@ -153,11 +153,11 @@ fn void wrap_cell(logic::Arena* arena, Span[] spans, int max_w, bool plain, Wrap
                 cur_w++;
             }
 
-            if (!plain) cur_line.append_zstr((char*)ansi::FG_MUTED);
+            if (!plain) cur_line.append_zstr(ansi::fg_muted);
             cur_line.append_char('(');
             cur_line.append_slice(sp.url);
             cur_line.append_char(')');
-            if (!plain) cur_line.append_zstr((char*)ansi::RESET);
+            if (!plain) cur_line.append_zstr(ansi::RESET);
             cur_w += url_w;
         }
     }
@@ -212,8 +212,8 @@ fn void emit_wrapped_row(
 
                 if (is_header && !plain)
                 {
-                    tb.append_zstr((char*)ansi::FG_CYAN);
-                    tb.append_zstr((char*)ansi::BOLD);
+                    tb.append_zstr(ansi::fg_cyan);
+                    tb.append_zstr(ansi::BOLD);
                 }
 
                 if (align == Alignment.CENTER)
@@ -237,7 +237,7 @@ fn void emit_wrapped_row(
 
                 if (is_header && !plain)
                 {
-                    tb.append_zstr((char*)ansi::RESET);
+                    tb.append_zstr(ansi::RESET);
                 }
             }
             else
@@ -476,13 +476,13 @@ fn void render_table(TableBlock* table, int src_line, int term_width, bool plain
 
     // 8. Separator line under header
     tb.reset();
-    if (!plain) tb.append_zstr((char*)ansi::FG_MUTED);
+    if (!plain) tb.append_zstr(ansi::fg_muted);
     for (int c = 0; c < cols; c++)
     {
         tb.append_repeat("─", col_widths[c]);
         if (c < cols - 1) tb.append_spaces(gap);
     }
-    if (!plain) tb.append_zstr((char*)ansi::RESET);
+    if (!plain) tb.append_zstr(ansi::RESET);
     emit_fn(ctx, tb.to_string(), src_line + 1);
 
     // 9. Emit body rows (with 1 blank line between rows ONLY if at least one row wrapped)

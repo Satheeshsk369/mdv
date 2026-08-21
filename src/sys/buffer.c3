@@ -119,7 +119,7 @@ fn void ByteBuffer.free(ByteBuffer* b)
     {
         mem::free(b.buf);
         b.buf = {};
-        b.len = 0;
-        b.cap = 0;
     }
+    b.len = 0;
+    b.cap = 0;
 }

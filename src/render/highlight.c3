@@ -57,10 +57,10 @@ fn void highlight_code_line(buffer::ByteBuffer* b, String line, String lang, boo
     bool is_hash_comment_lang = strutils::string_eq(lang, "python") || strutils::string_eq(lang, "py") || strutils::string_eq(lang, "bash") || strutils::string_eq(lang, "sh") || strutils::string_eq(lang, "yaml") || strutils::string_eq(lang, "yml") || strutils::string_eq(lang, "toml") || strutils::string_eq(lang, "r");
     if ((is_hash_comment_lang && strutils::string_starts_with(trimmed, "#")) || strutils::string_starts_with(trimmed, "//") || strutils::string_starts_with(trimmed, "/*") || strutils::string_starts_with(trimmed, "* ") || strutils::string_starts_with(trimmed, "<!--"))
     {
-        b.append_zstr((char*)ansi::FG_MUTED);
-        b.append_zstr((char*)ansi::ITALIC);
+        b.append_zstr(ansi::fg_muted);
+        b.append_zstr(ansi::ITALIC);
         b.append_slice(line);
-        b.append_zstr((char*)ansi::RESET);
+        b.append_zstr(ansi::RESET);
         return;
     }
 
@@ -74,10 +74,10 @@ fn void highlight_code_line(buffer::ByteBuffer* b, String line, String lang, boo
         // 1. Comments
         if ((c == '/' && i + 1 < len && line[i + 1] == '/') || (is_hash_comment_lang && c == '#'))
         {
-            b.append_zstr((char*)ansi::FG_MUTED);
-            b.append_zstr((char*)ansi::ITALIC);
+            b.append_zstr(ansi::fg_muted);
+            b.append_zstr(ansi::ITALIC);
             b.append_slice(line[i..]);
-            b.append_zstr((char*)ansi::RESET);
+            b.append_zstr(ansi::RESET);
             break;
         }
 
@@ -101,9 +101,9 @@ fn void highlight_code_line(buffer::ByteBuffer* b, String line, String lang, boo
                 }
                 i++;
             }
-            b.append_zstr((char*)ansi::FG_YELLOW);
+            b.append_zstr(ansi::fg_yellow);
             b.append_slice(line[s_start : i - s_start]);
-            b.append_zstr((char*)ansi::RESET);
+            b.append_zstr(ansi::RESET);
             continue;
         }
 
@@ -115,9 +115,9 @@ fn void highlight_code_line(buffer::ByteBuffer* b, String line, String lang, boo
             {
                 i++;
             }
-            b.append_zstr((char*)ansi::FG_PURPLE);
+            b.append_zstr(ansi::fg_purple);
             b.append_slice(line[n_start : i - n_start]);
-            b.append_zstr((char*)ansi::RESET);
+            b.append_zstr(ansi::RESET);
             continue;
         }
 
@@ -133,34 +133,34 @@ fn void highlight_code_line(buffer::ByteBuffer* b, String line, String lang, boo
 
             if (is_keyword_token(id))
             {
-                b.append_zstr((char*)ansi::FG_PINK);
-                b.append_zstr((char*)ansi::BOLD);
+                b.append_zstr(ansi::fg_pink);
+                b.append_zstr(ansi::BOLD);
                 b.append_slice(id);
-                b.append_zstr((char*)ansi::RESET);
+                b.append_zstr(ansi::RESET);
             }
             else if (is_type_or_literal_token(id))
             {
-                b.append_zstr((char*)ansi::FG_CYAN);
+                b.append_zstr(ansi::fg_cyan);
                 b.append_slice(id);
-                b.append_zstr((char*)ansi::RESET);
+                b.append_zstr(ansi::RESET);
             }
             else if (i < len && line[i] == '(') // Function call
             {
-                b.append_zstr((char*)ansi::FG_GREEN);
+                b.append_zstr(ansi::fg_green);
                 b.append_slice(id);
-                b.append_zstr((char*)ansi::RESET);
+                b.append_zstr(ansi::RESET);
             }
             else if (id.len > 0 && (id[0] == '@' || id[0] == '$'))
             {
-                b.append_zstr((char*)ansi::FG_ORANGE);
+                b.append_zstr(ansi::fg_orange);
                 b.append_slice(id);
-                b.append_zstr((char*)ansi::RESET);
+                b.append_zstr(ansi::RESET);
             }
             else
             {
-                b.append_zstr((char*)ansi::FG_TEXT);
+                b.append_zstr(ansi::fg_text);
                 b.append_slice(id);
-                b.append_zstr((char*)ansi::RESET);
+                b.append_zstr(ansi::RESET);
             }
             continue;
         }
@@ -168,9 +168,9 @@ fn void highlight_code_line(buffer::ByteBuffer* b, String line, String lang, boo
         // 5. Punctuation & Operators
         if (c == '=' || c == '+' || c == '-' || c == '*' || c == '/' || c == '<' || c == '>' || c == '!' || c == '&' || c == '|' || c == '^' || c == '~')
         {
-            b.append_zstr((char*)ansi::FG_PINK);
+            b.append_zstr(ansi::fg_pink);
             b.append_char(c);
-            b.append_zstr((char*)ansi::RESET);
+            b.append_zstr(ansi::RESET);
             i++;
             continue;
         }

@@ -32,6 +32,8 @@ fn void print_help()
     io::printn("    -s, --stdout             Print rendered text directly to stdout and exit");
     io::printn("    -p, --plain              Print plain text without ANSI formatting");
     io::printn("    -nw, --no-wrap           Disable line wrapping");
+    io::printn("    --light                  Use light theme palette");
+    io::printn("    --dark                   Use dark theme palette (default)");
     io::printn("    -h, --help               Show help");
     io::printn("    -v, --version            Show version");
     io::printn("");
@@ -42,7 +44,7 @@ fn void render_file_stdout(char* filename, int width, bool no_wrap)
     char* content = strutils::load_file_string(filename);
     if (content == null)
     {
-        if (!ansi::plain_mode) io::print(ansi::FG_PINK);
+        if (!ansi::plain_mode) io::print(ansi::fg_pink);
         io::printfn("Error: Could not open file '%s'", (ZString)filename);
         if (!ansi::plain_mode) io::print(ansi::RESET);
         return;
@@ -104,6 +106,16 @@ fn int main(String[] args)
         {
             ansi::set_plain(true);
             force_stdout = true;
+            continue;
+        }
+        if (arg == "--light" || arg == "-light")
+        {
+            ansi::set_theme(ansi::Theme.LIGHT);
+            continue;
+        }
+        if (arg == "--dark" || arg == "-dark")
+        {
+            ansi::set_theme(ansi::Theme.DARK);
             continue;
         }
         if (strutils::is_numeric((char*)arg.ptr))

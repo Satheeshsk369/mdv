@@ -24,7 +24,7 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
             b.append_slice(span.text);
 
         case SpanKind.BOLD:
-            if (!plain) b.append_zstr((char*)ansi::BOLD);
+            if (!plain) b.append_zstr(ansi::BOLD);
             if (span.children.len > 0)
             {
                 for (usz i = 0; i < span.children.len; i++)
@@ -36,10 +36,10 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
             {
                 b.append_slice(span.text);
             }
-            if (!plain) b.append_zstr((char*)ansi::RESET);
+            if (!plain) b.append_zstr(ansi::RESET);
 
         case SpanKind.ITALIC:
-            if (!plain) b.append_zstr((char*)ansi::ITALIC);
+            if (!plain) b.append_zstr(ansi::ITALIC);
             if (span.children.len > 0)
             {
                 for (usz i = 0; i < span.children.len; i++)
@@ -51,13 +51,13 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
             {
                 b.append_slice(span.text);
             }
-            if (!plain) b.append_zstr((char*)ansi::RESET);
+            if (!plain) b.append_zstr(ansi::RESET);
 
         case SpanKind.STRIKETHROUGH:
             if (!plain)
             {
-                b.append_zstr((char*)ansi::STRIKE);
-                b.append_zstr((char*)ansi::FG_MUTED);
+                b.append_zstr(ansi::STRIKE);
+                b.append_zstr(ansi::fg_muted);
             }
             if (span.children.len > 0)
             {
@@ -70,14 +70,14 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
             {
                 b.append_slice(span.text);
             }
-            if (!plain) b.append_zstr((char*)ansi::RESET);
+            if (!plain) b.append_zstr(ansi::RESET);
 
         case SpanKind.CODE_INLINE:
-            if (!plain) b.append_zstr((char*)ansi::CODE_INLINE);
+            if (!plain) b.append_zstr(ansi::code_inline);
             if (!plain) b.append_char(' ');
             b.append_slice(span.text);
             if (!plain) b.append_char(' ');
-            if (!plain) b.append_zstr((char*)ansi::RESET);
+            if (!plain) b.append_zstr(ansi::RESET);
 
         case SpanKind.MATH_INLINE:
         case SpanKind.MATH_DISPLAY:
@@ -86,13 +86,13 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
         case SpanKind.FOOTNOTE_REF:
             if (!plain)
             {
-                b.append_zstr((char*)ansi::FG_CYAN);
-                b.append_zstr((char*)ansi::BOLD);
+                b.append_zstr(ansi::fg_cyan);
+                b.append_zstr(ansi::BOLD);
             }
             b.append_char('[');
             b.append_slice(span.text);
             b.append_char(']');
-            if (!plain) b.append_zstr((char*)ansi::RESET);
+            if (!plain) b.append_zstr(ansi::RESET);
 
         case SpanKind.LINK:
             if (!plain && span.url.len > 0)
@@ -103,8 +103,8 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
             }
             if (!plain)
             {
-                b.append_zstr((char*)ansi::FG_CYAN);
-                b.append_zstr((char*)ansi::UNDERLINE);
+                b.append_zstr(ansi::fg_cyan);
+                b.append_zstr(ansi::UNDERLINE);
             }
             if (span.children.len > 0)
             {
@@ -117,7 +117,7 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
             {
                 b.append_slice(span.text);
             }
-            if (!plain) b.append_zstr((char*)ansi::RESET);
+            if (!plain) b.append_zstr(ansi::RESET);
             if (!plain && span.url.len > 0)
             {
                 b.append_zstr("\x1b]8;;\x1b\\");
@@ -126,33 +126,33 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
             if (span.url.len > 0)
             {
                 b.append_char(' ');
-                if (!plain) b.append_zstr((char*)ansi::FG_MUTED);
+                if (!plain) b.append_zstr(ansi::fg_muted);
                 b.append_char('(');
                 b.append_slice(span.url);
                 b.append_char(')');
-                if (!plain) b.append_zstr((char*)ansi::RESET);
+                if (!plain) b.append_zstr(ansi::RESET);
             }
 
         case SpanKind.IMAGE:
             b.append_zstr("🖼  ");
             if (!plain)
             {
-                b.append_zstr((char*)ansi::FG_CYAN);
-                b.append_zstr((char*)ansi::BOLD);
+                b.append_zstr(ansi::fg_cyan);
+                b.append_zstr(ansi::BOLD);
             }
             b.append_char('[');
             b.append_slice(span.text);
             b.append_char(']');
-            if (!plain) b.append_zstr((char*)ansi::RESET);
+            if (!plain) b.append_zstr(ansi::RESET);
 
             if (span.url.len > 0)
             {
                 b.append_char(' ');
-                if (!plain) b.append_zstr((char*)ansi::FG_MUTED);
+                if (!plain) b.append_zstr(ansi::fg_muted);
                 b.append_char('(');
                 b.append_slice(span.url);
                 b.append_char(')');
-                if (!plain) b.append_zstr((char*)ansi::RESET);
+                if (!plain) b.append_zstr(ansi::RESET);
             }
     }
 }
@@ -234,13 +234,13 @@ fn void render_wrapped_spans(
         {
             switch (sp.kind)
             {
-                case SpanKind.BOLD: style_start = (char*)ansi::BOLD; style_end = (char*)ansi::RESET;
-                case SpanKind.ITALIC: style_start = (char*)ansi::ITALIC; style_end = (char*)ansi::RESET;
-                case SpanKind.STRIKETHROUGH: style_start = (char*)ansi::STRIKE; style_end = (char*)ansi::RESET;
-                case SpanKind.CODE_INLINE: style_start = (char*)ansi::CODE_INLINE; style_end = (char*)ansi::RESET;
+                case SpanKind.BOLD: style_start = ansi::BOLD; style_end = ansi::RESET;
+                case SpanKind.ITALIC: style_start = ansi::ITALIC; style_end = ansi::RESET;
+                case SpanKind.STRIKETHROUGH: style_start = ansi::STRIKE; style_end = ansi::RESET;
+                case SpanKind.CODE_INLINE: style_start = ansi::code_inline; style_end = ansi::RESET;
                 case SpanKind.MATH_INLINE: style_start = ""; style_end = "";
-                case SpanKind.FOOTNOTE_REF: style_start = (char*)ansi::FG_CYAN; style_end = (char*)ansi::RESET;
-                case SpanKind.LINK: style_start = (char*)ansi::FG_CYAN; style_end = (char*)ansi::RESET;
+                case SpanKind.FOOTNOTE_REF: style_start = ansi::fg_cyan; style_end = ansi::RESET;
+                case SpanKind.LINK: style_start = ansi::fg_cyan; style_end = ansi::RESET;
                 default: style_start = ""; style_end = "";
             }
         }
@@ -313,11 +313,11 @@ fn void render_wrapped_spans(
                 cur_line.append_char(' ');
                 cur_w++;
             }
-            if (!plain) cur_line.append_zstr((char*)ansi::FG_MUTED);
+            if (!plain) cur_line.append_zstr(ansi::fg_muted);
             cur_line.append_char('(');
             cur_line.append_slice(sp.url);
             cur_line.append_char(')');
-            if (!plain) cur_line.append_zstr((char*)ansi::RESET);
+            if (!plain) cur_line.append_zstr(ansi::RESET);
             cur_w += url_w;
         }
     }
@@ -372,26 +372,26 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                     lb.reset();
                     if (!plain)
                     {
-                        lb.append_zstr((char*)ansi::FG_CYAN);
-                        lb.append_zstr((char*)ansi::BOLD);
+                        lb.append_zstr(ansi::fg_cyan);
+                        lb.append_zstr(ansi::BOLD);
                     }
                     lb.append_slice(entry.key);
-                    if (!plain) lb.append_zstr((char*)ansi::RESET);
+                    if (!plain) lb.append_zstr(ansi::RESET);
                     lb.append_zstr(":");
                     for (int s = 0; s < pad_spaces + 1; s++) lb.append_char(' ');
 
-                    if (!plain) lb.append_zstr((char*)ansi::FG_TEXT);
+                    if (!plain) lb.append_zstr(ansi::fg_text);
                     lb.append_slice(entry.value);
-                    if (!plain) lb.append_zstr((char*)ansi::RESET);
+                    if (!plain) lb.append_zstr(ansi::RESET);
                     emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start + 1 + (int)e);
                 }
 
                 // Divider line below metadata
                 lb.reset();
-                if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
+                if (!plain) lb.append_zstr(ansi::fg_muted);
                 int mbar_len = width > 20 ? width - 4 : 76;
                 lb.append_repeat("─", mbar_len);
-                if (!plain) lb.append_zstr((char*)ansi::RESET);
+                if (!plain) lb.append_zstr(ansi::RESET);
                 emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_end);
 
             case BlockKind.FOOTNOTE_DEF:
@@ -416,10 +416,10 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
 
             case BlockKind.THEMATIC_BREAK:
                 lb.reset();
-                if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
+                if (!plain) lb.append_zstr(ansi::fg_muted);
                 int bar_len = width > 20 ? width - 4 : 76;
                 lb.append_repeat("─", bar_len);
-                if (!plain) lb.append_zstr((char*)ansi::RESET);
+                if (!plain) lb.append_zstr(ansi::RESET);
                 emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start);
 
             case BlockKind.HEADING:
@@ -433,11 +433,12 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                 {
                     switch (b.heading.level)
                     {
-                        case 1: lb.append_zstr((char*)ansi::FG_PINK); lb.append_zstr((char*)ansi::BOLD);
-                        case 2: lb.append_zstr((char*)ansi::FG_GREEN); lb.append_zstr((char*)ansi::BOLD);
-                        case 3: lb.append_zstr((char*)ansi::FG_ORANGE); lb.append_zstr((char*)ansi::BOLD);
-                        case 4: lb.append_zstr((char*)ansi::FG_PURPLE); lb.append_zstr((char*)ansi::BOLD);
-                        default: lb.append_zstr((char*)ansi::FG_CYAN); lb.append_zstr((char*)ansi::BOLD);
+                        case 1: lb.append_zstr(ansi::fg_h1);
+                        case 2: lb.append_zstr(ansi::fg_h2);
+                        case 3: lb.append_zstr(ansi::fg_h3);
+                        case 4: lb.append_zstr(ansi::fg_h4);
+                        case 5: lb.append_zstr(ansi::fg_h5);
+                        default: lb.append_zstr(ansi::fg_h6);
                     }
                 }
                 else
@@ -447,7 +448,7 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                 }
 
                 render_spans(&lb, b.heading.spans, plain);
-                if (!plain) lb.append_zstr((char*)ansi::RESET);
+                if (!plain) lb.append_zstr(ansi::RESET);
                 emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start);
 
             case BlockKind.CODE_BLOCK:
@@ -464,14 +465,14 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                 lb.reset();
                 if (!plain)
                 {
-                    logic::CalloutTheme theme = logic::CALLOUT_THEMES[(int)b.callout.kind];
+                    logic::CalloutTheme theme = logic::get_callout_theme(b.callout.kind);
                     lb.append_zstr(theme.color);
-                    lb.append_zstr((char*)ansi::BOLD);
+                    lb.append_zstr(ansi::BOLD);
                     lb.append_zstr("│ ");
                     lb.append_slice(theme.icon);
                     lb.append_spaces(1);
                     lb.append_slice(theme.label);
-                    lb.append_zstr((char*)ansi::RESET);
+                    lb.append_zstr(ansi::RESET);
                 }
                 else
                 {
@@ -567,20 +568,20 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                 {
                     if (!plain)
                     {
-                        lb.append_zstr((char*)ansi::FG_CYAN);
-                        lb.append_zstr((char*)ansi::BOLD);
+                        lb.append_zstr(ansi::fg_cyan);
+                        lb.append_zstr(ansi::BOLD);
                     }
                     lb.append_char('[');
                     lb.append_slice(b.image_block.alt);
                     lb.append_char(']');
-                    if (!plain) lb.append_zstr((char*)ansi::RESET);
+                    if (!plain) lb.append_zstr(ansi::RESET);
                     lb.append_char(' ');
                 }
-                if (!plain) lb.append_zstr((char*)ansi::FG_MUTED);
+                if (!plain) lb.append_zstr(ansi::fg_muted);
                 lb.append_char('(');
                 lb.append_slice(b.image_block.url);
                 lb.append_char(')');
-                if (!plain) lb.append_zstr((char*)ansi::RESET);
+                if (!plain) lb.append_zstr(ansi::RESET);
                 emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start);
 
             case BlockKind.PARAGRAPH:
