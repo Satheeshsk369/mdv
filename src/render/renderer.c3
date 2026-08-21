@@ -82,9 +82,7 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
 
         case SpanKind.MATH_INLINE:
         case SpanKind.MATH_DISPLAY:
-            if (!plain) b.append_zstr((char*)ansi::FG_MATH);
             b.append_slice(span.text);
-            if (!plain) b.append_zstr((char*)ansi::RESET);
 
         case SpanKind.FOOTNOTE_REF:
             if (!plain)
@@ -230,7 +228,7 @@ fn void render_wrapped_spans(
                 case SpanKind.ITALIC: style_start = (char*)ansi::ITALIC; style_end = (char*)ansi::RESET;
                 case SpanKind.STRIKETHROUGH: style_start = (char*)ansi::STRIKE; style_end = (char*)ansi::RESET;
                 case SpanKind.CODE_INLINE: style_start = (char*)ansi::CODE_INLINE; style_end = (char*)ansi::RESET;
-                case SpanKind.MATH_INLINE: style_start = (char*)ansi::FG_MATH; style_end = (char*)ansi::RESET;
+                case SpanKind.MATH_INLINE: style_start = ""; style_end = "";
                 case SpanKind.FOOTNOTE_REF: style_start = (char*)ansi::FG_CYAN; style_end = (char*)ansi::RESET;
                 case SpanKind.LINK: style_start = (char*)ansi::FG_CYAN; style_end = (char*)ansi::RESET;
                 default: style_start = ""; style_end = "";
@@ -425,11 +423,11 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                 {
                     switch (b.heading.level)
                     {
-                        case 1: lb.append_zstr((char*)ansi::FG_PINK); lb.append_zstr((char*)ansi::BOLD); lb.append_zstr("█ ");
-                        case 2: lb.append_zstr((char*)ansi::FG_GREEN); lb.append_zstr((char*)ansi::BOLD); lb.append_zstr("▊ ");
-                        case 3: lb.append_zstr((char*)ansi::FG_ORANGE); lb.append_zstr((char*)ansi::BOLD); lb.append_zstr("▋ ");
-                        case 4: lb.append_zstr((char*)ansi::FG_PURPLE); lb.append_zstr((char*)ansi::BOLD); lb.append_zstr("▌ ");
-                        default: lb.append_zstr((char*)ansi::FG_CYAN); lb.append_zstr((char*)ansi::BOLD); lb.append_zstr("▍ ");
+                        case 1: lb.append_zstr((char*)ansi::FG_PINK); lb.append_zstr((char*)ansi::BOLD);
+                        case 2: lb.append_zstr((char*)ansi::FG_GREEN); lb.append_zstr((char*)ansi::BOLD);
+                        case 3: lb.append_zstr((char*)ansi::FG_ORANGE); lb.append_zstr((char*)ansi::BOLD);
+                        case 4: lb.append_zstr((char*)ansi::FG_PURPLE); lb.append_zstr((char*)ansi::BOLD);
+                        default: lb.append_zstr((char*)ansi::FG_CYAN); lb.append_zstr((char*)ansi::BOLD);
                     }
                 }
                 else
@@ -443,28 +441,12 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                 emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start);
 
             case BlockKind.CODE_BLOCK:
-                if (b.code.language.len > 0)
-                {
-                    lb.reset();
-                    if (!plain)
-                    {
-                        lb.append_zstr((char*)ansi::FG_CYAN);
-                        lb.append_zstr((char*)ansi::BOLD);
-                    }
-                    lb.append_zstr("[");
-                    lb.append_slice(b.code.language);
-                    lb.append_zstr("]");
-                    if (!plain) lb.append_zstr((char*)ansi::RESET);
-                    emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start);
-                }
-
-                // Code block lines with 2-space indent
+                // Code block lines with exact indentation (zero leading padding for easy copy-paste)
                 for (usz l = 0; l < b.code.lines.len; l++)
                 {
                     lb.reset();
-                    lb.append_zstr("  ");
                     highlight_code_line(&lb, b.code.lines[l], b.code.language, plain);
-                    emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start + 1 + (int)l);
+                    emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start + (int)l);
                 }
 
             case BlockKind.CALLOUT:
@@ -562,15 +544,7 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                 {
                     lb.reset();
                     lb.append_spaces(pad_left);
-                    if (!plain)
-                    {
-                        lb.append_zstr((char*)ansi::FG_MATH);
-                    }
                     lb.append_slice(mbox.rows[r]);
-                    if (!plain)
-                    {
-                        lb.append_zstr((char*)ansi::RESET);
-                    }
                     emit_table_line_cb((void*)&ctx, lb.to_string(), b.src_line_start);
                 }
 

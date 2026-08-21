@@ -38,39 +38,11 @@ fn void push_text_span(List{Span}* l, logic::Arena* arena, String text)
     {
         if (text[i] == '&')
         {
-            String sub = text[i..];
-            char* repl = null;
+            String symbol;
             usz skip = 0;
-
-            if (strutils::string_starts_with(sub, "&copy;")) { repl = "©"; skip = 6; }
-            else if (strutils::string_starts_with(sub, "&trade;")) { repl = "™"; skip = 7; }
-            else if (strutils::string_starts_with(sub, "&reg;")) { repl = "®"; skip = 5; }
-            else if (strutils::string_starts_with(sub, "&mdash;")) { repl = "—"; skip = 7; }
-            else if (strutils::string_starts_with(sub, "&ndash;")) { repl = "–"; skip = 7; }
-            else if (strutils::string_starts_with(sub, "&hellip;")) { repl = "…"; skip = 8; }
-            else if (strutils::string_starts_with(sub, "&amp;")) { repl = "&"; skip = 5; }
-            else if (strutils::string_starts_with(sub, "&lt;")) { repl = "<"; skip = 4; }
-            else if (strutils::string_starts_with(sub, "&gt;")) { repl = ">"; skip = 4; }
-            else if (strutils::string_starts_with(sub, "&quot;")) { repl = "\""; skip = 6; }
-            else if (strutils::string_starts_with(sub, "&apos;")) { repl = "'"; skip = 6; }
-            else if (strutils::string_starts_with(sub, "&plusmn;")) { repl = "±"; skip = 8; }
-            else if (strutils::string_starts_with(sub, "&times;")) { repl = "×"; skip = 7; }
-            else if (strutils::string_starts_with(sub, "&divide;")) { repl = "÷"; skip = 8; }
-            else if (strutils::string_starts_with(sub, "&deg;")) { repl = "°"; skip = 5; }
-            else if (strutils::string_starts_with(sub, "&infin;")) { repl = "∞"; skip = 7; }
-            else if (strutils::string_starts_with(sub, "&ne;")) { repl = "≠"; skip = 4; }
-            else if (strutils::string_starts_with(sub, "&le;")) { repl = "≤"; skip = 4; }
-            else if (strutils::string_starts_with(sub, "&ge;")) { repl = "≥"; skip = 4; }
-            else if (strutils::string_starts_with(sub, "&euro;")) { repl = "€"; skip = 6; }
-            else if (strutils::string_starts_with(sub, "&pound;")) { repl = "£"; skip = 7; }
-            else if (strutils::string_starts_with(sub, "&yen;")) { repl = "¥"; skip = 5; }
-            else if (strutils::string_starts_with(sub, "&check;")) { repl = "✔"; skip = 7; }
-            else if (strutils::string_starts_with(sub, "&cross;")) { repl = "✗"; skip = 7; }
-            else if (strutils::string_starts_with(sub, "&bull;")) { repl = "•"; skip = 6; }
-
-            if (repl != null)
+            if (strutils::match_html_entity(text[i..], &symbol, &skip))
             {
-                decoded.append_zstr(repl);
+                decoded.append_slice(symbol);
                 i += skip;
                 continue;
             }

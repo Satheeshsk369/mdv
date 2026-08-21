@@ -85,10 +85,8 @@ fn void flush_math_block(StreamContext* ctx, logic::Arena* scratch)
         for (int r = 0; r < mbox.height; r++)
         {
             int pad = 4;
-            if (!ctx.plain) io::print(ansi::FG_MATH);
             for (int k = 0; k < pad; k++) io::print(" ");
             io::print(mbox.rows[r]);
-            if (!ctx.plain) io::print(ansi::RESET);
             io::printn("");
         }
         io::printn("");
@@ -202,11 +200,10 @@ fn void process_stream_line(StreamContext* ctx, String line, logic::Arena* scrat
             }
         }
 
-        // Highlight code line live with 2-space indent
+        // Highlight code line live without leading spaces for easy copy-paste
         buffer::ByteBuffer cl;
         cl.init(512);
         defer cl.free();
-        cl.append_zstr("  ");
         String code_lang = (String)(&ctx.code_lang[0])[:strutils::str_len(&ctx.code_lang[0])];
         highlight_code_line(&cl, line, code_lang, ctx.plain);
         io::printn(cl.to_string());
@@ -325,23 +322,6 @@ fn void process_stream_line(StreamContext* ctx, String line, logic::Arena* scrat
             mem::copy(&ctx.code_lang[0], lang.ptr, (sz)llen);
         }
         ctx.code_lang[llen] = 0;
-
-        if (lang.len > 0)
-        {
-            buffer::ByteBuffer hb;
-            hb.init(64);
-            defer hb.free();
-            if (!ctx.plain)
-            {
-                hb.append_zstr((char*)ansi::FG_CYAN);
-                hb.append_zstr((char*)ansi::BOLD);
-            }
-            hb.append_zstr("[");
-            hb.append_slice(lang);
-            hb.append_zstr("]");
-            if (!ctx.plain) hb.append_zstr((char*)ansi::RESET);
-            io::printn(hb.to_string());
-        }
         return;
     }
 
@@ -451,11 +431,11 @@ fn void process_stream_line(StreamContext* ctx, String line, logic::Arena* scrat
         {
             switch (hlevel)
             {
-                case 1: hb.append_zstr((char*)ansi::FG_PINK); hb.append_zstr((char*)ansi::BOLD); hb.append_zstr("█ ");
-                case 2: hb.append_zstr((char*)ansi::FG_GREEN); hb.append_zstr((char*)ansi::BOLD); hb.append_zstr("▊ ");
-                case 3: hb.append_zstr((char*)ansi::FG_ORANGE); hb.append_zstr((char*)ansi::BOLD); hb.append_zstr("▋ ");
-                case 4: hb.append_zstr((char*)ansi::FG_PURPLE); hb.append_zstr((char*)ansi::BOLD); hb.append_zstr("▌ ");
-                default: hb.append_zstr((char*)ansi::FG_CYAN); hb.append_zstr((char*)ansi::BOLD); hb.append_zstr("▍ ");
+                case 1: hb.append_zstr((char*)ansi::FG_PINK); hb.append_zstr((char*)ansi::BOLD);
+                case 2: hb.append_zstr((char*)ansi::FG_GREEN); hb.append_zstr((char*)ansi::BOLD);
+                case 3: hb.append_zstr((char*)ansi::FG_ORANGE); hb.append_zstr((char*)ansi::BOLD);
+                case 4: hb.append_zstr((char*)ansi::FG_PURPLE); hb.append_zstr((char*)ansi::BOLD);
+                default: hb.append_zstr((char*)ansi::FG_CYAN); hb.append_zstr((char*)ansi::BOLD);
             }
         }
         else

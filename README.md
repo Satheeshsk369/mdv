@@ -56,7 +56,7 @@ This compiles the native executable and installs the `mdv` binary globally to `~
 ## Global Usage
 
 ```bash
-# Open file in live watch mode with auto line sync and Truecolor rendering (Default)
+# Open file in live watch mode with auto line sync & native mouse selection (Default)
 mdv document.md
 
 # Open synchronized to a specific line number
@@ -64,12 +64,12 @@ mdv document.md 45
 mdv document.md:45
 mdv document.md +45
 
-# Disable line wrapping (scroll horizontally with ← / →)
-mdv -nw document.md
-
-# Print rendered output directly to stdout (useful for AI visual output & scripts)
+# Print rendered Markdown directly to stdout and exit immediately
 mdv -s document.md
 mdv --stdout document.md
+
+# Disable line wrapping
+mdv -nw document.md
 
 # Output plain text without ANSI escape codes
 mdv -p document.md

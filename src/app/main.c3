@@ -25,12 +25,12 @@ fn void print_help()
     print_version();
     io::printn("");
     io::printn("Usage:");
-    io::printn("    mdv <file.md> [line]");
-    io::printn("    mdv [options] <file.md>");
+    io::printn("    mdv <file.md> [line]     Live watch & render in viewer (Default)");
+    io::printn("    mdv -s <file.md>         Print rendered text directly to stdout and exit");
     io::printn("    cat file.md | mdv");
     io::printn("");
     io::printn("Options:");
-    io::printn("    -s, --stdout             Print rendered text directly to stdout");
+    io::printn("    -s, --stdout             Print rendered text directly to stdout and exit");
     io::printn("    -p, --plain              Print plain text without ANSI formatting");
     io::printn("    -nw, --no-wrap           Disable line wrapping");
     io::printn("    -h, --help               Show help");
@@ -153,14 +153,14 @@ fn int main(String[] args)
             target_file[colon_pos] = 0;
         }
 
-        // 1. Direct stdout stream
+        // 1. Explicit stdout stream or non-interactive pipe
         if (force_stdout || !terminal::is_tty())
         {
             render_file_stdout(target_file, width, no_wrap);
             return 0;
         }
 
-        // 2. Default: Live watch viewer with auto line sync & full colors
+        // 2. Default: Live watch viewer with auto line sync, scroll retention & native mouse selection
         app::run_watch(target_file, target_line, no_wrap);
         return 0;
     }

@@ -1534,3 +1534,88 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
         terminal::wait_for_input(30);
     }
 }
+
+fn int render_doc_to_stdout(char* filename, int width, bool no_wrap)
+{
+    char* content = strutils::load_file_string(filename);
+    if (content == null)
+    {
+        if (!ansi::plain_mode) io::print(ansi::FG_PINK);
+        io::printfn("Error: Could not open file '%s'", (ZString)filename);
+        if (!ansi::plain_mode) io::print(ansi::RESET);
+        return 0;
+    }
+    defer mem::free(content);
+
+    RenderConfig config;
+    config.width = width;
+    config.plain = ansi::plain_mode;
+    config.no_wrap = no_wrap;
+
+    String content_str = (String)content[:strutils::str_len(content)];
+    Document doc = parser::parse_document(content_str);
+    defer doc.free();
+
+    VisualDocument vdoc = render::render_document(&doc, config);
+    defer vdoc.free();
+
+    for (usz i = 0; i < vdoc.lines.len; i++)
+    {
+        io::printn(vdoc.lines[i].text);
+    }
+
+    return (int)vdoc.lines.len;
+}
+
+fn void run_simple_watch(char* filename, bool no_wrap)
+{
+    terminal::setup_signals();
+    terminal::enable_raw_mode();
+    defer terminal::disable_raw_mode();
+
+    terminal::FileState prev_state;
+    if (!terminal::get_file_state(filename, &prev_state))
+    {
+        if (!ansi::plain_mode) io::print(ansi::FG_PINK);
+        io::printfn("Error: Could not open file '%s'", (ZString)filename);
+        if (!ansi::plain_mode) io::print(ansi::RESET);
+        return;
+    }
+
+    int prev_width = terminal::get_width();
+
+    // Clear terminal screen & scrollback and position at top
+    terminal::write_direct("\x1b[H\x1b[2J\x1b[3J");
+
+    // Render initial view
+    render_doc_to_stdout(filename, prev_width, no_wrap);
+
+    while (true)
+    {
+        int key = terminal::poll_key();
+        if (key == 'q' || key == 'Q' || key == 27 || key == 3)
+        {
+            break;
+        }
+
+        terminal::usleep(50000); // 50ms polling
+
+        int cur_width = terminal::get_width();
+        terminal::FileState cur_state;
+        bool exists = terminal::get_file_state(filename, &cur_state);
+
+        bool width_changed = (cur_width != prev_width);
+        bool file_changed = exists && terminal::file_has_changed(&prev_state, &cur_state);
+
+        if (file_changed || width_changed)
+        {
+            if (exists) prev_state = cur_state;
+            prev_width = cur_width;
+
+            // Completely clear screen and scrollback, move cursor to top-left
+            terminal::write_direct("\x1b[H\x1b[2J\x1b[3J");
+
+            render_doc_to_stdout(filename, cur_width, no_wrap);
+        }
+    }
+}

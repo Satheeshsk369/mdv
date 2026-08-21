@@ -272,6 +272,7 @@ fn void scan_file_tree(char* current_file, FileTree* out_tree)
 
 Termios orig_termios;
 bool raw_mode_active = false;
+bool alt_screen_active = false;
 
 fn void handle_signal(int sig)
 {
@@ -349,14 +350,17 @@ fn void write_direct(char* s)
 
 fn void enter_alt_screen()
 {
-    // Enable alternate screen + disable autowrap (\x1b[?7l) + mouse tracking + clear + hide cursor
-    write_direct("\x1b[?1049h\x1b[?7l\x1b[?1000h\x1b[?1002h\x1b[?1006h\x1b[2J\x1b[3J\x1b[H\x1b[?25l");
+    // Enable alternate screen + disable autowrap (\x1b[?7l) + clear + hide cursor
+    write_direct("\x1b[?1049h\x1b[?7l\x1b[2J\x1b[3J\x1b[H\x1b[?25l");
+    alt_screen_active = true;
 }
 
 fn void leave_alt_screen()
 {
-    // Disable mouse tracking + enable autowrap (\x1b[?7h) + leave alternate screen + show cursor
-    write_direct("\x1b[?7h\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[?1049l\x1b[?25h\x1b[0m");
+    if (!alt_screen_active) return;
+    // Enable autowrap (\x1b[?7h) + leave alternate screen + show cursor
+    write_direct("\x1b[?7h\x1b[?1049l\x1b[?25h\x1b[0m");
+    alt_screen_active = false;
 }
 
 fn void clear_screen()

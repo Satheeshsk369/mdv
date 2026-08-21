@@ -442,6 +442,53 @@ fn char* load_file_string(char* filename)
     return (char*)buf.ptr;
 }
 
+struct HtmlEntityDef {
+    String entity;
+    String symbol;
+}
+
+const HtmlEntityDef[] HTML_ENTITIES = {
+    { "&copy;", "©" },
+    { "&trade;", "™" },
+    { "&reg;", "®" },
+    { "&mdash;", "—" },
+    { "&ndash;", "–" },
+    { "&hellip;", "…" },
+    { "&amp;", "&" },
+    { "&lt;", "<" },
+    { "&gt;", ">" },
+    { "&quot;", "\"" },
+    { "&apos;", "'" },
+    { "&plusmn;", "±" },
+    { "&times;", "×" },
+    { "&divide;", "÷" },
+    { "&deg;", "°" },
+    { "&infin;", "∞" },
+    { "&ne;", "≠" },
+    { "&le;", "≤" },
+    { "&ge;", "≥" },
+    { "&euro;", "€" },
+    { "&pound;", "£" },
+    { "&yen;", "¥" },
+    { "&check;", "✔" },
+    { "&cross;", "✗" },
+    { "&bull;", "•" }
+};
+
+fn bool match_html_entity(String s, String* out_symbol, usz* out_skip)
+{
+    for (usz k = 0; k < HTML_ENTITIES.len; k++)
+    {
+        if (string_starts_with(s, HTML_ENTITIES[k].entity))
+        {
+            *out_symbol = HTML_ENTITIES[k].symbol;
+            *out_skip = (usz)HTML_ENTITIES[k].entity.len;
+            return true;
+        }
+    }
+    return false;
+}
+
 fn void decode_html_entities(String in_str, char* out_buf, int max_len)
 {
     if (out_buf == null || max_len <= 0) return;
@@ -453,42 +500,13 @@ fn void decode_html_entities(String in_str, char* out_buf, int max_len)
     {
         if (in_str[i] == '&')
         {
-            String sub = in_str[i..];
-            char* repl = null;
+            String symbol;
             usz skip = 0;
-
-            if (string_starts_with(sub, "&copy;")) { repl = "©"; skip = 6; }
-            else if (string_starts_with(sub, "&trade;")) { repl = "™"; skip = 7; }
-            else if (string_starts_with(sub, "&reg;")) { repl = "®"; skip = 5; }
-            else if (string_starts_with(sub, "&mdash;")) { repl = "—"; skip = 7; }
-            else if (string_starts_with(sub, "&ndash;")) { repl = "–"; skip = 7; }
-            else if (string_starts_with(sub, "&hellip;")) { repl = "…"; skip = 8; }
-            else if (string_starts_with(sub, "&amp;")) { repl = "&"; skip = 5; }
-            else if (string_starts_with(sub, "&lt;")) { repl = "<"; skip = 4; }
-            else if (string_starts_with(sub, "&gt;")) { repl = ">"; skip = 4; }
-            else if (string_starts_with(sub, "&quot;")) { repl = "\""; skip = 6; }
-            else if (string_starts_with(sub, "&apos;")) { repl = "'"; skip = 6; }
-            else if (string_starts_with(sub, "&plusmn;")) { repl = "±"; skip = 8; }
-            else if (string_starts_with(sub, "&times;")) { repl = "×"; skip = 7; }
-            else if (string_starts_with(sub, "&divide;")) { repl = "÷"; skip = 8; }
-            else if (string_starts_with(sub, "&deg;")) { repl = "°"; skip = 5; }
-            else if (string_starts_with(sub, "&infin;")) { repl = "∞"; skip = 7; }
-            else if (string_starts_with(sub, "&ne;")) { repl = "≠"; skip = 4; }
-            else if (string_starts_with(sub, "&le;")) { repl = "≤"; skip = 4; }
-            else if (string_starts_with(sub, "&ge;")) { repl = "≥"; skip = 4; }
-            else if (string_starts_with(sub, "&euro;")) { repl = "€"; skip = 6; }
-            else if (string_starts_with(sub, "&pound;")) { repl = "£"; skip = 7; }
-            else if (string_starts_with(sub, "&yen;")) { repl = "¥"; skip = 5; }
-            else if (string_starts_with(sub, "&check;")) { repl = "✔"; skip = 7; }
-            else if (string_starts_with(sub, "&cross;")) { repl = "✗"; skip = 7; }
-            else if (string_starts_with(sub, "&bull;")) { repl = "•"; skip = 6; }
-
-            if (repl != null)
+            if (match_html_entity(in_str[i..], &symbol, &skip))
             {
-                int r = 0;
-                while (repl[r] != 0 && out_p < max_len - 1)
+                for (sz r = 0; r < (sz)symbol.len && out_p < max_len - 1; r++)
                 {
-                    out_buf[out_p++] = repl[r++];
+                    out_buf[out_p++] = symbol[r];
                 }
                 i += skip;
                 continue;
