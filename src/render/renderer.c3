@@ -5,7 +5,6 @@ import std::core::mem;
 import std::collections::list;
 import logic;
 import ansi;
-import layout;
 import math;
 import strutils;
 import buffer;
@@ -167,7 +166,7 @@ fn void emit_table_line_cb(void* ctx_ptr, String text, int src_line)
 
 fn void render_wrapped_spans(
     void* emit_ctx,
-    layout::EmitLineFn emit_fn,
+    EmitLineFn emit_fn,
     Span[] spans,
     int src_line,
     int max_w,
@@ -532,7 +531,7 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                 render_wrapped_spans((void*)&ctx, &emit_table_line_cb, b.list_item.spans, b.src_line_start, width - 4, cont_full.to_string(), first_full.to_string(), plain, config.no_wrap);
 
             case BlockKind.TABLE:
-                layout::render_table(&b.table, b.src_line_start, width, plain, (void*)&ctx, &emit_table_line_cb);
+                render_table(&b.table, b.src_line_start, width, plain, (void*)&ctx, &emit_table_line_cb);
 
             case BlockKind.MATH_BLOCK:
                 MathBox mbox = math::render_latex_to_box(ctx.arena, b.math_block.latex);

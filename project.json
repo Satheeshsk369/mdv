@@ -16,7 +16,6 @@
         "src/logic/**",
         "src/parser/**",
         "src/math/**",
-        "src/layout/**",
         "src/render/**",
         "src/sys/**"
       ]

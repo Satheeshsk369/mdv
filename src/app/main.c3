@@ -9,7 +9,6 @@ import terminal;
 import strutils;
 import parser;
 import render;
-import layout;
 import app;
 
 extern fn int isatty(int fd);

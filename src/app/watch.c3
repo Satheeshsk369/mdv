@@ -6,7 +6,6 @@ import std::collections::list;
 import logic;
 import parser;
 import render;
-import layout;
 import ansi;
 import terminal;
 import strutils;
@@ -141,41 +140,6 @@ fn bool char_eq_ignore_case(char a, char b)
     if (a >= 'A' && a <= 'Z') a = (char)(a + ('a' - 'A'));
     if (b >= 'A' && b <= 'Z') b = (char)(b + ('a' - 'A'));
     return a == b;
-}
-
-struct ScrollVelocity {
-    int key_streak;
-    int wheel_streak;
-    int last_dir;
-    int streak_ticks;
-}
-
-fn int get_accelerated_step(ScrollVelocity* v, int dir, bool is_wheel)
-{
-    if (v.last_dir != dir || v.streak_ticks > 8)
-    {
-        v.key_streak = 0;
-        v.wheel_streak = 0;
-    }
-    v.last_dir = dir;
-    v.streak_ticks = 0;
-
-    if (is_wheel)
-    {
-        v.wheel_streak++;
-        if (v.wheel_streak > 12) return 12;
-        if (v.wheel_streak > 6) return 8;
-        if (v.wheel_streak > 2) return 5;
-        return 3;
-    }
-    else
-    {
-        v.key_streak++;
-        if (v.key_streak > 20) return 5;
-        if (v.key_streak > 10) return 3;
-        if (v.key_streak > 4) return 2;
-        return 1;
-    }
 }
 
 fn void append_with_search_highlight(buffer::ByteBuffer* fb, String line, String query, bool is_cur_match_line)
@@ -784,7 +748,6 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     }
 
     // TUI state
-    ScrollVelocity velocity = {};
     bool show_toc = false;
     int toc_cursor = 0;
     bool show_help = false;
@@ -854,7 +817,6 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 need_redraw = true;
             }
         }
-        velocity.streak_ticks++;
 
         // Process keypresses
         while (true)
@@ -1222,10 +1184,9 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                     need_redraw = true;
                 }
             }
-            else if (key == 'j' || key == 1000) // Down (with acceleration)
+            else if (key == 'j' || key == 1000) // Down
             {
-                int step = get_accelerated_step(&velocity, 1, false);
-                cursor_line += step;
+                cursor_line++;
                 if (cursor_line >= total_lines) cursor_line = total_lines > 0 ? total_lines - 1 : 0;
                 int scrolloff = view_height > 6 ? 2 : 0;
                 if (cursor_line + scrolloff >= scroll_top + view_height)
@@ -1235,10 +1196,9 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 }
                 need_redraw = true;
             }
-            else if (key == 'k' || key == 1001) // Up (with acceleration)
+            else if (key == 'k' || key == 1001) // Up
             {
-                int step = get_accelerated_step(&velocity, -1, false);
-                cursor_line -= step;
+                cursor_line--;
                 if (cursor_line < 0) cursor_line = 0;
                 int scrolloff = view_height > 6 ? 2 : 0;
                 if (cursor_line - scrolloff < scroll_top)
@@ -1248,9 +1208,9 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 }
                 need_redraw = true;
             }
-            else if (key == 1012) // Mouse Wheel Up (with acceleration)
+            else if (key == 1012) // Mouse Wheel Up
             {
-                int step = get_accelerated_step(&velocity, -1, true);
+                int step = 3;
                 scroll_top -= step;
                 if (scroll_top < 0) scroll_top = 0;
                 cursor_line -= step;
@@ -1259,9 +1219,9 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 if (cursor_line >= scroll_top + view_height) cursor_line = scroll_top + view_height - 1;
                 need_redraw = true;
             }
-            else if (key == 1013) // Mouse Wheel Down (with acceleration)
+            else if (key == 1013) // Mouse Wheel Down
             {
-                int step = get_accelerated_step(&velocity, 1, true);
+                int step = 3;
                 scroll_top += step;
                 if (scroll_top > max_scroll) scroll_top = max_scroll;
                 cursor_line += step;
@@ -1532,90 +1492,5 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
 
         // Wait up to 30ms for keyboard/terminal input event; if timeout, loop checks file state
         terminal::wait_for_input(30);
-    }
-}
-
-fn int render_doc_to_stdout(char* filename, int width, bool no_wrap)
-{
-    char* content = strutils::load_file_string(filename);
-    if (content == null)
-    {
-        if (!ansi::plain_mode) io::print(ansi::FG_PINK);
-        io::printfn("Error: Could not open file '%s'", (ZString)filename);
-        if (!ansi::plain_mode) io::print(ansi::RESET);
-        return 0;
-    }
-    defer mem::free(content);
-
-    RenderConfig config;
-    config.width = width;
-    config.plain = ansi::plain_mode;
-    config.no_wrap = no_wrap;
-
-    String content_str = (String)content[:strutils::str_len(content)];
-    Document doc = parser::parse_document(content_str);
-    defer doc.free();
-
-    VisualDocument vdoc = render::render_document(&doc, config);
-    defer vdoc.free();
-
-    for (usz i = 0; i < vdoc.lines.len; i++)
-    {
-        io::printn(vdoc.lines[i].text);
-    }
-
-    return (int)vdoc.lines.len;
-}
-
-fn void run_simple_watch(char* filename, bool no_wrap)
-{
-    terminal::setup_signals();
-    terminal::enable_raw_mode();
-    defer terminal::disable_raw_mode();
-
-    terminal::FileState prev_state;
-    if (!terminal::get_file_state(filename, &prev_state))
-    {
-        if (!ansi::plain_mode) io::print(ansi::FG_PINK);
-        io::printfn("Error: Could not open file '%s'", (ZString)filename);
-        if (!ansi::plain_mode) io::print(ansi::RESET);
-        return;
-    }
-
-    int prev_width = terminal::get_width();
-
-    // Clear terminal screen & scrollback and position at top
-    terminal::write_direct("\x1b[H\x1b[2J\x1b[3J");
-
-    // Render initial view
-    render_doc_to_stdout(filename, prev_width, no_wrap);
-
-    while (true)
-    {
-        int key = terminal::poll_key();
-        if (key == 'q' || key == 'Q' || key == 27 || key == 3)
-        {
-            break;
-        }
-
-        terminal::usleep(50000); // 50ms polling
-
-        int cur_width = terminal::get_width();
-        terminal::FileState cur_state;
-        bool exists = terminal::get_file_state(filename, &cur_state);
-
-        bool width_changed = (cur_width != prev_width);
-        bool file_changed = exists && terminal::file_has_changed(&prev_state, &cur_state);
-
-        if (file_changed || width_changed)
-        {
-            if (exists) prev_state = cur_state;
-            prev_width = cur_width;
-
-            // Completely clear screen and scrollback, move cursor to top-left
-            terminal::write_direct("\x1b[H\x1b[2J\x1b[3J");
-
-            render_doc_to_stdout(filename, cur_width, no_wrap);
-        }
     }
 }

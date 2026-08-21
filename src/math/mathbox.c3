@@ -179,8 +179,8 @@ fn MathBox box_fraction(logic::Arena* arena, MathBox num, MathBox den)
 fn MathBox box_sqrt(logic::Arena* arena, MathBox inner, MathBox degree)
 {
     int deg_w = degree.width;
-    int left_w = (deg_w > 0 ? deg_w + 1 : 1);
-    int w = left_w + 1 + inner.width;
+    int prefix_w = deg_w + 2;
+    int w = prefix_w + inner.width;
     int new_h = inner.height + 1;
     int new_base = inner.baseline + 1;
 
@@ -190,33 +190,29 @@ fn MathBox box_sqrt(logic::Arena* arena, MathBox inner, MathBox degree)
     mb.init(512);
     defer mb.free();
 
-    // Top vinculum overline: [deg_spaces] ┌───
+    // Top row 0 (vinculum overline): [deg] ┌───
     mb.reset();
-    if (deg_w > 0) mb.append_spaces(deg_w);
-    mb.append_spaces(left_w - deg_w);
+    if (deg_w > 0)
+    {
+        mb.append_slice(degree.rows[0]);
+    }
+    mb.append_char(' ');
     mb.append_zstr("┌");
-    mb.append_repeat("─", inner.width + 1);
+    mb.append_repeat("─", inner.width);
     r_buf[0] = mb.to_arena_string(arena);
 
-    // Inner rows with radical symbol
+    // Inner rows (1 .. inner.height)
     for (int r = 0; r < inner.height; r++)
     {
         mb.reset();
+        if (deg_w > 0) mb.append_spaces(deg_w);
+
         if (r == inner.height - 1)
         {
-            if (deg_w > 0)
-            {
-                mb.append_slice(degree.rows[0]);
-                mb.append_zstr("√ ");
-            }
-            else
-            {
-                mb.append_zstr("√ ");
-            }
+            mb.append_zstr("√ ");
         }
         else
         {
-            mb.append_spaces(left_w);
             mb.append_zstr("│ ");
         }
 
@@ -229,7 +225,7 @@ fn MathBox box_sqrt(logic::Arena* arena, MathBox inner, MathBox degree)
     }
 
     MathBox res;
-    res.width = w + 1;
+    res.width = w;
     res.height = new_h;
     res.baseline = new_base;
     res.rows = r_buf[0 : (usz)new_h];

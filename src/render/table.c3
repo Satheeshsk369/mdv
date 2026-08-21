@@ -1,4 +1,4 @@
-module layout;
+module render;
 
 import std::core::mem;
 import std::collections::list;

@@ -5,7 +5,6 @@ import std::core::mem;
 import std::collections::list;
 import logic;
 import ansi;
-import layout;
 import math;
 import parser;
 import strutils;
@@ -174,7 +173,7 @@ fn void flush_table(StreamContext* ctx, logic::Arena* scratch)
     tbl.headers = header_row;
     tbl.rows = body_rows[0 : (usz)(ctx.table_lines.size - 2)];
 
-    layout::render_table(&tbl, 0, ctx.width, ctx.plain, null, fn void(void* c, String s, int l) {
+    render_table(&tbl, 0, ctx.width, ctx.plain, null, fn void(void* c, String s, int l) {
         io::printn(s);
     });
 

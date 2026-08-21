@@ -8,7 +8,6 @@ import strutils;
 import buffer;
 import parser;
 import math;
-import layout;
 import render;
 
 fn void test_unicode_display_width() @test
