@@ -384,6 +384,7 @@ fn void draw_presentation_viewport(
 )
 {
     fb.reset();
+    if (step == null || step_idx < 0 || total_steps <= 0) return;
 
     // Disable line wrap and move cursor to top-left (1,1)
     fb.append_zstr("\x1b[?7l\x1b[H");
@@ -427,7 +428,15 @@ fn void draw_presentation_viewport(
     // 2. Render Step AST into lines
     Document step_doc;
     step_doc.blocks = step.blocks;
-    VisualDocument step_vdoc = render::render_document(&step_doc, config);
+    VisualDocument step_vdoc;
+    if (step.blocks.len > 0)
+    {
+        step_vdoc = render::render_document(&step_doc, config);
+    }
+    else
+    {
+        step_vdoc.init();
+    }
     defer step_vdoc.free();
 
     int total_lines = step_vdoc.get_total_lines();
@@ -1380,6 +1389,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                         doc = parser::parse_document(content_str);
                         vdoc = render::render_document(&doc, config);
                         extract_toc(&doc, &vdoc, &toc);
+                        present_arena.reset();
                         extract_presentation_steps(&doc, &present_steps, &present_arena);
                         if (present_step_idx >= (int)present_steps.size)
                         {
@@ -1735,6 +1745,10 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                                 doc = parser::parse_document(content_str);
                                 vdoc = render::render_document(&doc, config);
                                 extract_toc(&doc, &vdoc, &toc);
+                                present_arena.reset();
+                                extract_presentation_steps(&doc, &present_steps, &present_arena);
+                                present_step_idx = 0;
+                                present_scroll_top = 0;
                                 total_lines = vdoc.get_total_lines();
                                 max_scroll = total_lines > 0 ? total_lines - 1 : 0;
                                 scroll_top = 0;
@@ -2042,6 +2056,12 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                     doc = parser::parse_document(content_str);
                     vdoc = render::render_document(&doc, config);
                     extract_toc(&doc, &vdoc, &toc);
+                    present_arena.reset();
+                    extract_presentation_steps(&doc, &present_steps, &present_arena);
+                    if (present_step_idx >= (int)present_steps.size)
+                    {
+                        present_step_idx = (int)present_steps.size > 0 ? (int)present_steps.size - 1 : 0;
+                    }
                     total_lines = vdoc.get_total_lines();
                     max_scroll = total_lines > 0 ? total_lines - 1 : 0;
                     cursor_line = vdoc.find_visual_line(cur_src - 1);
@@ -2129,6 +2149,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 doc = parser::parse_document(new_str);
                 vdoc = render::render_document(&doc, config);
                 extract_toc(&doc, &vdoc, &toc);
+                present_arena.reset();
                 extract_presentation_steps(&doc, &present_steps, &present_arena);
                 if (present_step_idx >= (int)present_steps.size)
                 {
@@ -2159,9 +2180,21 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
         {
             if (presentation_mode && !show_help)
             {
-                if (present_steps.size > 0 && present_step_idx < (int)present_steps.size)
+                if (present_steps.size > 0)
                 {
-                    draw_presentation_viewport(&fb, &present_steps.entries[present_step_idx], present_step_idx, (int)present_steps.size, config, width, height, &cur_filename[0], present_scroll_top);
+                    if (present_step_idx < 0) present_step_idx = 0;
+                    if (present_step_idx >= (int)present_steps.size) present_step_idx = (int)present_steps.size - 1;
+                    draw_presentation_viewport(
+                        &fb,
+                        &present_steps.entries[(usz)present_step_idx],
+                        present_step_idx,
+                        (int)present_steps.size,
+                        config,
+                        width,
+                        height,
+                        &cur_filename[0],
+                        present_scroll_top
+                    );
                 }
             }
             else
