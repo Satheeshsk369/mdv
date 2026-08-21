@@ -9,25 +9,25 @@ extern fn char* getenv(char* name);
 
 fn int main(String[] args)
 {
-    io::print(ansi::FG_CYAN);
+    io::print((ZString)ansi::fg_cyan);
     io::printn("==> Building mdv target…");
-    io::print(ansi::RESET);
+    io::print((ZString)ansi::RESET);
 
     int res = system("c3c build mdv");
     if (res != 0)
     {
-        io::print(ansi::FG_PINK);
+        io::print((ZString)ansi::fg_pink);
         io::printn("Error: Failed to build mdv target");
-        io::print(ansi::RESET);
+        io::print((ZString)ansi::RESET);
         return 1;
     }
 
     char* home = getenv("HOME");
     if (home == null || home[0] == 0)
     {
-        io::print(ansi::FG_PINK);
+        io::print((ZString)ansi::fg_pink);
         io::printn("Error: HOME environment variable is not set");
-        io::print(ansi::RESET);
+        io::print((ZString)ansi::RESET);
         return 1;
     }
 
@@ -51,18 +51,18 @@ fn int main(String[] args)
     int copy_res = system(&cmd[0]);
     if (copy_res != 0)
     {
-        io::print(ansi::FG_PINK);
+        io::print((ZString)ansi::fg_pink);
         io::printn("Error: Failed to copy binary to ~/.local/bin/mdv");
-        io::print(ansi::RESET);
+        io::print((ZString)ansi::RESET);
         return 1;
     }
 
-    io::print(ansi::FG_GREEN);
-    io::print(ansi::BOLD);
+    io::print((ZString)ansi::fg_green);
+    io::print((ZString)ansi::BOLD);
     io::print("✔ Successfully installed mdv to ");
-    io::print(ansi::RESET);
-    io::print(ansi::FG_CYAN);
+    io::print((ZString)ansi::RESET);
+    io::print((ZString)ansi::fg_cyan);
     io::printfn("%s/.local/bin/mdv", (ZString)home);
-    io::print(ansi::RESET);
+    io::print((ZString)ansi::RESET);
     return 0;
 }

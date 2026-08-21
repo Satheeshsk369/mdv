@@ -326,7 +326,7 @@ fn void draw_viewport(
         fb.append_zstr(ansi::RESET);
         fb.append_zstr("\x1b[K\n");
 
-        char*[20] help_rows = {
+        char*[19] help_rows = {
             "\x1b[38;2;102;217;239m\x1b[1mVertical Navigation:\x1b[0m",
             "  \x1b[38;2;230;219;116mj / ↓\x1b[0m                 Scroll down (accelerated)",
             "  \x1b[38;2;230;219;116mk / ↑\x1b[0m                 Scroll up (accelerated)",
@@ -340,8 +340,7 @@ fn void draw_viewport(
             "  \x1b[38;2;230;219;116mh / l / ← / →\x1b[0m         Horizontal scroll (accelerated)",
             "",
             "\x1b[38;2;102;217;239m\x1b[1mFeatures & Actions:\x1b[0m",
-            "  \x1b[38;2;166;226;46mTab\x1b[0m                   Toggle Document Outline (Table of Contents)",
-            "  \x1b[38;2;166;226;46mt\x1b[0m                     Toggle Theme (Dark / Light)",
+            "  \x1b[38;2;166;226;46mTab / t\x1b[0m               Toggle Document Outline (Table of Contents)",
             "  \x1b[38;2;166;226;46mo\x1b[0m                     Switch Document (Markdown File Tree)",
             "  \x1b[38;2;166;226;46m/\x1b[0m                     In-document search (n next, N prev)",
             "  \x1b[38;2;166;226;46me\x1b[0m                     Open $EDITOR at current line",
@@ -351,7 +350,7 @@ fn void draw_viewport(
 
         for (int r = 0; r < view_height; r++)
         {
-            if (r < 20)
+            if (r < 19)
             {
                 fb.append_zstr("  ");
                 fb.append_zstr(help_rows[r]);
@@ -715,25 +714,20 @@ fn void draw_viewport(
     header_left.append_int(total);
     header_left.append_zstr(" · ");
     header_left.append_int(pct);
-    header_left.append_zstr("%");
-    if (ansi::current_theme == ansi::Theme.LIGHT)
-    {
-        header_left.append_zstr(" · Light");
-    }
-    header_left.append_zstr(")");
+    header_left.append_zstr("%)");
     header_left.append_zstr(ansi::RESET);
 
     int left_w = strutils::string_display_width(header_left.to_string());
     fb.append_slice(header_left.to_string());
 
-    String help_text = "[? Help │ Tab TOC │ t Theme │ q Quit]";
+    String help_text = "[? Help │ Tab TOC │ q Quit]";
     int help_w = strutils::string_display_width(help_text);
     int pad = term_width - left_w - help_w - 1;
     if (pad > 0)
     {
         fb.append_spaces(pad);
         fb.append_zstr(ansi::fg_muted);
-        fb.append_zstr("[? Help │ Tab TOC │ t Theme │ q Quit]");
+        fb.append_zstr("[? Help │ Tab TOC │ q Quit]");
         fb.append_zstr(ansi::RESET);
     }
     fb.append_zstr("\x1b[K\n");
@@ -1543,19 +1537,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 show_help = true;
                 need_redraw = true;
             }
-            else if (key == 't' || key == 'T') // 't' -> Toggle Theme (Dark / Light)
-            {
-                ansi::toggle_theme();
-                strutils::copy_str(&status_msg_buf[0], ansi::current_theme == ansi::Theme.LIGHT ? "✔ Switched to Light Theme" : "✔ Switched to Dark Theme", 128);
-                status_ticks = 40;
-                vdoc.free();
-                vdoc = render::render_document(&doc, config);
-                extract_toc(&doc, &vdoc, &toc);
-                total_lines = vdoc.get_total_lines();
-                max_scroll = total_lines > 0 ? total_lines - 1 : 0;
-                need_redraw = true;
-            }
-            else if (key == 9) // Tab -> Toggle Document Outline (TOC)
+            else if (key == 9 || key == 't' || key == 'T') // Tab / 't' -> Toggle Document Outline (TOC)
             {
                 show_toc = !show_toc;
                 need_redraw = true;

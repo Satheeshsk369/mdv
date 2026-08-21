@@ -9,6 +9,7 @@ import buffer;
 import parser;
 import math;
 import render;
+import ansi;
 
 fn void test_unicode_display_width() @test
 {
@@ -397,5 +398,29 @@ fn void test_logic_bitstruct_flags() @test
     test::eq(m_flags.display_mode, true);
     test::eq(m_flags.is_fraction_num, true);
     test::eq(m_flags.in_subscript, false);
+}
+
+fn void test_ansi_monoid_and_fluent_builder() @test
+{
+    // Monoid combining
+    ansi::Style s1 = ansi::style_empty().bold().cyan();
+    ansi::Style s2 = ansi::style_empty().underline().red();
+    ansi::Style s_combined = s1.combine(s2);
+
+    test::eq(s_combined.is_bold, true);
+    test::eq(s_combined.is_underline, true);
+    test::eq(s_combined.fg_color, ansi::fg_pink);
+
+    // Fluent styled text rendering
+    buffer::ByteBuffer bb;
+    bb.init(256);
+    defer bb.free();
+
+    ansi::Styled st = ansi::text("Hello World").bold().green();
+    st.render(&bb);
+    String rendered = bb.to_string();
+
+    test::gt(rendered.len, 11);
+    test::eq(strutils::string_contains(rendered, "Hello World"), true);
 }
 
