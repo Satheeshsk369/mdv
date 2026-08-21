@@ -274,18 +274,18 @@ fn String transform_math(logic::Arena* arena, String input)
                         if (t_num == "5" && t_den == "8") { mb.append_zstr("⅝"); continue; }
                         if (t_num == "7" && t_den == "8") { mb.append_zstr("⅞"); continue; }
 
-                        bool complex_num = (t_num.len > 1 && (t_num[0] != '(' || t_num[t_num.len - 1] != ')'));
-                        bool complex_den = (t_den.len > 1 && (t_den[0] != '(' || t_den[t_den.len - 1] != ')'));
+                        bool has_op_num = strutils::string_contains(t_num, "+") || strutils::string_contains(t_num, "-") || strutils::string_contains(t_num, "=") || strutils::string_contains(t_num, " ");
+                        bool has_op_den = strutils::string_contains(t_den, "+") || strutils::string_contains(t_den, "-") || strutils::string_contains(t_den, "=") || strutils::string_contains(t_den, " ");
 
-                        if (complex_num) mb.append_char('(');
+                        if (has_op_num) mb.append_char('(');
                         mb.append_slice(t_num);
-                        if (complex_num) mb.append_char(')');
+                        if (has_op_num) mb.append_char(')');
 
-                        mb.append_zstr(" / ");
+                        mb.append_char('/');
 
-                        if (complex_den) mb.append_char('(');
+                        if (has_op_den) mb.append_char('(');
                         mb.append_slice(t_den);
-                        if (complex_den) mb.append_char(')');
+                        if (has_op_den) mb.append_char(')');
                         continue;
                     }
                 }
@@ -341,7 +341,8 @@ fn String transform_math(logic::Arena* arena, String input)
                     if (i < (usz)input.len && input[i] == '}') i++;
 
                     String t_rad = transform_math(arena, rad);
-                    if (t_rad.len > 1 && (t_rad[0] != '(' || t_rad[t_rad.len - 1] != ')'))
+                    bool has_op_rad = strutils::string_contains(t_rad, "+") || strutils::string_contains(t_rad, "-") || strutils::string_contains(t_rad, "=") || strutils::string_contains(t_rad, " ");
+                    if (has_op_rad && (t_rad[0] != '(' || t_rad[t_rad.len - 1] != ')'))
                     {
                         mb.append_char('(');
                         mb.append_slice(t_rad);

@@ -95,9 +95,16 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
             if (!plain) b.append_zstr((char*)ansi::RESET);
 
         case SpanKind.LINK:
+            if (!plain && span.url.len > 0)
+            {
+                b.append_zstr("\x1b]8;;");
+                b.append_slice(span.url);
+                b.append_zstr("\x1b\\");
+            }
             if (!plain)
             {
                 b.append_zstr((char*)ansi::FG_CYAN);
+                b.append_zstr((char*)ansi::UNDERLINE);
             }
             if (span.children.len > 0)
             {
@@ -111,6 +118,10 @@ fn void render_span(buffer::ByteBuffer* b, Span span, bool plain)
                 b.append_slice(span.text);
             }
             if (!plain) b.append_zstr((char*)ansi::RESET);
+            if (!plain && span.url.len > 0)
+            {
+                b.append_zstr("\x1b]8;;\x1b\\");
+            }
 
             if (span.url.len > 0)
             {
