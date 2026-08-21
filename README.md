@@ -1,14 +1,18 @@
 # mdv
 
-A standalone, high-performance Markdown and 2D LaTeX math terminal viewer written in **C3**. Designed for fast visual previewing in terminal workflows, multiplexers, and CLI pipelines.
+A standalone, high-performance Markdown, AST query, and 2D LaTeX math terminal viewer written in **C3**. Designed for fast visual previewing in terminal workflows, multiplexers, and scriptable Unix CLI pipelines.
 
 ---
 
 ## Features
 
-- **Blazing Fast Native C3:** Instant parsing and Truecolor ANSI formatting with zero external runtime dependencies.
-- **Built-in Syntax Highlighter:**
-  - Automatic keyword, type, string, comment, number, and function token highlighting inside code blocks for C, C3, Python, Rust, Go, Zig, JavaScript, TypeScript, Bash, JSON, YAML, TOML, SQL, HTML, and CSS.
+- **Blazing Fast Native C3:** Instant parsing, Truecolor ANSI formatting, and AST querying with zero external runtime dependencies.
+- **Vim-Style CRUD Mutation Grammar:**
+  - Full support for `[Verb] + [Noun]` operations (`-y` yank, `-d` delete, `-c` change, `-a` append, `-i` insert, `-w` save in-place).
+- **AST-Aware Querying & Section Anchoring:**
+  - Slices heading sections and nested subtrees by slug (`mdv doc.md#installation`) or flag (`-H "Quick Start"`).
+  - Extracts code blocks by language/index (`--code python:1 --raw | python3`), tables (`--table 1 --csv`), and math blocks (`--math 1`).
+  - Document outline generation (`--toc`) and structural metrics (`--count`).
 - **2D Multi-line LaTeX Math Engine:**
   - Multi-line fractions (`\frac{a}{b}`, `\cfrac`) with dynamic horizontal division bars (`───`).
   - 5-row Summations ($\Sigma$), Products ($\Pi$), and Scalable Integrals (`⌠ │ ⌡`) with upper and lower limits.
@@ -20,27 +24,18 @@ A standalone, high-performance Markdown and 2D LaTeX math terminal viewer writte
   - Boxed formulas (`\boxed{...}`), horizontal braces (`\overbrace`, `\underbrace`), multi-character vectors (`\overrightarrow{AB}`), and cancellations (`\cancel{x}`).
   - Greek letters, calculus operators, logic, set theory, blackboard bold ($\mathbb{R}$), and calligraphic ($\mathcal{L}$) scripts.
   - Compact single-line Unicode math for inline `$ ... $` equations.
+- **Built-in Syntax Highlighter:**
+  - Automatic keyword, type, string, comment, number, and function token highlighting inside code blocks for C, C3, Python, Rust, Go, Zig, JavaScript, TypeScript, Bash, JSON, YAML, TOML, SQL, HTML, and CSS.
+- **Live File-Watching with Terminal Velocity Acceleration:**
+  - Smooth accelerated keyboard & mouse scrolling that ramps up velocity during rapid/held navigation.
+  - Half-page jumping (`u` / `d`), outline modal (`Tab` / `t`), document search (`/`), and editor jumping (`e`).
 - **Column & Word Wrapping by Default:**
-  - Paragraphs, callouts, blockquotes, and lists wrap cleanly at word boundaries to fit the terminal width.
+  - Paragraphs, callouts, blockquotes, and lists wrap cleanly at word boundaries to fit the terminal width (or custom `-W <cols>`).
   - Optional `-nw` / `--no-wrap` flag with horizontal scrolling (`←` / `→` or `h` / `l`).
 - **YAML Frontmatter Cards:**
   - Metadata headers (`title:`, `author:`, `date:`, `version:`) automatically format into clean header cards.
-- **Footnotes & References:**
-  - Inline references (`[^1]`) and definition blocks (`[^1]: ...`).
-- **HTML Entity Decoding:**
-  - Decodes `&copy;`, `&trade;`, `&mdash;`, `&ndash;`, `&plusmn;`, `&times;`, `&divide;`, `&infin;`, `&le;`, `&ge;`, `&euro;`, `&pound;`, `&check;`, `&bull;`.
-- **Live File-Watching with Instant Line Sync & SGR Mouse Scrolling:**
-  - Seamless mouse wheel and keyboard scrolling without screen artifacts.
-  - Automatically detects file edits on disk, re-renders in milliseconds, and smoothly scrolls to keep changed lines in view.
-- **Interactive TUI Controls in Watch Mode:**
-  - `Tab` / `t`: Interactive Document Outline (TOC popup) with instant heading jumping.
-  - `/`: In-document interactive search with `n` (next) and `N` (previous) match navigation.
-  - `w`: Toggle between Wrap mode and No-Wrap mode.
-  - `h` / `l` / `←` / `→`: Horizontal scroll in no-wrap mode.
-  - `?`: Toggle in-viewer interactive keybindings help screen.
-  - `Esc`: Dismiss search highlights or close modal dialogs (does not quit).
-  - `y`: Instant document copying to system clipboard via ANSI OSC 52 sequences.
-  - `q` / `Ctrl+C`: Exit viewer.
+- **Unicode Box Tables & Callouts:**
+  - Auto-column sizing with alignment markers (`:---:`) and GitHub/Obsidian callouts (`[!NOTE]`, `[!TIP]`, `[!WARNING]`, `[!IMPORTANT]`, `[!CAUTION]`).
 
 ---
 
@@ -53,23 +48,132 @@ This compiles the native executable and installs the `mdv` binary globally to `~
 
 ---
 
-## Global Usage
+## Vim-Style AST Query & Mutation Grammar
+
+`mdv` provides a concise `[Verb] + [Noun / Target]` grammar for AST-level querying, deletion, replacement, and insertion:
+
+### 1. Verbs (Actions)
+| Flag | Action | Description |
+| :--- | :--- | :--- |
+| **`-y, --yank`** | Yank / Query | Extract and render target block or section (**Default**). |
+| **`-d, --delete`** | Delete | Remove the target block or section cleanly from AST. |
+| **`-c, --change`** | Change / Replace | Replace target content with new content from argument or stdin. |
+| **`-a, --append`** | Append | Insert new content at the bottom of the target section. |
+| **`-i, --insert`** | Insert / Prepend | Insert new content at the top of the section (immediately under heading). |
+| **`-w, --write, --in-place`** | Save to Disk | Save modifications back to file on disk atomically (default: stdout). |
+
+### 2. Nouns (Target Specifiers)
+| Specifier | Target Type | Example |
+| :--- | :--- | :--- |
+| **`#slug`** or **`s:<title>`** | Heading Section + Children | `#installation`, `s:"Quick Start"` |
+| **`c:<lang>[:idx]`** | Code Block (language + index) | `c:python:1`, `c:bash` |
+| **`t:<idx>`** | Table (by 1-based index) | `t:1` |
+| **`m:<idx>`** | 2D Math Block (by index) | `m:1` |
+| **`k:<kind>`** | Callout by kind | `k:warning`, `k:note` |
+
+### 3. Pipeline Examples
+```bash
+# Delete a section in-place
+mdv document.md -d s:"Deprecated API" -w
+
+# Replace 1st Python code block with new script from stdin
+cat new_script.py | mdv document.md -c c:python:1 -w
+
+# Append a new step to the installation section
+echo "3. Run 'mdv' to start" | mdv document.md -a #installation -w
+
+# Insert changelog entry at the top of section
+echo "- v0.3.0 released" | mdv CHANGELOG.md -i #v0-3-0 -w
+
+# Yank 1st python code block in raw format directly into python
+mdv document.md -y c:python:1 --raw | python3
+
+# Yank 1st table directly as CSV
+mdv document.md -y t:1 --csv
+```
+
+---
+
+## AST-Aware Query, Slicing & Extraction
+
+### Section & Slug Anchors
+```bash
+# Slice and render a specific section by heading slug
+mdv document.md#installation
+mdv document.md#2-latex-math-formulas
+
+# Or via flag (case-insensitive substring or slug match)
+mdv document.md -H "Quick Start"
+mdv document.md --section "API Reference"
+```
+
+### Typed Block Extraction
+```bash
+# Extract all bash code blocks
+mdv document.md --code bash
+
+# Extract the 1st Python code block in raw format
+mdv document.md --code python:1 --raw | python3
+
+# Extract the 1st table as CSV
+mdv report.md --table 1 --csv > table.csv
+
+# Extract the 1st LaTeX display equation
+mdv paper.md --math 1
+```
+
+### Document Structure & Outline
+```bash
+# Print structured heading outline with slug anchors and line numbers
+mdv document.md --toc
+
+# Print document block counts and structure statistics
+mdv document.md --count
+
+# Filter only blocks matching a keyword or pattern
+mdv document.md --grep "Euler"
+```
+
+---
+
+## Interactive Viewer Keybindings
+
+When running `mdv file.md` interactively, the viewer features sub-millisecond redraws and velocity-accelerated scrolling:
+
+| Key | Action |
+| :--- | :--- |
+| `j` / `↓` | Scroll down (accelerates with rapid key repeat up to terminal velocity) |
+| `k` / `↑` | Scroll up (accelerates with rapid key repeat up to terminal velocity) |
+| `d` / `Ctrl+D` / `Space` | Half-page scroll down |
+| `u` / `Ctrl+U` / `Shift+Space` | Half-page scroll up |
+| `h` / `l` / `←` / `→` | Horizontal scroll (accelerated) for wide tables & code blocks |
+| `g` / `G` | Jump directly to Top / Bottom of document |
+| `: <line>` | Goto line number (e.g. `:42`) |
+| `Tab` / `t` | Toggle Document Outline (Table of Contents) modal |
+| `o` | Open Markdown File Tree switcher |
+| `/` | Live in-document search (`n` next match, `N` previous match, `Esc` clear) |
+| `e` | Open current line in `$EDITOR` (resumes watch on exit) |
+| `y` | Copy full document to clipboard via OSC 52 |
+| `w` | Toggle Wrap / No-Wrap mode |
+| `?` | Toggle Help & Keybinding cheat-sheet |
+| `q` | Quit viewer |
+
+---
+
+## Global CLI Usage
 
 ```bash
-# Open file in live watch mode with auto line sync & native mouse selection (Default)
+# Open file in live watch mode with auto line sync (Default)
 mdv document.md
-
-# Open synchronized to a specific line number
-mdv document.md 45
 mdv document.md:45
-mdv document.md +45
 
 # Print rendered Markdown directly to stdout and exit immediately
 mdv -s document.md
 mdv --stdout document.md
 
-# Disable line wrapping
-mdv -nw document.md
+# Custom rendering width & disable line wrapping
+mdv -W 80 -s document.md
+mdv -nw -s document.md
 
 # Output plain text without ANSI escape codes
 mdv -p document.md
@@ -77,5 +181,5 @@ mdv --plain document.md
 
 # Stream and render from stdin
 curl -s https://raw.githubusercontent.com/.../README.md | mdv
-cat document.md | mdv
+cat document.md | mdv -s
 ```
