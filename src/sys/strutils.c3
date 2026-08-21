@@ -566,24 +566,59 @@ fn void slugify(String in_str, char* out_buf, usz max_len)
     out_buf[out_p] = 0;
 }
 
+fn String strip_leading_num_slug(String s)
+{
+    usz i = 0;
+    while (i < s.len && ((s[i] >= '0' && s[i] <= '9') || s[i] == '-' || s[i] == '.' || s[i] == '_'))
+    {
+        i++;
+    }
+    if (i < s.len) return s[i..];
+    return s;
+}
+
 fn bool slug_match(String query, String heading_title)
 {
-    if (query.len == 0) return false;
-    
-    // Direct case-insensitive substring match
-    if (string_contains_case_insensitive(heading_title, query)) return true;
+    if (query.len == 0 || heading_title.len == 0) return false;
 
-    // Slugified match
+    // Strip leading '#' from query if present
+    String q = query;
+    if (q.starts_with("#")) q = q[1..];
+    if (q.len == 0) return false;
+
+    // Strip surrounding quotes from query if present
+    if (q.len >= 2 && ((q.starts_with("\"") && q.ends_with("\"")) || (q.starts_with("'") && q.ends_with("'"))))
+    {
+        q = q[1 : q.len - 2];
+    }
+    if (q.len == 0) return false;
+    
+    // 1. Direct case-insensitive substring match
+    if (string_contains_case_insensitive(heading_title, q)) return true;
+
+    // 2. Slugified match
     char[256] q_slug;
     char[256] h_slug;
-    slugify(query, &q_slug[0], 256);
+    slugify(q, &q_slug[0], 256);
     slugify(heading_title, &h_slug[0], 256);
 
     String qs = (String)(&q_slug[0])[:str_len(&q_slug[0])];
     String hs = (String)(&h_slug[0])[:str_len(&h_slug[0])];
 
     if (qs == hs) return true;
-    if (string_contains(hs, qs)) return true;
+    if (string_contains(hs, qs) || string_contains(qs, hs)) return true;
+
+    // 3. Number-insensitive / stripped prefix matching
+    // e.g. "1-background" -> "background", matches query "background"
+    String hs_no_num = strip_leading_num_slug(hs);
+    String qs_no_num = strip_leading_num_slug(qs);
+
+    if (qs == hs_no_num || qs_no_num == hs_no_num) return true;
+    if (hs_no_num.len > 0 && qs_no_num.len > 0)
+    {
+        if (string_contains(hs_no_num, qs_no_num) || string_contains(qs_no_num, hs_no_num)) return true;
+    }
+
     return false;
 }
 

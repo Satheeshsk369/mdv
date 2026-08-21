@@ -32,9 +32,10 @@ fn void print_help()
     io::printn("Vim-Style CRUD Operations:");
     io::printn("    -y, --yank <target>              Yank / Query target (e.g. -y #install, -y c:python:1)");
     io::printn("    -d, --delete <target>            Delete target block/section cleanly from AST");
-    io::printn("    -c, --change <target> [text]     Change / replace target content with new text");
+    io::printn("    -c, --change <target> [text]     Change / replace target body content with new text");
     io::printn("    -a, --append <target> [text]     Append content to end of section/block");
     io::printn("    -i, --insert <target> [text]     Insert content right after heading (top of section)");
+    io::printn("    --rename <target> <title>        Rename section heading title");
     io::printn("    -w, --write, --in-place          Save mutations back to disk atomically (default: stdout)");
     io::printn("");
     io::printn("Target Nouns:");
@@ -52,6 +53,8 @@ fn void print_help()
     io::printn("    -g, --grep <pattern>             Filter blocks containing pattern");
     io::printn("    --toc, --outline                 Print structured document heading outline");
     io::printn("    --count, --stats                 Print document structure & block statistics");
+    io::printn("    --word-count, --wc               Print section-by-section word count breakdown");
+    io::printn("    --lint                           Run document structure & formatting quality checks");
     io::printn("    -r, --raw, --raw-code            Emit raw code/math content without markdown fences");
     io::printn("    --csv                            Emit table directly as CSV");
     io::printn("");
@@ -102,6 +105,16 @@ fn bool execute_query_on_document(Document* doc, logic::QueryConfig* q, RenderCo
     if (q.kind == logic::QueryKind.COUNT)
     {
         logic::render_stats_stdout(doc, config.plain);
+        return true;
+    }
+    if (q.kind == logic::QueryKind.WORD_COUNT)
+    {
+        logic::render_word_count_stdout(doc, config.plain);
+        return true;
+    }
+    if (q.kind == logic::QueryKind.LINT)
+    {
+        logic::render_lint_stdout(doc, config.plain);
         return true;
     }
     if (q.kind == logic::QueryKind.CODE && q.raw)
@@ -235,6 +248,32 @@ fn int main(String[] args)
         {
             query.kind = logic::QueryKind.COUNT;
             force_stdout = true;
+            continue;
+        }
+        if (arg == "--word-count" || arg == "--wc")
+        {
+            query.kind = logic::QueryKind.WORD_COUNT;
+            force_stdout = true;
+            continue;
+        }
+        if (arg == "--lint")
+        {
+            query.kind = logic::QueryKind.LINT;
+            force_stdout = true;
+            continue;
+        }
+        if (arg == "--rename")
+        {
+            if (i + 1 < (int)args.len)
+            {
+                mutation_verb = logic::MutationVerb.RENAME;
+                strutils::copy_str(&mutation_target[0], (char*)args[++i].ptr, 128);
+                if (i + 1 < (int)args.len && !args[i + 1].starts_with("-"))
+                {
+                    mutation_content = (char*)args[++i].ptr;
+                }
+                force_stdout = true;
+            }
             continue;
         }
         if (arg == "-W" || arg == "--width")
@@ -403,7 +442,14 @@ fn int main(String[] args)
         }
         if (!arg.starts_with("-"))
         {
-            target_file = (char*)arg.ptr;
+            if (target_file == null)
+            {
+                target_file = (char*)arg.ptr;
+            }
+            else if (mutation_verb != logic::MutationVerb.NONE && mutation_content == null)
+            {
+                mutation_content = (char*)arg.ptr;
+            }
         }
         else if (arg == "-")
         {

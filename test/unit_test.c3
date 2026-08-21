@@ -486,5 +486,56 @@ fn void test_vim_style_ast_mutations() @test
     char* app_res = logic::execute_mutation(orig_src, &doc, logic::MutationVerb.APPEND, "s:Section 1", "Appended note", &arena, &app_ok);
     test::eq(app_ok, true);
     test::eq(strutils::string_contains((String)app_res[:strutils::str_len(app_res)], "Appended note"), true);
+
+    // Test Section Body Replacement (preserves heading title)
+    bool sec_chg_ok = false;
+    char* sec_chg_res = logic::execute_mutation(orig_src, &doc, logic::MutationVerb.CHANGE, "s:Section 1", "Brand new section 1 body", &arena, &sec_chg_ok);
+    test::eq(sec_chg_ok, true);
+    test::eq(strutils::string_contains((String)sec_chg_res[:strutils::str_len(sec_chg_res)], "## Section 1"), true);
+    test::eq(strutils::string_contains((String)sec_chg_res[:strutils::str_len(sec_chg_res)], "Brand new section 1 body"), true);
+    test::eq(strutils::string_contains((String)sec_chg_res[:strutils::str_len(sec_chg_res)], "Intro text"), false);
+
+    // Test Section Rename
+    bool ren_ok = false;
+    char* ren_res = logic::execute_mutation(orig_src, &doc, logic::MutationVerb.RENAME, "s:Section 1", "Renamed Section 1", &arena, &ren_ok);
+    test::eq(ren_ok, true);
+    test::eq(strutils::string_contains((String)ren_res[:strutils::str_len(ren_res)], "## Renamed Section 1"), true);
+    test::eq(strutils::string_contains((String)ren_res[:strutils::str_len(ren_res)], "Intro text"), true);
+}
+
+fn void test_fuzzy_and_number_insensitive_slug_matching() @test
+{
+    // Match "## 1. Background" via "Background", "#background", "s:Background", "1. Background", "1-background"
+    String h1 = "1. Background";
+    test::eq(strutils::slug_match("Background", h1), true);
+    test::eq(strutils::slug_match("#background", h1), true);
+    test::eq(strutils::slug_match("1. Background", h1), true);
+    test::eq(strutils::slug_match("1-background", h1), true);
+    test::eq(strutils::slug_match("\"Background\"", h1), true);
+
+    // Match "### 2.3 System Architecture & Design"
+    String h2 = "2.3 System Architecture & Design";
+    test::eq(strutils::slug_match("System Architecture", h2), true);
+    test::eq(strutils::slug_match("Architecture", h2), true);
+    test::eq(strutils::slug_match("#system-architecture-design", h2), true);
+    test::eq(strutils::slug_match("2.3", h2), true);
+}
+
+fn void test_word_count_calculation() @test
+{
+    String sample_md = "# Title\n\n## Section 1\n\nFive words in this sentence.\n\n```c3\nfn void test()\n```\n";
+    Document doc = parser::parse_document(sample_md);
+    defer doc.free();
+
+    logic::Arena arena;
+    arena.init(16384);
+    defer arena.free();
+
+    int total_words = 0;
+    for (usz i = 0; i < doc.blocks.len; i++)
+    {
+        total_words += logic::count_words_in_block(&doc.blocks[i], &arena);
+    }
+    test::gt(total_words, 5);
 }
 

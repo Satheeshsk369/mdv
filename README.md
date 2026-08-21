@@ -8,7 +8,15 @@ A standalone, high-performance Markdown, AST query, and 2D LaTeX math terminal v
 
 - **Blazing Fast Native C3:** Instant parsing, Truecolor ANSI formatting, and AST querying with zero external runtime dependencies.
 - **Vim-Style CRUD Mutation Grammar:**
-  - Full support for `[Verb] + [Noun]` operations (`-y` yank, `-d` delete, `-c` change, `-a` append, `-i` insert, `-w` save in-place).
+  - Full support for `[Verb] + [Noun]` operations (`-y` yank, `-d` delete, `-c` change body, `-a` append, `-i` insert, `--rename` title, `-w` save in-place).
+- **Fuzzy & Number-Insensitive Heading Matching:**
+  - Matches sections effortlessly (`-H "Background"`, `-c s:Background`, `#background`) regardless of numbering like `## 1. Background` or `### 2.3 System Architecture`.
+- **Preserves Headings & Document Integrity on Mutations:**
+  - Changing a section (`-c #slug`) replaces the inner body while preserving the heading and document hierarchy.
+  - Slices lines directly from the original source buffer to guarantee 100% byte-accurate preservation of comments, frontmatter, whitespace, and horizontal rules (`---`).
+- **Section Word Count & Structure Linter:**
+  - `--word-count` / `--wc`: Section-by-section word count breakdown (essential for grant proposals, essays, and reports with word limits).
+  - `--lint`: Validates heading hierarchy jumps, empty sections, and untyped code fences.
 - **AST-Aware Querying & Section Anchoring:**
   - Slices heading sections and nested subtrees by slug (`mdv doc.md#installation`) or flag (`-H "Quick Start"`).
   - Extracts code blocks by language/index (`--code python:1 --raw | python3`), tables (`--table 1 --csv`), and math blocks (`--math 1`).
@@ -56,16 +64,17 @@ This compiles the native executable and installs the `mdv` binary globally to `~
 | Flag | Action | Description |
 | :--- | :--- | :--- |
 | **`-y, --yank`** | Yank / Query | Extract and render target block or section (**Default**). |
-| **`-d, --delete`** | Delete | Remove the target block or section cleanly from AST. |
-| **`-c, --change`** | Change / Replace | Replace target content with new content from argument or stdin. |
+| **`-d, --delete`** | Delete | Remove the target block or entire section cleanly from AST. |
+| **`-c, --change`** | Change Body | Replace the body of a section (preserving heading title) with new text from arg or stdin. |
 | **`-a, --append`** | Append | Insert new content at the bottom of the target section. |
 | **`-i, --insert`** | Insert / Prepend | Insert new content at the top of the section (immediately under heading). |
+| **`--rename`** | Rename Title | Rename the section heading title while preserving body. |
 | **`-w, --write, --in-place`** | Save to Disk | Save modifications back to file on disk atomically (default: stdout). |
 
 ### 2. Nouns (Target Specifiers)
 | Specifier | Target Type | Example |
 | :--- | :--- | :--- |
-| **`#slug`** or **`s:<title>`** | Heading Section + Children | `#installation`, `s:"Quick Start"` |
+| **`#slug`** or **`s:<title>`** | Heading Section + Children | `#installation`, `s:"Quick Start"`, `s:Background` |
 | **`c:<lang>[:idx]`** | Code Block (language + index) | `c:python:1`, `c:bash` |
 | **`t:<idx>`** | Table (by 1-based index) | `t:1` |
 | **`m:<idx>`** | 2D Math Block (by index) | `m:1` |
@@ -78,6 +87,12 @@ mdv document.md -d s:"Deprecated API" -w
 
 # Replace 1st Python code block with new script from stdin
 cat new_script.py | mdv document.md -c c:python:1 -w
+
+# Replace body of section "1. Background" while keeping the heading line
+echo "New background research summary." | mdv proposal.md -c s:Background -w
+
+# Rename a section title
+mdv proposal.md --rename s:Background "1. Executive Summary" -w
 
 # Append a new step to the installation section
 echo "3. Run 'mdv' to start" | mdv document.md -a #installation -w
@@ -94,17 +109,24 @@ mdv document.md -y t:1 --csv
 
 ---
 
-## AST-Aware Query, Slicing & Extraction
+## AST-Aware Query, Slicing & Quality Checks
 
-### Section & Slug Anchors
+### Section & Slug Anchors (Fuzzy & Number-Insensitive)
 ```bash
-# Slice and render a specific section by heading slug
-mdv document.md#installation
+# Slices by heading name or slug regardless of leading numbers
+mdv document.md -H "Background"
 mdv document.md#2-latex-math-formulas
-
-# Or via flag (case-insensitive substring or slug match)
 mdv document.md -H "Quick Start"
-mdv document.md --section "API Reference"
+```
+
+### Word Count & Structure Linter
+```bash
+# Print section-by-section word count breakdown
+mdv proposal.md --wc
+mdv proposal.md --word-count
+
+# Run document quality linter (heading hierarchy, empty sections, untyped code)
+mdv document.md --lint
 ```
 
 ### Typed Block Extraction

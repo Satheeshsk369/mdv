@@ -17,6 +17,8 @@ enum QueryKind {
     CALLOUT,
     TOC,
     COUNT,
+    WORD_COUNT,
+    LINT,
     GREP
 }
 
@@ -513,7 +515,241 @@ fn void render_raw_math_stdout(Document* doc, int target_idx)
     }
 }
 
-// ── Vim-Style AST Mutation Engine (Delete, Change, Append, Insert) ─────────
+fn int count_words_in_string(String s)
+{
+    int count = 0;
+    bool in_word = false;
+    for (usz i = 0; i < s.len; i++)
+    {
+        char c = s[i];
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r')
+        {
+            in_word = false;
+        }
+        else if (!in_word)
+        {
+            in_word = true;
+            count++;
+        }
+    }
+    return count;
+}
+
+fn int count_words_in_block(Block* b, Arena* arena)
+{
+    if (b == null) return 0;
+    int count = 0;
+    switch (b.kind)
+    {
+        case BlockKind.HEADING:
+            String t = get_heading_plain_title(&b.heading, arena);
+            count += count_words_in_string(t);
+        case BlockKind.PARAGRAPH:
+            String pt = get_spans_plain_text(b.paragraph.spans, arena);
+            count += count_words_in_string(pt);
+        case BlockKind.CODE_BLOCK:
+            for (usz l = 0; l < b.code.lines.len; l++)
+            {
+                count += count_words_in_string(b.code.lines[l]);
+            }
+        case BlockKind.TABLE:
+            for (usz r = 0; r < b.table.rows.len; r++)
+            {
+                for (usz c = 0; c < b.table.rows[r].len; c++)
+                {
+                    String ct = get_spans_plain_text(b.table.rows[r][c], arena);
+                    count += count_words_in_string(ct);
+                }
+            }
+        case BlockKind.CALLOUT:
+            count += count_words_in_string(b.callout.title);
+            String cot = get_spans_plain_text(b.callout.spans, arena);
+            count += count_words_in_string(cot);
+        case BlockKind.LIST_ITEM:
+            String lit = get_spans_plain_text(b.list_item.spans, arena);
+            count += count_words_in_string(lit);
+        case BlockKind.MATH_BLOCK:
+            count += count_words_in_string(b.math_block.latex);
+        default:
+            break;
+    }
+    return count;
+}
+
+fn void render_word_count_stdout(Document* doc, bool plain)
+{
+    if (doc == null || doc.blocks.len == 0) return;
+
+    Arena arena;
+    arena.init(65536);
+    defer arena.free();
+
+    int total_words = 0;
+    int section_count = 0;
+
+    for (usz i = 0; i < doc.blocks.len; i++)
+    {
+        Block* b = &doc.blocks[i];
+        if (b.kind == BlockKind.HEADING)
+        {
+            section_count++;
+            String title = get_heading_plain_title(&b.heading, &arena);
+            int h_level = b.heading.level;
+
+            int sec_words = count_words_in_string(title);
+            for (usz j = i + 1; j < doc.blocks.len; j++)
+            {
+                Block* child = &doc.blocks[j];
+                if (child.kind == BlockKind.HEADING && child.heading.level <= h_level)
+                {
+                    break;
+                }
+                sec_words += count_words_in_block(child, &arena);
+            }
+            total_words += count_words_in_string(title);
+
+            for (int k = 1; k < h_level; k++) io::print("  ");
+
+            if (plain)
+            {
+                for (int k = 0; k < h_level; k++) io::print("#");
+                io::print(" ");
+                io::print(title);
+                io::printfn(": %d words", sec_words);
+            }
+            else
+            {
+                char* col = h_level == 1 ? ansi::fg_pink : (h_level == 2 ? ansi::fg_green : ansi::fg_orange);
+                for (int k = 0; k < h_level; k++) io::print("#");
+                io::print(" ");
+                io::printf("%s%s%s%s", (ZString)ansi::BOLD, (ZString)col, title, (ZString)ansi::RESET);
+                io::printfn(": %s%d words%s", (ZString)ansi::fg_cyan, sec_words, (ZString)ansi::RESET);
+            }
+        }
+        else
+        {
+            total_words += count_words_in_block(b, &arena);
+        }
+    }
+
+    if (plain)
+    {
+        io::printn("────────────────────────────────────────────────────────────");
+        io::printfn("Total: %d words across %d sections", total_words, section_count);
+    }
+    else
+    {
+        io::printfn("%s────────────────────────────────────────────────────────────%s", (ZString)ansi::fg_muted, (ZString)ansi::RESET);
+        io::printfn("%sTotal:%s %s%d words%s across %d sections", (ZString)ansi::BOLD, (ZString)ansi::RESET, (ZString)ansi::fg_green, total_words, (ZString)ansi::RESET, section_count);
+    }
+}
+
+fn void render_lint_stdout(Document* doc, bool plain)
+{
+    if (doc == null || doc.blocks.len == 0) return;
+
+    Arena arena;
+    arena.init(65536);
+    defer arena.free();
+
+    int warnings = 0;
+    int last_h_level = 0;
+
+    if (!plain)
+    {
+        io::printfn("%sDocument Structure & Quality Linter:%s\n", (ZString)ansi::BOLD, (ZString)ansi::RESET);
+    }
+    else
+    {
+        io::printn("Document Structure & Quality Linter:\n");
+    }
+
+    for (usz i = 0; i < doc.blocks.len; i++)
+    {
+        Block* b = &doc.blocks[i];
+        if (b.kind == BlockKind.HEADING)
+        {
+            String title = get_heading_plain_title(&b.heading, &arena);
+            int h_level = b.heading.level;
+
+            if (last_h_level > 0 && h_level > last_h_level + 1)
+            {
+                warnings++;
+                if (plain)
+                {
+                    io::printfn("  [WARN] Heading hierarchy jump: level %d to %d at '%s' (line %d)", last_h_level, h_level, title, b.src_line_start + 1);
+                }
+                else
+                {
+                    io::printfn("  %s[WARN]%s Heading hierarchy jump: level %d to %d at '%s' (line %d)", (ZString)ansi::fg_yellow, (ZString)ansi::RESET, last_h_level, h_level, title, b.src_line_start + 1);
+                }
+            }
+            last_h_level = h_level;
+
+            int body_words = 0;
+            for (usz j = i + 1; j < doc.blocks.len; j++)
+            {
+                Block* child = &doc.blocks[j];
+                if (child.kind == BlockKind.HEADING && child.heading.level <= h_level) break;
+                body_words += count_words_in_block(child, &arena);
+            }
+            if (body_words == 0)
+            {
+                warnings++;
+                if (plain)
+                {
+                    io::printfn("  [WARN] Empty section: '%s' has 0 body words (line %d)", title, b.src_line_start + 1);
+                }
+                else
+                {
+                    io::printfn("  %s[WARN]%s Empty section: '%s' has 0 body words (line %d)", (ZString)ansi::fg_yellow, (ZString)ansi::RESET, title, b.src_line_start + 1);
+                }
+            }
+        }
+        else if (b.kind == BlockKind.CODE_BLOCK)
+        {
+            if (b.code.language.len == 0)
+            {
+                warnings++;
+                if (plain)
+                {
+                    io::printfn("  [INFO] Untyped code block at line %d (missing language fence)", b.src_line_start + 1);
+                }
+                else
+                {
+                    io::printfn("  %s[INFO]%s Untyped code block at line %d (missing language fence)", (ZString)ansi::fg_cyan, (ZString)ansi::RESET, b.src_line_start + 1);
+                }
+            }
+        }
+    }
+
+    if (plain)
+    {
+        io::printn("────────────────────────────────────────────────────────────");
+        if (warnings == 0)
+        {
+            io::printn("✔ Linter passed: Document structure is clean and well-formed.");
+        }
+        else
+        {
+            io::printfn("Result: %d issue(s) detected.", warnings);
+        }
+    }
+    else
+    {
+        io::printfn("%s────────────────────────────────────────────────────────────%s", (ZString)ansi::fg_muted, (ZString)ansi::RESET);
+        if (warnings == 0)
+        {
+            io::printfn("%s✔ Linter passed:%s Document structure is clean and well-formed.", (ZString)ansi::fg_green, (ZString)ansi::RESET);
+        }
+        else
+        {
+            io::printfn("%sResult:%s %s%d issue(s) detected.%s", (ZString)ansi::BOLD, (ZString)ansi::RESET, (ZString)ansi::fg_yellow, warnings, (ZString)ansi::RESET);
+        }
+    }
+}
+
+// ── Vim-Style AST Mutation Engine (Delete, Change, Append, Insert, Rename) ─
 
 enum MutationVerb {
     NONE,
@@ -521,7 +757,8 @@ enum MutationVerb {
     DELETE,
     CHANGE,
     APPEND,
-    INSERT
+    INSERT,
+    RENAME
 }
 
 enum TargetKind {
@@ -548,61 +785,74 @@ fn TargetSpec parse_target_spec(char* target)
     spec.index = 0;
     if (target == null || target[0] == 0) return spec;
 
-    if (target[0] == '#')
+    char* t = target;
+    if (t[0] == '#')
     {
         spec.kind = TargetKind.SECTION;
-        strutils::copy_str(&spec.pattern[0], target + 1, 128);
+        strutils::copy_str(&spec.pattern[0], t + 1, 128);
         return spec;
     }
-    if (strutils::str_starts_with(target, "s:") || strutils::str_starts_with(target, "sec:") || strutils::str_starts_with(target, "section:"))
+    if (strutils::str_starts_with(t, "s:") || strutils::str_starts_with(t, "sec:") || strutils::str_starts_with(t, "section:") || strutils::str_starts_with(t, "r:") || strutils::str_starts_with(t, "rename:"))
     {
         spec.kind = TargetKind.SECTION;
         int p = 0;
-        while (target[p] != 0 && target[p] != ':') p++;
-        if (target[p] == ':') p++;
-        strutils::copy_str(&spec.pattern[0], target + p, 128);
+        while (t[p] != 0 && t[p] != ':') p++;
+        if (t[p] == ':') p++;
+        strutils::copy_str(&spec.pattern[0], t + p, 128);
+        int pat_len = strutils::str_len(&spec.pattern[0]);
+        if (pat_len >= 2 && ((spec.pattern[0] == '"' && spec.pattern[pat_len - 1] == '"') || (spec.pattern[0] == '\'' && spec.pattern[pat_len - 1] == '\'')))
+        {
+            spec.pattern[pat_len - 1] = 0;
+            strutils::copy_str(&spec.pattern[0], &spec.pattern[1], 128);
+        }
         return spec;
     }
-    if (strutils::str_starts_with(target, "c:") || strutils::str_starts_with(target, "code:"))
+    if (strutils::str_starts_with(t, "c:") || strutils::str_starts_with(t, "code:"))
     {
         spec.kind = TargetKind.CODE;
         int p = 0;
-        while (target[p] != 0 && target[p] != ':') p++;
-        if (target[p] == ':') p++;
-        strutils::parse_lang_and_index(target + p, &spec.lang[0], 64, &spec.index);
+        while (t[p] != 0 && t[p] != ':') p++;
+        if (t[p] == ':') p++;
+        strutils::parse_lang_and_index(t + p, &spec.lang[0], 64, &spec.index);
         return spec;
     }
-    if (strutils::str_starts_with(target, "t:") || strutils::str_starts_with(target, "table:") || strutils::str_starts_with(target, "tables:"))
+    if (strutils::str_starts_with(t, "t:") || strutils::str_starts_with(t, "table:") || strutils::str_starts_with(t, "tables:"))
     {
         spec.kind = TargetKind.TABLE;
         int p = 0;
-        while (target[p] != 0 && target[p] != ':') p++;
-        if (target[p] == ':') p++;
-        spec.index = strutils::parse_int(target + p);
+        while (t[p] != 0 && t[p] != ':') p++;
+        if (t[p] == ':') p++;
+        spec.index = strutils::parse_int(t + p);
         return spec;
     }
-    if (strutils::str_starts_with(target, "m:") || strutils::str_starts_with(target, "math:"))
+    if (strutils::str_starts_with(t, "m:") || strutils::str_starts_with(t, "math:"))
     {
         spec.kind = TargetKind.MATH;
         int p = 0;
-        while (target[p] != 0 && target[p] != ':') p++;
-        if (target[p] == ':') p++;
-        spec.index = strutils::parse_int(target + p);
+        while (t[p] != 0 && t[p] != ':') p++;
+        if (t[p] == ':') p++;
+        spec.index = strutils::parse_int(t + p);
         return spec;
     }
-    if (strutils::str_starts_with(target, "k:") || strutils::str_starts_with(target, "callout:"))
+    if (strutils::str_starts_with(t, "k:") || strutils::str_starts_with(t, "callout:"))
     {
         spec.kind = TargetKind.CALLOUT;
         int p = 0;
-        while (target[p] != 0 && target[p] != ':') p++;
-        if (target[p] == ':') p++;
-        strutils::copy_str(&spec.pattern[0], target + p, 128);
+        while (t[p] != 0 && t[p] != ':') p++;
+        if (t[p] == ':') p++;
+        strutils::copy_str(&spec.pattern[0], t + p, 128);
         return spec;
     }
 
     // Default fallback: section match
     spec.kind = TargetKind.SECTION;
-    strutils::copy_str(&spec.pattern[0], target, 128);
+    strutils::copy_str(&spec.pattern[0], t, 128);
+    int pat_len = strutils::str_len(&spec.pattern[0]);
+    if (pat_len >= 2 && ((spec.pattern[0] == '"' && spec.pattern[pat_len - 1] == '"') || (spec.pattern[0] == '\'' && spec.pattern[pat_len - 1] == '\'')))
+    {
+        spec.pattern[pat_len - 1] = 0;
+        strutils::copy_str(&spec.pattern[0], &spec.pattern[1], 128);
+    }
     return spec;
 }
 
@@ -643,13 +893,13 @@ fn char* execute_mutation(
     int target_start_line = -1;
     int target_end_line = -1;
     int insert_line = -1;
+    int h_level = 1;
 
     // 2. Resolve AST node and line boundaries
     switch (spec.kind)
     {
         case TargetKind.SECTION:
             int h_match_idx = -1;
-            int h_level = 1;
             int q_len = strutils::str_len(&spec.pattern[0]);
             String q_str = (String)(&spec.pattern[0])[:(usz)q_len];
 
@@ -670,8 +920,9 @@ fn char* execute_mutation(
 
             if (h_match_idx < 0) return orig_src;
 
-            target_start_line = doc.blocks[(usz)h_match_idx].src_line_start;
-            int last_child_line = doc.blocks[(usz)h_match_idx].src_line_end;
+            int h_start = doc.blocks[(usz)h_match_idx].src_line_start;
+            int h_end = doc.blocks[(usz)h_match_idx].src_line_end;
+            int last_child_line = h_end;
 
             // Find section end (next heading of equal or higher level)
             for (usz j = (usz)h_match_idx + 1; j < doc.blocks.len; j++)
@@ -690,9 +941,27 @@ fn char* execute_mutation(
                 target_end_line = last_child_line < total_lines ? last_child_line : total_lines - 1;
             }
 
-            if (verb == MutationVerb.INSERT)
+            if (verb == MutationVerb.DELETE)
             {
-                insert_line = doc.blocks[(usz)h_match_idx].src_line_end + 1;
+                target_start_line = h_start;
+            }
+            else if (verb == MutationVerb.CHANGE)
+            {
+                // Replaces ONLY the body under the heading (preserving heading itself)
+                target_start_line = h_end + 1;
+                if (target_start_line > target_end_line)
+                {
+                    target_end_line = h_end;
+                }
+            }
+            else if (verb == MutationVerb.RENAME)
+            {
+                target_start_line = h_start;
+                target_end_line = h_end;
+            }
+            else if (verb == MutationVerb.INSERT)
+            {
+                insert_line = h_end + 1;
             }
             else if (verb == MutationVerb.APPEND)
             {
@@ -809,6 +1078,45 @@ fn char* execute_mutation(
 
         if (new_content != null && new_content[0] != 0)
         {
+            if (spec.kind == TargetKind.CODE && !strutils::str_starts_with(new_content, "```"))
+            {
+                mb.append_zstr("```");
+                if (spec.lang[0] != 0) mb.append_zstr(&spec.lang[0]);
+                mb.append_char('\n');
+                mb.append_zstr(new_content);
+                int nlen = strutils::str_len(new_content);
+                if (new_content[nlen - 1] != '\n') mb.append_char('\n');
+                mb.append_zstr("```\n");
+            }
+            else
+            {
+                mb.append_zstr(new_content);
+                int nlen = strutils::str_len(new_content);
+                if (new_content[nlen - 1] != '\n') mb.append_char('\n');
+            }
+        }
+
+        for (int l = target_end_line + 1; l < total_lines; l++)
+        {
+            mb.append_slice(src_lines.entries[(usz)l]);
+            mb.append_char('\n');
+        }
+    }
+    else if (verb == MutationVerb.RENAME)
+    {
+        for (int l = 0; l < target_start_line && l < total_lines; l++)
+        {
+            mb.append_slice(src_lines.entries[(usz)l]);
+            mb.append_char('\n');
+        }
+
+        if (new_content != null && new_content[0] != 0)
+        {
+            if (new_content[0] != '#')
+            {
+                for (int k = 0; k < h_level; k++) mb.append_char('#');
+                mb.append_char(' ');
+            }
             mb.append_zstr(new_content);
             int nlen = strutils::str_len(new_content);
             if (new_content[nlen - 1] != '\n') mb.append_char('\n');
