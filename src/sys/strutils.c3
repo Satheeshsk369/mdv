@@ -354,6 +354,31 @@ fn bool string_contains(String haystack, String needle)
     return false;
 }
 
+fn bool string_contains_case_insensitive(String haystack, String needle)
+{
+    if (needle.len == 0) return true;
+    if (haystack.len < needle.len) return false;
+    usz max_i = (usz)(haystack.len - needle.len);
+    for (usz i = 0; i <= max_i; i++)
+    {
+        bool match = true;
+        for (usz j = 0; j < (usz)needle.len; j++)
+        {
+            char h = haystack[i + j];
+            char n = needle[j];
+            if (h >= 'A' && h <= 'Z') h = (char)(h + 32);
+            if (n >= 'A' && n <= 'Z') n = (char)(n + 32);
+            if (h != n)
+            {
+                match = false;
+                break;
+            }
+        }
+        if (match) return true;
+    }
+    return false;
+}
+
 fn int find_first_diff_line(char* old_text, char* new_text)
 {
     if (old_text == null || new_text == null) return 0;
@@ -489,6 +514,101 @@ fn bool match_html_entity(String s, String* out_symbol, usz* out_skip)
     return false;
 }
 
+fn void slugify(String in_str, char* out_buf, usz max_len)
+{
+    if (out_buf == null || max_len == 0) return;
+    usz out_p = 0;
+    usz len = (usz)in_str.len;
+    bool last_was_dash = true; // avoid leading dashes
+
+    for (usz i = 0; i < len && out_p < max_len - 1; i++)
+    {
+        char c = in_str[i];
+        if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+        {
+            out_buf[out_p++] = c;
+            last_was_dash = false;
+        }
+        else if (c >= 'A' && c <= 'Z')
+        {
+            out_buf[out_p++] = (char)(c + 32); // lowercase
+            last_was_dash = false;
+        }
+        else if (c == ' ' || c == '-' || c == '_' || c == '.' || c == '/' || c == ':' || c == '&' || c == '(' || c == ')' || c == ',' || c == '\'' || c == '"')
+        {
+            if (!last_was_dash && out_p < max_len - 1)
+            {
+                out_buf[out_p++] = '-';
+                last_was_dash = true;
+            }
+        }
+    }
+
+    // Strip trailing dash
+    while (out_p > 0 && out_buf[out_p - 1] == '-')
+    {
+        out_p--;
+    }
+    out_buf[out_p] = 0;
+}
+
+fn bool slug_match(String query, String heading_title)
+{
+    if (query.len == 0) return false;
+    
+    // Direct case-insensitive substring match
+    if (string_contains_case_insensitive(heading_title, query)) return true;
+
+    // Slugified match
+    char[256] q_slug;
+    char[256] h_slug;
+    slugify(query, &q_slug[0], 256);
+    slugify(heading_title, &h_slug[0], 256);
+
+    String qs = (String)(&q_slug[0])[:str_len(&q_slug[0])];
+    String hs = (String)(&h_slug[0])[:str_len(&h_slug[0])];
+
+    if (qs == hs) return true;
+    if (string_contains(hs, qs)) return true;
+    return false;
+}
+
+fn bool split_file_and_anchor(char* input, char* file_out, char* anchor_out, usz max_len)
+{
+    if (input == null || max_len == 0) return false;
+    file_out[0] = 0;
+    anchor_out[0] = 0;
+
+    int hash_pos = -1;
+    int len = str_len(input);
+    for (int i = 0; i < len; i++)
+    {
+        if (input[i] == '#')
+        {
+            hash_pos = i;
+            break;
+        }
+    }
+
+    if (hash_pos >= 0)
+    {
+        int f_len = hash_pos;
+        if ((usz)f_len >= max_len) f_len = (int)max_len - 1;
+        for (int i = 0; i < f_len; i++) file_out[i] = input[i];
+        file_out[f_len] = 0;
+
+        int a_start = hash_pos + 1;
+        int a_len = len - a_start;
+        if ((usz)a_len >= max_len) a_len = (int)max_len - 1;
+        for (int i = 0; i < a_len; i++) anchor_out[i] = input[a_start + i];
+        anchor_out[a_len] = 0;
+        return true;
+    }
+
+    copy_str(file_out, input, (int)max_len);
+    return false;
+}
+
 fn void decode_html_entities(String in_str, char* out_buf, int max_len)
 {
     if (out_buf == null || max_len <= 0) return;
@@ -516,4 +636,51 @@ fn void decode_html_entities(String in_str, char* out_buf, int max_len)
         out_buf[out_p++] = in_str[i++];
     }
     out_buf[out_p] = 0;
+}
+
+fn void parse_lang_and_index(char* query, char* lang_out, usz max_lang, int* idx_out)
+{
+    if (lang_out != null && max_lang > 0) lang_out[0] = 0;
+    if (idx_out != null) *idx_out = 0;
+    if (query == null) return;
+
+    int colon = -1;
+    int len = str_len(query);
+    for (int i = 0; i < len; i++)
+    {
+        if (query[i] == ':')
+        {
+            colon = i;
+            break;
+        }
+    }
+
+    if (colon >= 0)
+    {
+        if (lang_out != null && max_lang > 0)
+        {
+            int l_len = colon;
+            if ((usz)l_len >= max_lang) l_len = (int)max_lang - 1;
+            for (int i = 0; i < l_len; i++) lang_out[i] = query[i];
+            lang_out[l_len] = 0;
+        }
+        if (idx_out != null)
+        {
+            *idx_out = parse_int(&query[colon + 1]);
+        }
+    }
+    else
+    {
+        if (is_numeric(query))
+        {
+            if (idx_out != null) *idx_out = parse_int(query);
+        }
+        else
+        {
+            if (lang_out != null && max_lang > 0)
+            {
+                copy_str(lang_out, query, (int)max_lang);
+            }
+        }
+    }
 }

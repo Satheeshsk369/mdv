@@ -424,3 +424,35 @@ fn void test_ansi_monoid_and_fluent_builder() @test
     test::eq(strutils::string_contains(rendered, "Hello World"), true);
 }
 
+fn void test_markdown_ast_query_and_slug_anchors() @test
+{
+    // Test slugification
+    char[128] slug;
+    strutils::slugify("2. LaTeX Math Formulas & Symbols!", &slug[0], 128);
+    test::eq((String)(&slug[0])[:strutils::str_len(&slug[0])], "2-latex-math-formulas-symbols");
+
+    // Test AST Querying
+    String sample_md = "# Title\n\n## Section 1\n\nIntro text\n\n```python\nprint('hello')\n```\n\n## Section 2\n\n| A | B |\n|---|---|\n| 1 | 2 |\n";
+    Document doc = parser::parse_document(sample_md);
+    defer doc.free();
+
+    logic::Arena arena;
+    arena.init(16384);
+    defer arena.free();
+
+    // Query section 1
+    Document sec1 = logic::query_section(&doc, "section-1", &arena);
+    test::gt(sec1.blocks.len, 0);
+    test::eq(sec1.blocks[0].kind, BlockKind.HEADING);
+
+    // Query python code block
+    Document py_code = logic::query_code_blocks(&doc, "python", 1, &arena);
+    test::eq(py_code.blocks.len, 1);
+    test::eq(py_code.blocks[0].kind, BlockKind.CODE_BLOCK);
+
+    // Query tables
+    Document tables = logic::query_tables(&doc, 1, &arena);
+    test::eq(tables.blocks.len, 1);
+    test::eq(tables.blocks[0].kind, BlockKind.TABLE);
+}
+
