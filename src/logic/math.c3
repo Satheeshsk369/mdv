@@ -282,6 +282,7 @@ enum MathCommand {
     LEFT,
     BEGIN,
     TEXT,
+    OPERATORNAME,
     QUAD,
     QQUAD
 }
@@ -353,6 +354,7 @@ const CommandDef[] COMMANDS = {
     { "left", MathCommand.LEFT, { .arity = 1 } },
     { "begin", MathCommand.BEGIN, { .arity = 1 } },
     { "text", MathCommand.TEXT, { .arity = 1 } },
+    { "operatorname", MathCommand.OPERATORNAME, { .arity = 1 } },
     { "quad", MathCommand.QUAD, { .spacing } },
     { "qquad", MathCommand.QQUAD, { .spacing } }
 };

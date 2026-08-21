@@ -350,16 +350,16 @@ fn void write_direct(char* s)
 
 fn void enter_alt_screen()
 {
-    // Enable alternate screen + disable autowrap (\x1b[?7l) + clear + hide cursor
-    write_direct("\x1b[?1049h\x1b[?7l\x1b[2J\x1b[3J\x1b[H\x1b[?25l");
+    // Enable alternate screen + disable autowrap (\x1b[?7l) + progressive keyboard (\x1b[>1u) + clear + hide cursor
+    write_direct("\x1b[?1049h\x1b[?7l\x1b[>1u\x1b[2J\x1b[3J\x1b[H\x1b[?25l");
     alt_screen_active = true;
 }
 
 fn void leave_alt_screen()
 {
     if (!alt_screen_active) return;
-    // Enable autowrap (\x1b[?7h) + leave alternate screen + show cursor
-    write_direct("\x1b[?7h\x1b[?1049l\x1b[?25h\x1b[0m");
+    // Reset keyboard mode (\x1b[<u) + enable autowrap (\x1b[?7h) + leave alternate screen + show cursor
+    write_direct("\x1b[<u\x1b[?7h\x1b[?1049l\x1b[?25h\x1b[0m");
     alt_screen_active = false;
 }
 
@@ -507,6 +507,16 @@ fn int poll_key()
             if (btn == 64) return 1012; // Wheel Up
             if (btn == 65) return 1013; // Wheel Down
             return 0;
+        }
+
+        // Shift+Space / Mod-Space: \x1b[32;2u or \x1b[32;2~ or \x1b 
+        if (n >= 5 && buf[1] == '[' && buf[2] == '3' && buf[3] == '2')
+        {
+            return 1014; // Shift+Space
+        }
+        if (n == 2 && buf[1] == ' ')
+        {
+            return 1014; // Shift+Space / Alt+Space
         }
 
         // Application Cursor Keys: \x1bO...

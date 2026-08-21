@@ -714,6 +714,11 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                     }
                     *prev_atom = MathAtomKind.ORD;
                     return box_from_string(p.arena, "text");
+
+                case OPERATORNAME:
+                    MathBox op_box = parse_math_group(p);
+                    *prev_atom = MathAtomKind.OP;
+                    return op_box;
             }
         }
 

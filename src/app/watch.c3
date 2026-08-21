@@ -312,13 +312,12 @@ fn void draw_viewport(
         fb.append_repeat("─", bar_w);
         fb.append_zstr("\x1b[0m\x1b[K\n");
 
-        char*[20] help_rows = {
+        char*[19] help_rows = {
             "\x1b[38;2;102;217;239m\x1b[1mVertical Navigation:\x1b[0m",
-            "  \x1b[38;2;230;219;116mj / ↓\x1b[0m                 Scroll down (with acceleration)",
-            "  \x1b[38;2;230;219;116mk / ↑\x1b[0m                 Scroll up (with acceleration)",
-            "  \x1b[38;2;230;219;116md / Ctrl+D\x1b[0m            Half page down",
-            "  \x1b[38;2;230;219;116mu / Ctrl+U\x1b[0m            Half page up",
-            "  \x1b[38;2;230;219;116mSpace / Ctrl+F\x1b[0m        Full page down",
+            "  \x1b[38;2;230;219;116mj / ↓\x1b[0m                 Scroll down 1 line",
+            "  \x1b[38;2;230;219;116mk / ↑\x1b[0m                 Scroll up 1 line",
+            "  \x1b[38;2;230;219;116mSpace / Ctrl+D\x1b[0m        Scroll down",
+            "  \x1b[38;2;230;219;116mShift+Sp / b / Ctrl+U\x1b[0m Scroll up",
             "  \x1b[38;2;230;219;116mg / G\x1b[0m                 Jump to Top / Bottom",
             "  \x1b[38;2;230;219;116m: <line>\x1b[0m              Goto line number (e.g. :42)",
             "",
@@ -337,7 +336,7 @@ fn void draw_viewport(
 
         for (int r = 0; r < view_height; r++)
         {
-            if (r < 20)
+            if (r < 19)
             {
                 fb.append_zstr("  ");
                 fb.append_zstr(help_rows[r]);
@@ -346,10 +345,10 @@ fn void draw_viewport(
             {
                 fb.append_zstr("\x1b[38;2;60;60;50m~\x1b[0m");
             }
-            fb.append_zstr("\x1b[K\n");
+            fb.append_zstr("\x1b[K");
+            if (r < view_height - 1) fb.append_char('\n');
         }
 
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Help \x1b[0m\x1b[38;2;117;113;94m [Esc / ? / q: Close]\x1b[0m\x1b[K");
         flush_fb(fb);
         return;
     }
@@ -416,11 +415,10 @@ fn void draw_viewport(
             {
                 fb.append_zstr("\x1b[38;2;60;60;50m~\x1b[0m");
             }
-            fb.append_zstr("\x1b[K\n");
+            fb.append_zstr("\x1b[K");
+            if (r < view_height - 1) fb.append_char('\n');
         }
 
-        // Bottom status line
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Outline \x1b[0m\x1b[38;2;117;113;94m [Enter: Jump │ Esc: Close]\x1b[0m\x1b[K");
         flush_fb(fb);
         return;
     }
@@ -569,11 +567,10 @@ fn void draw_viewport(
             {
                 fb.append_zstr("\x1b[38;2;60;60;50m~\x1b[0m");
             }
-            fb.append_zstr("\x1b[K\n");
+            fb.append_zstr("\x1b[K");
+            if (r < view_height - 1) fb.append_char('\n');
         }
 
-        // Bottom status line
-        fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m Tree \x1b[0m\x1b[38;2;117;113;94m [Enter: CD/Open │ a: Toggle all │ ←/→: Fold │ Esc: Close]\x1b[0m\x1b[K");
         flush_fb(fb);
         return;
     }
@@ -586,26 +583,43 @@ fn void draw_viewport(
     int cur_src = (cursor_line >= 0 && cursor_line < total && vdoc.lines[cursor_line].src_line >= 0) ? vdoc.lines[cursor_line].src_line + 1 : 1;
     int pct = total > 0 ? ((cursor_line + 1) * 100) / total : 0;
 
-    fb.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdv \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
-    fb.append_zstr(filename);
-    fb.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m ");
+    buffer::ByteBuffer header_left;
+    header_left.init(256);
+    defer header_left.free();
+
+    header_left.append_zstr("\x1b[48;2;39;40;34m\x1b[38;2;102;217;239m\x1b[1m mdv \x1b[0m\x1b[48;2;30;32;36m\x1b[38;2;248;248;242m\x1b[1m ");
+    header_left.append_zstr(filename);
+    header_left.append_zstr(" \x1b[0m\x1b[38;2;117;113;94m│\x1b[0m ");
 
     if (changed_src_line >= 0)
     {
-        fb.append_zstr("\x1b[38;2;166;226;46m\x1b[1m⚡ Sync L");
-        fb.append_int(changed_src_line + 1);
-        fb.append_zstr("\x1b[0m \x1b[38;2;117;113;94m│\x1b[0m ");
+        header_left.append_zstr("\x1b[38;2;166;226;46m\x1b[1m⚡ Sync L");
+        header_left.append_int(changed_src_line + 1);
+        header_left.append_zstr("\x1b[0m \x1b[38;2;117;113;94m│\x1b[0m ");
     }
 
-    fb.append_zstr("\x1b[38;2;166;226;46m\x1b[1mLn ");
-    fb.append_int(cur_src);
-    fb.append_zstr("\x1b[0m \x1b[38;2;117;113;94m(");
-    fb.append_int(cursor_line + 1);
-    fb.append_zstr("/");
-    fb.append_int(total);
-    fb.append_zstr(" · ");
-    fb.append_int(pct);
-    fb.append_zstr("%)\x1b[0m\x1b[K\n");
+    header_left.append_zstr("\x1b[38;2;166;226;46m\x1b[1mLn ");
+    header_left.append_int(cur_src);
+    header_left.append_zstr("\x1b[0m \x1b[38;2;117;113;94m(");
+    header_left.append_int(cursor_line + 1);
+    header_left.append_zstr("/");
+    header_left.append_int(total);
+    header_left.append_zstr(" · ");
+    header_left.append_int(pct);
+    header_left.append_zstr("%)\x1b[0m");
+
+    int left_w = strutils::string_display_width(header_left.to_string());
+    fb.append_slice(header_left.to_string());
+
+    String help_text = "[? Help │ q Quit]";
+    int help_w = strutils::string_display_width(help_text);
+    int pad = term_width - left_w - help_w - 1;
+    if (pad > 0)
+    {
+        fb.append_spaces(pad);
+        fb.append_zstr("\x1b[38;2;117;113;94m[? Help │ q Quit]\x1b[0m");
+    }
+    fb.append_zstr("\x1b[K\n");
 
     // Separator line
     fb.append_zstr("\x1b[38;2;117;113;94m");
@@ -641,11 +655,13 @@ fn void draw_viewport(
             {
                 append_horizontal_slice(fb, vdoc.lines[i].text, scroll_left, term_width - 1);
             }
-            fb.append_zstr("\x1b[K\n");
+            fb.append_zstr("\x1b[K");
+            if (i < scroll_top + view_height - 1) fb.append_char('\n');
         }
         else
         {
-            fb.append_zstr(" \x1b[38;2;60;60;50m~\x1b[0m\x1b[K\n");
+            fb.append_zstr(" \x1b[38;2;60;60;50m~\x1b[0m\x1b[K");
+            if (i < scroll_top + view_height - 1) fb.append_char('\n');
         }
     }
 
@@ -676,10 +692,6 @@ fn void draw_viewport(
         fb.append_zstr(status_msg);
         fb.append_zstr(" \x1b[0m\x1b[K");
     }
-    else
-    {
-        fb.append_zstr("\x1b[38;2;117;113;94m[? Help │ \x1b[38;2;166;226;46me Edit\x1b[38;2;117;113;94m │ q Quit]\x1b[0m\x1b[K");
-    }
 
     flush_fb(fb);
 }
@@ -695,7 +707,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
 
     int width = terminal::get_width();
     int height = terminal::get_height();
-    int view_height = height - 3;
+    int view_height = height - 2;
     if (view_height < 2) view_height = 2;
 
     bool no_wrap = initial_no_wrap;
@@ -1261,35 +1273,25 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 status_ticks = 40;
                 need_redraw = true;
             }
-            else if (key == 'd' || key == 1004) // Half page down
+            else if (key == 1002 || key == ' ' || key == 1004) // Space / Ctrl+D / PgDn -> Scroll down
             {
-                cursor_line += view_height / 2;
+                int scroll_step = view_height / 3;
+                if (scroll_step < 3) scroll_step = 3;
+                if (scroll_step > 8) scroll_step = 8;
+                cursor_line += scroll_step;
                 if (cursor_line >= total_lines) cursor_line = total_lines > 0 ? total_lines - 1 : 0;
-                scroll_top += view_height / 2;
+                scroll_top += scroll_step;
                 if (scroll_top > max_scroll) scroll_top = max_scroll;
                 need_redraw = true;
             }
-            else if (key == 'u' || key == 1005) // Half page up
+            else if (key == 1003 || key == 1014 || key == 1005 || key == 'b' || key == 'B') // Shift+Space / 'b' / Ctrl+U / PgUp -> Scroll up
             {
-                cursor_line -= view_height / 2;
+                int scroll_step = view_height / 3;
+                if (scroll_step < 3) scroll_step = 3;
+                if (scroll_step > 8) scroll_step = 8;
+                cursor_line -= scroll_step;
                 if (cursor_line < 0) cursor_line = 0;
-                scroll_top -= view_height / 2;
-                if (scroll_top < 0) scroll_top = 0;
-                need_redraw = true;
-            }
-            else if (key == 1002 || key == ' ') // Full page down (Space / PgDn / Ctrl+F)
-            {
-                cursor_line += view_height - 2;
-                if (cursor_line >= total_lines) cursor_line = total_lines > 0 ? total_lines - 1 : 0;
-                scroll_top += view_height - 2;
-                if (scroll_top > max_scroll) scroll_top = max_scroll;
-                need_redraw = true;
-            }
-            else if (key == 1003) // Full page up (PgUp / Ctrl+B)
-            {
-                cursor_line -= view_height - 2;
-                if (cursor_line < 0) cursor_line = 0;
-                scroll_top -= view_height - 2;
+                scroll_top -= scroll_step;
                 if (scroll_top < 0) scroll_top = 0;
                 need_redraw = true;
             }
@@ -1422,7 +1424,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
         {
             width = cur_width;
             height = cur_height;
-            view_height = height - 3;
+            view_height = height - 2;
             if (view_height < 2) view_height = 2;
 
             config.width = width;
