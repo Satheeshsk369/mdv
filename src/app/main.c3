@@ -29,19 +29,33 @@ fn void print_help()
     io::printn("    mdv -s <file.md>                 Render text directly to stdout and exit");
     io::printn("    cat file.md | mdv [options]      Pipe from stdin");
     io::printn("");
-    io::printn("Section & Block Queries (AST-Aware):");
-    io::printn("    mdv file.md#anchor               Extract & render specific heading section");
+    io::printn("Vim-Style CRUD Operations:");
+    io::printn("    -y, --yank <target>              Yank / Query target (e.g. -y #install, -y c:python:1)");
+    io::printn("    -d, --delete <target>            Delete target block/section cleanly from AST");
+    io::printn("    -c, --change <target> [text]     Change / replace target content with new text");
+    io::printn("    -a, --append <target> [text]     Append content to end of section/block");
+    io::printn("    -i, --insert <target> [text]     Insert content right after heading (top of section)");
+    io::printn("    -w, --write, --in-place          Save mutations back to disk atomically (default: stdout)");
+    io::printn("");
+    io::printn("Target Nouns:");
+    io::printn("    #slug, s:<title>                 Heading section + children (e.g. #installation, s:\"Quick Start\")");
+    io::printn("    c:<lang>[:idx], code:<lang>      Code block (e.g. c:python:1, c:bash)");
+    io::printn("    t:<idx>, table:<idx>             Table by 1-based index (e.g. t:1)");
+    io::printn("    m:<idx>, math:<idx>              2D LaTeX math block by index (e.g. m:1)");
+    io::printn("    k:<kind>, callout:<kind>         Callout by kind (e.g. k:warning, k:note)");
+    io::printn("");
+    io::printn("Query & Extraction Options:");
     io::printn("    -H, --section <title|slug>       Extract section by heading title or slug");
-    io::printn("    -c, --code [lang[:idx]]          Extract code blocks (e.g. -c bash, -c python:1)");
-    io::printn("    -T, --table, --tables [idx]      Extract Markdown tables (e.g. -T 1)");
-    io::printn("    -M, --math [idx]                 Extract 2D LaTeX formulas / math blocks");
-    io::printn("    -g, --grep <pattern>             Filter blocks containing text/regex pattern");
+    io::printn("    -c, --code [lang[:idx]]          Extract code blocks");
+    io::printn("    -T, --table, --tables [idx]      Extract Markdown tables");
+    io::printn("    -M, --math [idx]                 Extract 2D LaTeX formulas");
+    io::printn("    -g, --grep <pattern>             Filter blocks containing pattern");
     io::printn("    --toc, --outline                 Print structured document heading outline");
     io::printn("    --count, --stats                 Print document structure & block statistics");
     io::printn("    -r, --raw, --raw-code            Emit raw code/math content without markdown fences");
     io::printn("    --csv                            Emit table directly as CSV");
     io::printn("");
-    io::printn("Options:");
+    io::printn("Viewer & Rendering Options:");
     io::printn("    -s, --stdout                     Print rendered text directly to stdout and exit");
     io::printn("    -p, --plain                      Print plain text without ANSI formatting");
     io::printn("    -nw, --no-wrap                   Disable line wrapping");
@@ -158,7 +172,13 @@ fn int main(String[] args)
     query.raw = false;
     query.csv = false;
 
-    for (int i = 1; i < args.len; i++)
+    logic::MutationVerb mutation_verb = logic::MutationVerb.NONE;
+    char[128] mutation_target;
+    mutation_target[0] = 0;
+    char* mutation_content = null;
+    bool write_in_place = false;
+
+    for (int i = 1; i < (int)args.len; i++)
     {
         String arg = args[i];
         if (arg == "-h" || arg == "--help")
@@ -176,8 +196,10 @@ fn int main(String[] args)
             no_wrap = true;
             continue;
         }
-        if (arg == "-w" || arg == "--watch")
+        if (arg == "-w" || arg == "--write" || arg == "--in-place")
         {
+            write_in_place = true;
+            force_stdout = true;
             continue;
         }
         if (arg == "-s" || arg == "--stdout")
@@ -223,6 +245,95 @@ fn int main(String[] args)
             }
             continue;
         }
+
+        // ── Vim-Style Verbs: -y, -d, -c, -a, -i ──────────────────────────────
+        if (arg == "-y" || arg == "--yank" || arg == "--get")
+        {
+            if (i + 1 < (int)args.len && !args[i + 1].starts_with("-"))
+            {
+                char* target_spec = (char*)args[++i].ptr;
+                logic::TargetSpec spec = logic::parse_target_spec(target_spec);
+                switch (spec.kind)
+                {
+                    case logic::TargetKind.SECTION:
+                        query.kind = logic::QueryKind.SECTION;
+                        strutils::copy_str(&query.query_str[0], &spec.pattern[0], 128);
+                    case logic::TargetKind.CODE:
+                        query.kind = logic::QueryKind.CODE;
+                        strutils::copy_str(&query.lang[0], &spec.lang[0], 64);
+                        query.index = spec.index;
+                    case logic::TargetKind.TABLE:
+                        query.kind = logic::QueryKind.TABLE;
+                        query.index = spec.index;
+                    case logic::TargetKind.MATH:
+                        query.kind = logic::QueryKind.MATH;
+                        query.index = spec.index;
+                    case logic::TargetKind.CALLOUT:
+                        query.kind = logic::QueryKind.CALLOUT;
+                        strutils::copy_str(&query.query_str[0], &spec.pattern[0], 128);
+                }
+                force_stdout = true;
+            }
+            continue;
+        }
+
+        if (arg == "-d" || arg == "--delete")
+        {
+            if (i + 1 < (int)args.len)
+            {
+                mutation_verb = logic::MutationVerb.DELETE;
+                strutils::copy_str(&mutation_target[0], (char*)args[++i].ptr, 128);
+                force_stdout = true;
+            }
+            continue;
+        }
+
+        if (arg == "-c" || arg == "--change" || arg == "--replace")
+        {
+            if (i + 1 < (int)args.len)
+            {
+                mutation_verb = logic::MutationVerb.CHANGE;
+                strutils::copy_str(&mutation_target[0], (char*)args[++i].ptr, 128);
+                if (i + 1 < (int)args.len && !args[i + 1].starts_with("-"))
+                {
+                    mutation_content = (char*)args[++i].ptr;
+                }
+                force_stdout = true;
+            }
+            continue;
+        }
+
+        if (arg == "-a" || arg == "--append" || arg == "--append-to")
+        {
+            if (i + 1 < (int)args.len)
+            {
+                mutation_verb = logic::MutationVerb.APPEND;
+                strutils::copy_str(&mutation_target[0], (char*)args[++i].ptr, 128);
+                if (i + 1 < (int)args.len && !args[i + 1].starts_with("-"))
+                {
+                    mutation_content = (char*)args[++i].ptr;
+                }
+                force_stdout = true;
+            }
+            continue;
+        }
+
+        if (arg == "-i" || arg == "--insert" || arg == "--prepend")
+        {
+            if (i + 1 < (int)args.len)
+            {
+                mutation_verb = logic::MutationVerb.INSERT;
+                strutils::copy_str(&mutation_target[0], (char*)args[++i].ptr, 128);
+                if (i + 1 < (int)args.len && !args[i + 1].starts_with("-"))
+                {
+                    mutation_content = (char*)args[++i].ptr;
+                }
+                force_stdout = true;
+            }
+            continue;
+        }
+
+        // ── Query Flags ──────────────────────────────────────────────────────
         if (arg == "-H" || arg == "--section" || arg == "--heading")
         {
             if (i + 1 < (int)args.len)
@@ -233,7 +344,7 @@ fn int main(String[] args)
             }
             continue;
         }
-        if (arg == "-c" || arg == "--code")
+        if (arg == "--code")
         {
             query.kind = logic::QueryKind.CODE;
             force_stdout = true;
@@ -329,7 +440,7 @@ fn int main(String[] args)
         if (strutils::split_file_and_anchor(target_file, &clean_filename[0], &file_anchor[0], 256))
         {
             target_file = &clean_filename[0];
-            if (query.kind == logic::QueryKind.NONE && file_anchor[0] != 0)
+            if (query.kind == logic::QueryKind.NONE && mutation_verb == logic::MutationVerb.NONE && file_anchor[0] != 0)
             {
                 query.kind = logic::QueryKind.SECTION;
                 strutils::copy_str(&query.query_str[0], &file_anchor[0], 128);
@@ -352,6 +463,79 @@ fn int main(String[] args)
         {
             target_line = strutils::parse_int(target_file + colon_pos + 1);
             target_file[colon_pos] = 0;
+        }
+
+        // Handle AST Mutations (-d, -c, -a, -i)
+        if (mutation_verb != logic::MutationVerb.NONE)
+        {
+            char* content = strutils::load_file_string(target_file);
+            if (content == null)
+            {
+                if (!ansi::plain_mode) io::print((ZString)ansi::fg_pink);
+                io::printfn("Error: Could not open file '%s'", (ZString)target_file);
+                if (!ansi::plain_mode) io::print((ZString)ansi::RESET);
+                return 1;
+            }
+            defer mem::free(content);
+
+            // If mutation content not provided as CLI argument, read from piped stdin
+            char* piped_input = null;
+            if (mutation_content == null && (mutation_verb == logic::MutationVerb.CHANGE || mutation_verb == logic::MutationVerb.APPEND || mutation_verb == logic::MutationVerb.INSERT))
+            {
+                if (isatty(0) == 0)
+                {
+                    piped_input = read_all_stdin();
+                    mutation_content = piped_input;
+                }
+            }
+
+            String content_str = (String)content[:strutils::str_len(content)];
+            Document doc = parser::parse_document(content_str);
+            defer doc.free();
+
+            logic::Arena mut_arena;
+            mut_arena.init(65536);
+            defer mut_arena.free();
+
+            bool success = false;
+            char* mutated = logic::execute_mutation(content, &doc, mutation_verb, &mutation_target[0], mutation_content, &mut_arena, &success);
+
+            if (piped_input != null) mem::free(piped_input);
+
+            if (!success)
+            {
+                if (!ansi::plain_mode) io::print((ZString)ansi::fg_pink);
+                io::printfn("Error: Target '%s' not found for mutation", (ZString)&mutation_target[0]);
+                if (!ansi::plain_mode) io::print((ZString)ansi::RESET);
+                return 1;
+            }
+
+            if (write_in_place)
+            {
+                bool saved = strutils::save_file_string(target_file, mutated);
+                if (saved)
+                {
+                    if (terminal::is_tty())
+                    {
+                        io::print((ZString)ansi::fg_green);
+                        io::print((ZString)ansi::BOLD);
+                        io::printfn("✔ Saved changes to %s", (ZString)target_file);
+                        io::print((ZString)ansi::RESET);
+                    }
+                    return 0;
+                }
+                else
+                {
+                    io::print((ZString)ansi::fg_pink);
+                    io::printfn("Error: Failed to write to file '%s'", (ZString)target_file);
+                    io::print((ZString)ansi::RESET);
+                    return 1;
+                }
+            }
+
+            // Output mutated Markdown to stdout
+            io::printn((ZString)mutated);
+            return 0;
         }
 
         // If a query (section/code/table/math/toc/count/grep) is active or force_stdout is set
@@ -392,6 +576,32 @@ fn int main(String[] args)
     // 2. Stdin pipe (cat doc.md | mdv ...)
     if (strutils::str_eq(target_file, "-") || isatty(0) == 0)
     {
+        if (mutation_verb != logic::MutationVerb.NONE)
+        {
+            char* stdin_content = read_all_stdin();
+            if (stdin_content != null)
+            {
+                defer mem::free(stdin_content);
+                String c_str = (String)stdin_content[:strutils::str_len(stdin_content)];
+                Document doc = parser::parse_document(c_str);
+                defer doc.free();
+
+                logic::Arena mut_arena;
+                mut_arena.init(65536);
+                defer mut_arena.free();
+
+                bool success = false;
+                char* mutated = logic::execute_mutation(stdin_content, &doc, mutation_verb, &mutation_target[0], mutation_content, &mut_arena, &success);
+                if (success)
+                {
+                    io::printn((ZString)mutated);
+                    return 0;
+                }
+                return 1;
+            }
+            return 0;
+        }
+
         if (query.kind != logic::QueryKind.NONE)
         {
             char* stdin_content = read_all_stdin();

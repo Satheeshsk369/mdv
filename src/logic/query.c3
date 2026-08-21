@@ -512,3 +512,339 @@ fn void render_raw_math_stdout(Document* doc, int target_idx)
         }
     }
 }
+
+// ── Vim-Style AST Mutation Engine (Delete, Change, Append, Insert) ─────────
+
+enum MutationVerb {
+    NONE,
+    YANK,
+    DELETE,
+    CHANGE,
+    APPEND,
+    INSERT
+}
+
+enum TargetKind {
+    SECTION,
+    CODE,
+    TABLE,
+    MATH,
+    CALLOUT
+}
+
+struct TargetSpec {
+    TargetKind kind;
+    char[128] pattern;
+    char[64] lang;
+    int index;
+}
+
+fn TargetSpec parse_target_spec(char* target)
+{
+    TargetSpec spec;
+    spec.kind = TargetKind.SECTION;
+    spec.pattern[0] = 0;
+    spec.lang[0] = 0;
+    spec.index = 0;
+    if (target == null || target[0] == 0) return spec;
+
+    if (target[0] == '#')
+    {
+        spec.kind = TargetKind.SECTION;
+        strutils::copy_str(&spec.pattern[0], target + 1, 128);
+        return spec;
+    }
+    if (strutils::str_starts_with(target, "s:") || strutils::str_starts_with(target, "sec:") || strutils::str_starts_with(target, "section:"))
+    {
+        spec.kind = TargetKind.SECTION;
+        int p = 0;
+        while (target[p] != 0 && target[p] != ':') p++;
+        if (target[p] == ':') p++;
+        strutils::copy_str(&spec.pattern[0], target + p, 128);
+        return spec;
+    }
+    if (strutils::str_starts_with(target, "c:") || strutils::str_starts_with(target, "code:"))
+    {
+        spec.kind = TargetKind.CODE;
+        int p = 0;
+        while (target[p] != 0 && target[p] != ':') p++;
+        if (target[p] == ':') p++;
+        strutils::parse_lang_and_index(target + p, &spec.lang[0], 64, &spec.index);
+        return spec;
+    }
+    if (strutils::str_starts_with(target, "t:") || strutils::str_starts_with(target, "table:") || strutils::str_starts_with(target, "tables:"))
+    {
+        spec.kind = TargetKind.TABLE;
+        int p = 0;
+        while (target[p] != 0 && target[p] != ':') p++;
+        if (target[p] == ':') p++;
+        spec.index = strutils::parse_int(target + p);
+        return spec;
+    }
+    if (strutils::str_starts_with(target, "m:") || strutils::str_starts_with(target, "math:"))
+    {
+        spec.kind = TargetKind.MATH;
+        int p = 0;
+        while (target[p] != 0 && target[p] != ':') p++;
+        if (target[p] == ':') p++;
+        spec.index = strutils::parse_int(target + p);
+        return spec;
+    }
+    if (strutils::str_starts_with(target, "k:") || strutils::str_starts_with(target, "callout:"))
+    {
+        spec.kind = TargetKind.CALLOUT;
+        int p = 0;
+        while (target[p] != 0 && target[p] != ':') p++;
+        if (target[p] == ':') p++;
+        strutils::copy_str(&spec.pattern[0], target + p, 128);
+        return spec;
+    }
+
+    // Default fallback: section match
+    spec.kind = TargetKind.SECTION;
+    strutils::copy_str(&spec.pattern[0], target, 128);
+    return spec;
+}
+
+fn char* execute_mutation(
+    char* orig_src,
+    Document* doc,
+    MutationVerb verb,
+    char* target_str,
+    char* new_content,
+    Arena* arena,
+    bool* out_success
+)
+{
+    if (out_success != null) *out_success = false;
+    if (orig_src == null || doc == null || doc.blocks.len == 0 || verb == MutationVerb.NONE || verb == MutationVerb.YANK)
+    {
+        return orig_src;
+    }
+
+    TargetSpec spec = parse_target_spec(target_str);
+
+    // 1. Split original source into line slices
+    List{String} src_lines;
+    src_lines.init(mem, 256);
+    defer src_lines.free();
+
+    usz p = 0;
+    usz orig_len = (usz)strutils::str_len(orig_src);
+    while (p < orig_len)
+    {
+        usz l_start = p;
+        while (p < orig_len && orig_src[p] != '\n') p++;
+        src_lines.push((String)orig_src[l_start : p - l_start]);
+        if (p < orig_len && orig_src[p] == '\n') p++;
+    }
+
+    int total_lines = (int)src_lines.size;
+    int target_start_line = -1;
+    int target_end_line = -1;
+    int insert_line = -1;
+
+    // 2. Resolve AST node and line boundaries
+    switch (spec.kind)
+    {
+        case TargetKind.SECTION:
+            int h_match_idx = -1;
+            int h_level = 1;
+            int q_len = strutils::str_len(&spec.pattern[0]);
+            String q_str = (String)(&spec.pattern[0])[:(usz)q_len];
+
+            for (usz i = 0; i < doc.blocks.len; i++)
+            {
+                Block* b = &doc.blocks[i];
+                if (b.kind == BlockKind.HEADING)
+                {
+                    String title = get_heading_plain_title(&b.heading, arena);
+                    if (strutils::slug_match(q_str, title))
+                    {
+                        h_match_idx = (int)i;
+                        h_level = b.heading.level;
+                        break;
+                    }
+                }
+            }
+
+            if (h_match_idx < 0) return orig_src;
+
+            target_start_line = doc.blocks[(usz)h_match_idx].src_line_start;
+            int last_child_line = doc.blocks[(usz)h_match_idx].src_line_end;
+
+            // Find section end (next heading of equal or higher level)
+            for (usz j = (usz)h_match_idx + 1; j < doc.blocks.len; j++)
+            {
+                Block* b = &doc.blocks[j];
+                if (b.kind == BlockKind.HEADING && b.heading.level <= h_level)
+                {
+                    target_end_line = b.src_line_start - 1;
+                    break;
+                }
+                last_child_line = b.src_line_end;
+            }
+
+            if (target_end_line < 0)
+            {
+                target_end_line = last_child_line < total_lines ? last_child_line : total_lines - 1;
+            }
+
+            if (verb == MutationVerb.INSERT)
+            {
+                insert_line = doc.blocks[(usz)h_match_idx].src_line_end + 1;
+            }
+            else if (verb == MutationVerb.APPEND)
+            {
+                insert_line = target_end_line + 1;
+            }
+
+        case TargetKind.CODE:
+            int c_match_count = 0;
+            int lang_len = strutils::str_len(&spec.lang[0]);
+            String target_lang = lang_len > 0 ? (String)(&spec.lang[0])[:(usz)lang_len] : "";
+
+            for (usz i = 0; i < doc.blocks.len; i++)
+            {
+                Block* b = &doc.blocks[i];
+                if (b.kind == BlockKind.CODE_BLOCK)
+                {
+                    bool l_match = true;
+                    if (target_lang.len > 0)
+                    {
+                        l_match = strutils::string_contains_case_insensitive(b.code.language, target_lang);
+                    }
+                    if (l_match)
+                    {
+                        c_match_count++;
+                        if (spec.index <= 0 || c_match_count == spec.index)
+                        {
+                            target_start_line = b.src_line_start;
+                            target_end_line = b.src_line_end;
+                            insert_line = (verb == MutationVerb.INSERT) ? b.src_line_start : b.src_line_end + 1;
+                            break;
+                        }
+                    }
+                }
+            }
+
+        case TargetKind.TABLE:
+            int t_match_count = 0;
+            for (usz i = 0; i < doc.blocks.len; i++)
+            {
+                Block* b = &doc.blocks[i];
+                if (b.kind == BlockKind.TABLE)
+                {
+                    t_match_count++;
+                    if (spec.index <= 0 || t_match_count == spec.index)
+                    {
+                        target_start_line = b.src_line_start;
+                        target_end_line = b.src_line_end;
+                        insert_line = (verb == MutationVerb.INSERT) ? b.src_line_start : b.src_line_end + 1;
+                        break;
+                    }
+                }
+            }
+
+        case TargetKind.MATH:
+            int m_match_count = 0;
+            for (usz i = 0; i < doc.blocks.len; i++)
+            {
+                Block* b = &doc.blocks[i];
+                if (b.kind == BlockKind.MATH_BLOCK)
+                {
+                    m_match_count++;
+                    if (spec.index <= 0 || m_match_count == spec.index)
+                    {
+                        target_start_line = b.src_line_start;
+                        target_end_line = b.src_line_end;
+                        insert_line = (verb == MutationVerb.INSERT) ? b.src_line_start : b.src_line_end + 1;
+                        break;
+                    }
+                }
+            }
+
+        case TargetKind.CALLOUT:
+            for (usz i = 0; i < doc.blocks.len; i++)
+            {
+                Block* b = &doc.blocks[i];
+                if (b.kind == BlockKind.CALLOUT)
+                {
+                    target_start_line = b.src_line_start;
+                    target_end_line = b.src_line_end;
+                    insert_line = (verb == MutationVerb.INSERT) ? b.src_line_start : b.src_line_end + 1;
+                    break;
+                }
+            }
+    }
+
+    if (target_start_line < 0 && insert_line < 0)
+    {
+        return orig_src;
+    }
+
+    // 3. Assemble mutated document
+    buffer::ByteBuffer mb;
+    mb.init(orig_len + (new_content != null ? (usz)strutils::str_len(new_content) : 0) + 512);
+    defer mb.free();
+
+    if (verb == MutationVerb.DELETE)
+    {
+        for (int l = 0; l < total_lines; l++)
+        {
+            if (l < target_start_line || l > target_end_line)
+            {
+                mb.append_slice(src_lines.entries[(usz)l]);
+                mb.append_char('\n');
+            }
+        }
+    }
+    else if (verb == MutationVerb.CHANGE)
+    {
+        for (int l = 0; l < target_start_line && l < total_lines; l++)
+        {
+            mb.append_slice(src_lines.entries[(usz)l]);
+            mb.append_char('\n');
+        }
+
+        if (new_content != null && new_content[0] != 0)
+        {
+            mb.append_zstr(new_content);
+            int nlen = strutils::str_len(new_content);
+            if (new_content[nlen - 1] != '\n') mb.append_char('\n');
+        }
+
+        for (int l = target_end_line + 1; l < total_lines; l++)
+        {
+            mb.append_slice(src_lines.entries[(usz)l]);
+            mb.append_char('\n');
+        }
+    }
+    else if (verb == MutationVerb.INSERT || verb == MutationVerb.APPEND)
+    {
+        int ins = insert_line >= 0 ? insert_line : target_start_line;
+        if (ins > total_lines) ins = total_lines;
+
+        for (int l = 0; l < ins && l < total_lines; l++)
+        {
+            mb.append_slice(src_lines.entries[(usz)l]);
+            mb.append_char('\n');
+        }
+
+        if (new_content != null && new_content[0] != 0)
+        {
+            mb.append_zstr(new_content);
+            int nlen = strutils::str_len(new_content);
+            if (new_content[nlen - 1] != '\n') mb.append_char('\n');
+        }
+
+        for (int l = ins; l < total_lines; l++)
+        {
+            mb.append_slice(src_lines.entries[(usz)l]);
+            mb.append_char('\n');
+        }
+    }
+
+    if (out_success != null) *out_success = true;
+    return (char*)mb.to_arena_string(arena).ptr;
+}

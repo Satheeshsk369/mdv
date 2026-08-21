@@ -467,6 +467,20 @@ fn char* load_file_string(char* filename)
     return (char*)buf.ptr;
 }
 
+fn bool save_file_string(char* filename, char* content)
+{
+    if (filename == null || content == null) return false;
+    int flen = str_len(filename);
+    int clen = str_len(content);
+    String fname_str = (String)filename[:(usz)flen];
+    String cdata_str = (String)content[:(usz)clen];
+    if (catch err = io::file::save(fname_str, cdata_str))
+    {
+        return false;
+    }
+    return true;
+}
+
 struct HtmlEntityDef {
     String entity;
     String symbol;

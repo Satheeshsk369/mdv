@@ -456,3 +456,35 @@ fn void test_markdown_ast_query_and_slug_anchors() @test
     test::eq(tables.blocks[0].kind, BlockKind.TABLE);
 }
 
+fn void test_vim_style_ast_mutations() @test
+{
+    String sample_md = "# Title\n\n## Section 1\n\nIntro text\n\n```python\nprint('hello')\n```\n\n## Section 2\n\nTail text\n";
+    Document doc = parser::parse_document(sample_md);
+    defer doc.free();
+
+    logic::Arena arena;
+    arena.init(16384);
+    defer arena.free();
+
+    char* orig_src = (char*)sample_md.ptr;
+
+    // Test Delete (-d)
+    bool del_ok = false;
+    char* del_res = logic::execute_mutation(orig_src, &doc, logic::MutationVerb.DELETE, "s:Section 1", null, &arena, &del_ok);
+    test::eq(del_ok, true);
+    test::eq(strutils::string_contains((String)del_res[:strutils::str_len(del_res)], "Section 1"), false);
+    test::eq(strutils::string_contains((String)del_res[:strutils::str_len(del_res)], "Section 2"), true);
+
+    // Test Change / Replace (-c)
+    bool chg_ok = false;
+    char* chg_res = logic::execute_mutation(orig_src, &doc, logic::MutationVerb.CHANGE, "c:python:1", "print('world')", &arena, &chg_ok);
+    test::eq(chg_ok, true);
+    test::eq(strutils::string_contains((String)chg_res[:strutils::str_len(chg_res)], "print('world')"), true);
+
+    // Test Append (-a)
+    bool app_ok = false;
+    char* app_res = logic::execute_mutation(orig_src, &doc, logic::MutationVerb.APPEND, "s:Section 1", "Appended note", &arena, &app_ok);
+    test::eq(app_ok, true);
+    test::eq(strutils::string_contains((String)app_res[:strutils::str_len(app_res)], "Appended note"), true);
+}
+
