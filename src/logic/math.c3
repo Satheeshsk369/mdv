@@ -7,13 +7,6 @@ struct MathBox {
     String[] rows;
 }
 
-struct CLatexBox {
-    char** rows;
-    int width;
-    int height;
-    int baseline;
-}
-
 enum MathAtomKind {
     ORD,    // Ordinary symbol or variable (x, 2, \alpha)
     OP,     // Big operator or named function (\sum, \sin, \lim)

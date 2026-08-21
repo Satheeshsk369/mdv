@@ -814,6 +814,15 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
     prev_content = content;
     terminal::get_file_state(filename, &prev_state);
 
+    // Terminal Velocity Acceleration state
+    ulong last_scroll_time = 0;
+    int scroll_dir = 0; // 1 = down, -1 = up, 2 = right, -2 = left, 3 = wheel down, -3 = wheel up
+    int scroll_velocity = 1;
+    const int MAX_V_VELOCITY = 8;
+    const int MAX_H_VELOCITY = 6;
+    const int MAX_WHEEL_VELOCITY = 6;
+    const ulong VELOCITY_TIMEOUT_MS = 180;
+
     while (true)
     {
         bool need_redraw = false;
@@ -839,7 +848,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             // ── Help Modal Mode ──────────────────────────────────────────
             if (show_help)
             {
-                if (key == 27 || key == 'q' || key == 'Q' || key == '?' || key == 31 || key == 0x1F || key == 10 || key == 9)
+                if (key == 27 || key == 'q' || key == 'Q' || key == '?' || key == 31 || key == 0x1F || key == 10 || key == 9 || key == 1006 || key == 'h' || key == 'H')
                 {
                     show_help = false;
                     need_redraw = true;
@@ -958,7 +967,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             // ── TOC Modal Mode ────────────────────────────────────────────
             if (show_toc)
             {
-                if (key == 27 || key == 9 || key == 't' || key == 'T' || key == 'q')
+                if (key == 27 || key == 9 || key == 't' || key == 'T' || key == 'q' || key == 1006 || key == 'h' || key == 'H')
                 {
                     show_toc = false;
                     need_redraw = true;
@@ -981,7 +990,7 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                     toc_cursor = (int)toc.size > 0 ? (int)toc.size - 1 : 0;
                     need_redraw = true;
                 }
-                else if (key == 10) // Enter -> Jump to heading
+                else if (key == 10 || key == 13 || key == 1007 || key == 'l' || key == 'L') // Enter / Right -> Jump to heading
                 {
                     if (toc_cursor < (int)toc.size)
                     {
@@ -1196,9 +1205,22 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                     need_redraw = true;
                 }
             }
-            else if (key == 'j' || key == 1000) // Down
+            else if (key == 'j' || key == 1000) // Down (with terminal velocity acceleration)
             {
-                cursor_line++;
+                ulong now = terminal::get_time_ms();
+                if (scroll_dir == 1 && (now - last_scroll_time) <= VELOCITY_TIMEOUT_MS)
+                {
+                    if (scroll_velocity < MAX_V_VELOCITY) scroll_velocity++;
+                }
+                else
+                {
+                    scroll_velocity = 1;
+                    scroll_dir = 1;
+                }
+                last_scroll_time = now;
+
+                int step = scroll_velocity;
+                cursor_line += step;
                 if (cursor_line >= total_lines) cursor_line = total_lines > 0 ? total_lines - 1 : 0;
                 int scrolloff = view_height > 6 ? 2 : 0;
                 if (cursor_line + scrolloff >= scroll_top + view_height)
@@ -1208,9 +1230,22 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 }
                 need_redraw = true;
             }
-            else if (key == 'k' || key == 1001) // Up
+            else if (key == 'k' || key == 1001) // Up (with terminal velocity acceleration)
             {
-                cursor_line--;
+                ulong now = terminal::get_time_ms();
+                if (scroll_dir == -1 && (now - last_scroll_time) <= VELOCITY_TIMEOUT_MS)
+                {
+                    if (scroll_velocity < MAX_V_VELOCITY) scroll_velocity++;
+                }
+                else
+                {
+                    scroll_velocity = 1;
+                    scroll_dir = -1;
+                }
+                last_scroll_time = now;
+
+                int step = scroll_velocity;
+                cursor_line -= step;
                 if (cursor_line < 0) cursor_line = 0;
                 int scrolloff = view_height > 6 ? 2 : 0;
                 if (cursor_line - scrolloff < scroll_top)
@@ -1220,9 +1255,21 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 }
                 need_redraw = true;
             }
-            else if (key == 1012) // Mouse Wheel Up
+            else if (key == 1012) // Mouse Wheel Up (accelerated)
             {
-                int step = 3;
+                ulong now = terminal::get_time_ms();
+                if (scroll_dir == -3 && (now - last_scroll_time) <= 120)
+                {
+                    if (scroll_velocity < MAX_WHEEL_VELOCITY) scroll_velocity++;
+                }
+                else
+                {
+                    scroll_velocity = 1;
+                    scroll_dir = -3;
+                }
+                last_scroll_time = now;
+
+                int step = 3 * scroll_velocity;
                 scroll_top -= step;
                 if (scroll_top < 0) scroll_top = 0;
                 cursor_line -= step;
@@ -1231,9 +1278,21 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 if (cursor_line >= scroll_top + view_height) cursor_line = scroll_top + view_height - 1;
                 need_redraw = true;
             }
-            else if (key == 1013) // Mouse Wheel Down
+            else if (key == 1013) // Mouse Wheel Down (accelerated)
             {
-                int step = 3;
+                ulong now = terminal::get_time_ms();
+                if (scroll_dir == 3 && (now - last_scroll_time) <= 120)
+                {
+                    if (scroll_velocity < MAX_WHEEL_VELOCITY) scroll_velocity++;
+                }
+                else
+                {
+                    scroll_velocity = 1;
+                    scroll_dir = 3;
+                }
+                last_scroll_time = now;
+
+                int step = 3 * scroll_velocity;
                 scroll_top += step;
                 if (scroll_top > max_scroll) scroll_top = max_scroll;
                 cursor_line += step;
@@ -1244,20 +1303,43 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             }
             else if (key == 1006 || key == 'h' || key == 'H') // Left arrow
             {
-                if (no_wrap && scroll_left > 0)
+                ulong now = terminal::get_time_ms();
+                if (scroll_dir == -2 && (now - last_scroll_time) <= VELOCITY_TIMEOUT_MS)
                 {
-                    scroll_left -= 4;
+                    if (scroll_velocity < MAX_H_VELOCITY) scroll_velocity++;
+                }
+                else
+                {
+                    scroll_velocity = 1;
+                    scroll_dir = -2;
+                }
+                last_scroll_time = now;
+
+                int step = 4 * scroll_velocity;
+                if (scroll_left > 0)
+                {
+                    scroll_left -= step;
                     if (scroll_left < 0) scroll_left = 0;
                     need_redraw = true;
                 }
             }
             else if (key == 1007 || key == 'l' || key == 'L') // Right arrow
             {
-                if (no_wrap)
+                ulong now = terminal::get_time_ms();
+                if (scroll_dir == 2 && (now - last_scroll_time) <= VELOCITY_TIMEOUT_MS)
                 {
-                    scroll_left += 4;
-                    need_redraw = true;
+                    if (scroll_velocity < MAX_H_VELOCITY) scroll_velocity++;
                 }
+                else
+                {
+                    scroll_velocity = 1;
+                    scroll_dir = 2;
+                }
+                last_scroll_time = now;
+
+                int step = 4 * scroll_velocity;
+                scroll_left += step;
+                need_redraw = true;
             }
             else if (key == 'w' || key == 'W') // Toggle wrap / no-wrap
             {

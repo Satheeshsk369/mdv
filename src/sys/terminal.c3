@@ -57,11 +57,17 @@ struct PollFd {
 
 const short POLLIN = 0x0001;
 
+struct TimeVal {
+    long tv_sec;
+    long tv_usec;
+}
+
 extern fn int ioctl(int fd, ulong request, ...);
 extern fn int isatty(int fd);
 extern fn char* getenv(char* name);
 extern fn int stat(char* path, Stat* buf);
 extern fn int usleep(uint usec);
+extern fn int gettimeofday(TimeVal* tv, void* tz);
 extern fn int tcgetattr(int fd, Termios* termios_p);
 extern fn int tcsetattr(int fd, int optional_actions, Termios* termios_p);
 extern fn int read(int fd, void* buf, ulong count);
@@ -418,6 +424,13 @@ fn void sleep_ms(uint ms)
     usleep(ms * 1000);
 }
 
+fn ulong get_time_ms()
+{
+    TimeVal tv;
+    gettimeofday(&tv, null);
+    return (ulong)tv.tv_sec * 1000 + (ulong)(tv.tv_usec / 1000);
+}
+
 fn bool wait_for_input(int timeout_ms)
 {
     PollFd pfd;
@@ -483,6 +496,24 @@ fn int poll_key()
 
     if (buf[0] == 0x1b)
     {
+        // If single ESC or partial escape sequence, wait briefly to gather complete sequence
+        if (n == 1)
+        {
+            if (wait_for_input(20))
+            {
+                int extra = read(0, (void*)&buf[1], 63);
+                if (extra > 0) n += extra;
+            }
+        }
+        else if (n == 2 && (buf[1] == '[' || buf[1] == 'O'))
+        {
+            if (wait_for_input(20))
+            {
+                int extra = read(0, (void*)&buf[2], 62);
+                if (extra > 0) n += extra;
+            }
+        }
+
         if (n == 1) return 27; // Single Esc key
 
         // SGR Mouse mode: \x1b[<button;col;row(M|m)
@@ -522,30 +553,28 @@ fn int poll_key()
         // Application Cursor Keys: \x1bO...
         if (n >= 3 && buf[1] == 'O')
         {
-            if (buf[2] == 'A') return 1001; // Up
-            if (buf[2] == 'B') return 1000; // Down
-            if (buf[2] == 'C') return 1007; // Right
-            if (buf[2] == 'D') return 1006; // Left
-            if (buf[2] == 'H') return 1008; // Home
-            if (buf[2] == 'F') return 1009; // End
+            char last = buf[n - 1];
+            if (buf[2] == 'A' || last == 'A') return 1001; // Up
+            if (buf[2] == 'B' || last == 'B') return 1000; // Down
+            if (buf[2] == 'C' || last == 'C') return 1007; // Right
+            if (buf[2] == 'D' || last == 'D') return 1006; // Left
+            if (buf[2] == 'H' || last == 'H') return 1008; // Home
+            if (buf[2] == 'F' || last == 'F') return 1009; // End
             return 0;
         }
 
         // ANSI Cursor Keys: \x1b[...
         if (n >= 3 && buf[1] == '[')
         {
-            if (buf[2] == 'A') return 1001; // Up
-            if (buf[2] == 'B') return 1000; // Down
-            if (buf[2] == 'C') return 1007; // Right
-            if (buf[2] == 'D') return 1006; // Left
+            char last = buf[n - 1];
+            if (buf[2] == 'A' || last == 'A' || buf[2] == 'a' || last == 'a') return 1001; // Up
+            if (buf[2] == 'B' || last == 'B' || buf[2] == 'b' || last == 'b') return 1000; // Down
+            if (buf[2] == 'C' || last == 'C' || buf[2] == 'c' || last == 'c') return 1007; // Right
+            if (buf[2] == 'D' || last == 'D' || buf[2] == 'd' || last == 'd') return 1006; // Left
             if (buf[2] == '5' && n >= 4 && buf[3] == '~') return 1003; // PgUp
             if (buf[2] == '6' && n >= 4 && buf[3] == '~') return 1002; // PgDn
-            if (buf[2] == 'H') return 1008; // Home
-            if (buf[2] == 'F') return 1009; // End
-            if (buf[2] == '1' && n >= 4 && buf[3] == '~') return 1008; // Home
-            if (buf[2] == '4' && n >= 4 && buf[3] == '~') return 1009; // End
-            if (buf[2] == '7' && n >= 4 && buf[3] == '~') return 1008; // Home
-            if (buf[2] == '8' && n >= 4 && buf[3] == '~') return 1009; // End
+            if (buf[2] == 'H' || last == 'H' || (buf[2] == '1' && last == '~') || (buf[2] == '7' && last == '~')) return 1008; // Home
+            if (buf[2] == 'F' || last == 'F' || (buf[2] == '4' && last == '~') || (buf[2] == '8' && last == '~')) return 1009; // End
         }
         return 27;
     }

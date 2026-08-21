@@ -285,20 +285,21 @@ fn void test_command_bitstruct_flags() @test
     test::eq(flags.big_op, true);
 }
 
-fn void test_capi_exports() @test
+fn void test_direct_math_rendering() @test
 {
-    // Test 2D export
-    CLatexBox box = math::latexmath_render_2d("\\frac{a + 1}{b - 1}");
+    Arena arena;
+    arena.init(16384);
+    defer arena.free();
+
+    // Test 2D render
+    MathBox box = math::render_latex_to_box(&arena, "\\frac{a + 1}{b - 1}");
     test::eq(box.height, 3);
     test::eq(box.baseline, 1);
     test::gt(box.width, 0);
-    math::latexmath_free_2d(&box);
-    test::eq((void*)box.rows, null);
 
-    // Test 1D inline export
-    char* inline_str = math::latexmath_render_inline("x^2 + y^2 = r^2");
-    test::gt(strutils::str_len(inline_str), 0);
-    math::latexmath_free_string(inline_str);
+    // Test 1D inline transform
+    String inline_str = math::transform_math(&arena, "x^2 + y^2 = r^2");
+    test::gt(inline_str.len, 0);
 }
 
 fn void test_modulo_congruence() @test

@@ -28,17 +28,6 @@
         "src/sys/strutils.c3",
         "src/sys/buffer.c3"
       ]
-    },
-    "latexmath": {
-      "type": "static-lib",
-      "output": "build/liblatexmath",
-      "sources": [
-        "src/math/**",
-        "src/logic/**",
-        "src/render/ansi.c3",
-        "src/sys/buffer.c3",
-        "src/sys/strutils.c3"
-      ]
     }
   },
   "test-sources": [
