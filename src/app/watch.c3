@@ -788,10 +788,13 @@ fn void draw_viewport(
         int toc_total = (toc != null) ? (int)toc.size : 0;
 
         int toc_offset = 0;
-        if (toc_cursor >= view_height)
+        int scrolloff = (view_height > 6) ? 2 : 0;
+        if (toc_cursor + scrolloff >= view_height)
         {
-            toc_offset = toc_cursor - view_height + 1;
+            toc_offset = toc_cursor + scrolloff - view_height + 1;
         }
+        if (toc_offset > toc_cursor) toc_offset = toc_cursor;
+        if (toc_offset < 0) toc_offset = 0;
 
         for (int r = 0; r < view_height; r++)
         {
@@ -1685,24 +1688,78 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                     show_toc = false;
                     need_redraw = true;
                 }
-                else if (key == 'j' || key == 1000) // Down
+                else if (key == 'j' || key == 1000) // Down (with terminal velocity acceleration)
                 {
-                    if (toc_cursor + 1 < (int)toc.size) { toc_cursor++; need_redraw = true; }
-                }
-                else if (key == 'k' || key == 1001) // Up
-                {
-                    if (toc_cursor > 0) { toc_cursor--; need_redraw = true; }
-                }
-                else if (key == 1013) // Mouse Wheel Down
-                {
-                    int step = 3;
+                    ulong now = terminal::get_time_ms();
+                    if (scroll_dir == 1 && (now - last_scroll_time) <= VELOCITY_TIMEOUT_MS)
+                    {
+                        if (scroll_velocity < MAX_V_VELOCITY) scroll_velocity++;
+                    }
+                    else
+                    {
+                        scroll_velocity = 1;
+                        scroll_dir = 1;
+                    }
+                    last_scroll_time = now;
+
+                    int step = scroll_velocity;
                     toc_cursor += step;
                     if (toc_cursor >= (int)toc.size) toc_cursor = (int)toc.size > 0 ? (int)toc.size - 1 : 0;
                     need_redraw = true;
                 }
-                else if (key == 1012) // Mouse Wheel Up
+                else if (key == 'k' || key == 1001) // Up (with terminal velocity acceleration)
                 {
-                    int step = 3;
+                    ulong now = terminal::get_time_ms();
+                    if (scroll_dir == -1 && (now - last_scroll_time) <= VELOCITY_TIMEOUT_MS)
+                    {
+                        if (scroll_velocity < MAX_V_VELOCITY) scroll_velocity++;
+                    }
+                    else
+                    {
+                        scroll_velocity = 1;
+                        scroll_dir = -1;
+                    }
+                    last_scroll_time = now;
+
+                    int step = scroll_velocity;
+                    toc_cursor -= step;
+                    if (toc_cursor < 0) toc_cursor = 0;
+                    need_redraw = true;
+                }
+                else if (key == 1013) // Mouse Wheel Down (accelerated)
+                {
+                    ulong now = terminal::get_time_ms();
+                    if (scroll_dir == 3 && (now - last_scroll_time) <= 120)
+                    {
+                        if (scroll_velocity < MAX_WHEEL_VELOCITY) scroll_velocity++;
+                    }
+                    else
+                    {
+                        scroll_velocity = 1;
+                        scroll_dir = 3;
+                    }
+                    last_scroll_time = now;
+
+                    int step = 3 * scroll_velocity;
+                    toc_cursor += step;
+                    if (toc_cursor >= (int)toc.size) toc_cursor = (int)toc.size > 0 ? (int)toc.size - 1 : 0;
+                    need_redraw = true;
+                }
+                else if (key == 1012) // Mouse Wheel Up (accelerated)
+                {
+                    ulong now = terminal::get_time_ms();
+                    if (scroll_dir == -3 && (now - last_scroll_time) <= 120)
+                    {
+                        if (scroll_velocity < MAX_WHEEL_VELOCITY) scroll_velocity++;
+                    }
+                    else
+                    {
+                        scroll_velocity = 1;
+                        scroll_dir = -3;
+                    }
+                    last_scroll_time = now;
+
+                    int step = 3 * scroll_velocity;
                     toc_cursor -= step;
                     if (toc_cursor < 0) toc_cursor = 0;
                     need_redraw = true;
