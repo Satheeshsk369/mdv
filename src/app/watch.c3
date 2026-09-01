@@ -787,12 +787,19 @@ fn void draw_viewport(
 
         int toc_total = (toc != null) ? (int)toc.size : 0;
 
+        int toc_offset = 0;
+        if (toc_cursor >= view_height)
+        {
+            toc_offset = toc_cursor - view_height + 1;
+        }
+
         for (int r = 0; r < view_height; r++)
         {
-            if (r < toc_total)
+            int idx = toc_offset + r;
+            if (idx < toc_total)
             {
-                TocItem item = toc.entries[r];
-                bool is_cur = (r == toc_cursor);
+                TocItem item = toc.entries[idx];
+                bool is_cur = (idx == toc_cursor);
 
                 if (is_cur)
                 {
@@ -1686,6 +1693,36 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
                 {
                     if (toc_cursor > 0) { toc_cursor--; need_redraw = true; }
                 }
+                else if (key == 1013) // Mouse Wheel Down
+                {
+                    int step = 3;
+                    toc_cursor += step;
+                    if (toc_cursor >= (int)toc.size) toc_cursor = (int)toc.size > 0 ? (int)toc.size - 1 : 0;
+                    need_redraw = true;
+                }
+                else if (key == 1012) // Mouse Wheel Up
+                {
+                    int step = 3;
+                    toc_cursor -= step;
+                    if (toc_cursor < 0) toc_cursor = 0;
+                    need_redraw = true;
+                }
+                else if (key == 1002 || key == ' ' || key == 1004 || key == 'd' || key == 'D') // Half-page scroll down / PgDn / Space
+                {
+                    int step = view_height / 2;
+                    if (step < 1) step = 1;
+                    toc_cursor += step;
+                    if (toc_cursor >= (int)toc.size) toc_cursor = (int)toc.size > 0 ? (int)toc.size - 1 : 0;
+                    need_redraw = true;
+                }
+                else if (key == 1003 || key == 1014 || key == 1005 || key == 'b' || key == 'B' || key == 'u' || key == 'U') // Half-page scroll up / PgUp / Ctrl+U
+                {
+                    int step = view_height / 2;
+                    if (step < 1) step = 1;
+                    toc_cursor -= step;
+                    if (toc_cursor < 0) toc_cursor = 0;
+                    need_redraw = true;
+                }
                 else if (key == 'g' || key == 1008) // Top
                 {
                     toc_cursor = 0;
@@ -2105,6 +2142,21 @@ fn void run_watch(char* filename, int initial_line, bool initial_no_wrap = false
             else if (key == 9 || key == 't' || key == 'T') // Tab / 't' -> Toggle Document Outline (TOC)
             {
                 show_toc = !show_toc;
+                if (show_toc && toc.size > 0)
+                {
+                    toc_cursor = 0;
+                    for (sz i = 0; i < toc.size; i++)
+                    {
+                        if (toc.entries[i].visual_line <= cursor_line)
+                        {
+                            toc_cursor = (int)i;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                }
                 need_redraw = true;
             }
             else if (key == 'o' || key == 'O') // 'o' -> Open File Tree Switcher
