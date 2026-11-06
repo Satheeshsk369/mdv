@@ -38,6 +38,7 @@ struct Tree
     int[128] shown;
     int visible;
     int cursor;
+    int top;
 }
 
 fn bool markdown(String name)
@@ -150,6 +151,7 @@ fn void Tree.walk(&self, ZString dir, int depth, String current)
 fn void Tree.scan(&self, String current)
 {
     self.count = 0;
+    self.top = 0;
     Node* up = &self.nodes[self.count++];
     *up = {};
     copy(&up.path, "..");
@@ -252,7 +254,8 @@ fn bool Tree.toggle(&self)
 
 fn void Tree.draw(&self, DString* fb, int rows)
 {
-    int offset = self.cursor >= rows ? self.cursor - rows + 1 : 0;
+    self.top = follow(self.top, self.cursor, self.visible, rows);
+    int offset = self.top;
     for (int r = 0; r < rows; r++)
     {
         int v = offset + r;

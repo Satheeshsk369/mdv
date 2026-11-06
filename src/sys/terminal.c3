@@ -249,20 +249,32 @@ fn int wheel(int button)
     return 0;
 }
 
-fn int key()
+char[256] pending;
+int pendingLen;
+
+fn void fill()
 {
-    char[64] buf;
-    int n = read(0, &buf, 64);
-    if (n <= 0) return 0;
+    int n = read(0, &pending[pendingLen], (ulong)(pending.len - pendingLen));
+    if (n > 0) pendingLen += n;
+}
+
+fn int length(char[] b)
+{
+    if (b[0] != ESC || b.len == 1) return 1;
+    if (b[1] == 'O') return min(3, (int)b.len);
+    if (b[1] != '[') return 2;
+    if (b.len >= 3 && b[2] == 'M') return min(6, (int)b.len);
+    for (int i = 2; i < b.len; i++) if (b[i] >= 0x40 && b[i] <= 0x7E) return i + 1;
+    return (int)b.len;
+}
+
+fn int decode(char[] buf)
+{
+    int n = (int)buf.len;
     if (buf[0] != ESC)
     {
         foreach (i, c : CONTROL) if (buf[0] == c) return CONTROLKEYS[i];
         return buf[0];
-    }
-    if ((n == 1 || (n == 2 && (buf[1] == '[' || buf[1] == 'O'))) && wait(20))
-    {
-        int extra = read(0, &buf[n], (ulong)(64 - n));
-        if (extra > 0) n += extra;
     }
     if (n == 1) return ESC;
     if (n >= 6 && buf[1] == '[' && buf[2] == '<')
@@ -284,4 +296,20 @@ fn int key()
     if (buf[2] == 'H' || last == 'H' || (last == '~' && (buf[2] == '1' || buf[2] == '7'))) return HOME;
     if (buf[2] == 'F' || last == 'F' || (last == '~' && (buf[2] == '4' || buf[2] == '8'))) return END;
     return ESC;
+}
+
+fn int key()
+{
+    while (true)
+    {
+        if (pendingLen == 0) fill();
+        if (pendingLen == 0) return 0;
+        bool partial = pending[0] == ESC && (pendingLen == 1 || (pendingLen == 2 && (pending[1] == '[' || pending[1] == 'O')));
+        if (partial && wait(20)) fill();
+        int len = length(pending[:pendingLen]);
+        int k = decode(pending[:len]);
+        pendingLen -= len;
+        mem::move(&pending, &pending[len], pendingLen);
+        if (k) return k;
+    }
 }

@@ -86,7 +86,8 @@ const Bind[] DOCUMENT = {
 };
 
 const Bind[] CONTENTS = {
-    { terminal::ESC, CLOSE }, { terminal::TAB, CLOSE }, { 't', CLOSE }, { 'T', CLOSE }, { 'q', CLOSE },
+    { 'q', QUIT }, { 'Q', QUIT },
+    { terminal::ESC, CLOSE }, { terminal::TAB, CLOSE }, { 't', CLOSE }, { 'T', CLOSE },
     { terminal::LEFT, CLOSE }, { 'h', CLOSE }, { 'H', CLOSE },
     { terminal::ENTER, OPEN }, { terminal::RIGHT, OPEN }, { 'l', OPEN }, { 'L', OPEN },
 };
@@ -130,6 +131,16 @@ const String[] GUIDE = {
     "  \e[38;2;166;226;46my\e[0m                     Copy document to clipboard (OSC 52)",
     "  \e[38;2;166;226;46m?\e[0m                     Show / hide this help screen",
 };
+
+const ulong HELD = 60;
+
+fn int follow(int top, int cursor, int count, int rows)
+{
+    int off = rows > 6 ? 2 : 0;
+    if (cursor - off < top) top = cursor - off;
+    if (cursor + off >= top + rows) top = cursor + off - rows + 1;
+    return math::clamp(top, 0, max(count - rows, 0));
+}
 
 fn Act lookup(Bind[] table, int key)
 {
@@ -186,6 +197,7 @@ struct View
     int changed;
     List{Heading} outline;
     int heading;
+    int headingTop;
     Tree tree;
     char[128] query;
     int queryLen;
@@ -412,10 +424,10 @@ fn void View.normal(&self, Act act)
     switch (act)
     {
         case DOWN:
-            self.cursor = min(self.cursor + self.velocity.next(1, 8, 180), self.last());
+            self.cursor = min(self.cursor + self.velocity.next(1, 8, HELD), self.last());
             if (self.cursor + off >= self.top + self.rows) self.top = min(self.cursor + off - self.rows + 1, self.last());
         case UP:
-            self.cursor = max(self.cursor - self.velocity.next(-1, 8, 180), 0);
+            self.cursor = max(self.cursor - self.velocity.next(-1, 8, HELD), 0);
             if (self.cursor - off < self.top) self.top = max(self.cursor - off, 0);
         case WHEELUP:
             int step = 3 * self.velocity.next(-3, 6, 120);
@@ -426,9 +438,9 @@ fn void View.normal(&self, Act act)
             self.top = min(self.top + step, self.last());
             self.cursor = math::clamp(min(self.cursor + step, self.last()), self.top, self.top + self.rows - 1);
         case LEFT:
-            self.left = max(self.left - 4 * self.velocity.next(-2, 6, 180), 0);
+            self.left = max(self.left - 4 * self.velocity.next(-2, 6, HELD), 0);
         case RIGHT:
-            self.left += 4 * self.velocity.next(2, 6, 180);
+            self.left += 4 * self.velocity.next(2, 6, HELD);
         case WRAP:
             self.config.noWrap = !self.config.noWrap;
             self.left = 0;
@@ -494,9 +506,9 @@ fn void View.headings(&self, Act act)
         case CLOSE:
             self.mode = NORMAL;
         case DOWN:
-            self.heading = min(self.heading + self.velocity.next(1, 8, 180), last);
+            self.heading = min(self.heading + self.velocity.next(1, 8, HELD), last);
         case UP:
-            self.heading = max(self.heading - self.velocity.next(-1, 8, 180), 0);
+            self.heading = max(self.heading - self.velocity.next(-1, 8, HELD), 0);
         case WHEELDOWN:
             self.heading = min(self.heading + 3 * self.velocity.next(3, 6, 120), last);
         case WHEELUP:
@@ -527,9 +539,9 @@ fn void View.browse(&self, Act act)
         case CLOSE:
             self.mode = NORMAL;
         case DOWN:
-            if (self.tree.cursor + 1 < self.tree.visible) self.tree.cursor++;
+            self.tree.cursor = min(self.tree.cursor + self.velocity.next(1, 8, HELD), max(self.tree.visible - 1, 0));
         case UP:
-            if (self.tree.cursor > 0) self.tree.cursor--;
+            self.tree.cursor = max(self.tree.cursor - self.velocity.next(-1, 8, HELD), 0);
         case TOP:
             self.tree.cursor = 0;
         case BOTTOM:
@@ -575,6 +587,7 @@ fn bool View.key(&self, int key)
             self.browse(lookup(BROWSER, key));
         case OUTLINE:
             Act act = lookup(CONTENTS, key);
+            if (act == QUIT) return true;
             self.headings(act != NONE ? act : lookup(MOTION, key));
         case NORMAL:
             Act act = lookup(DOCUMENT, key);
@@ -648,9 +661,8 @@ fn void View.drawOutline(&self, DString* fb)
 {
     self.title(fb, "Document Outline (Table of Contents)");
     rule(fb, self.width);
-    int off = self.rows > 6 ? 2 : 0;
-    int offset = self.heading + off >= self.rows ? self.heading + off - self.rows + 1 : 0;
-    offset = math::clamp(offset, 0, max(self.heading, 0));
+    self.headingTop = follow(self.headingTop, self.heading, (int)self.outline.len(), self.rows);
+    int offset = self.headingTop;
     for (int r = 0; r < self.rows; r++)
     {
         int i = offset + r;
