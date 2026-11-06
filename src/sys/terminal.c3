@@ -1,44 +1,57 @@
 module terminal;
 
 import std::io;
-import strutils;
 
-struct WinSize {
+const int ESC = 27;
+const int TAB = 9;
+const int ENTER = 10;
+const int BACKSPACE = 127;
+const int DOWN = 1000;
+const int UP = 1001;
+const int PAGEDOWN = 1002;
+const int PAGEUP = 1003;
+const int HALFDOWN = 1004;
+const int HALFUP = 1005;
+const int LEFT = 1006;
+const int RIGHT = 1007;
+const int HOME = 1008;
+const int END = 1009;
+const int WHEELUP = 1012;
+const int WHEELDOWN = 1013;
+const int SHIFTSPACE = 1014;
+
+struct WinSize
+{
     ushort ws_row;
     ushort ws_col;
     ushort ws_xpixel;
     ushort ws_ypixel;
 }
 
-struct Stat {
-    ulong  st_dev;
-    ulong  st_ino;
-    ulong  st_nlink;
-    uint   st_mode;
-    uint   st_uid;
-    uint   st_gid;
-    uint   __pad0;
-    ulong  st_rdev;
-    long   st_size;
-    long   st_blksize;
-    long   st_blocks;
-    long   st_atime;
-    ulong  st_atime_nsec;
-    long   st_mtime;
-    ulong  st_mtime_nsec;
-    long   st_ctime;
-    ulong  st_ctime_nsec;
-    long[3] __glibc_reserved;
+struct Stat
+{
+    ulong st_dev;
+    ulong st_ino;
+    ulong st_nlink;
+    uint st_mode;
+    uint st_uid;
+    uint st_gid;
+    uint pad;
+    ulong st_rdev;
+    long st_size;
+    long st_blksize;
+    long st_blocks;
+    long st_atime;
+    ulong st_atime_nsec;
+    long st_mtime;
+    ulong st_mtime_nsec;
+    long st_ctime;
+    ulong st_ctime_nsec;
+    long[3] reserved;
 }
 
-struct FileState {
-    ulong inode;
-    long size;
-    long mtime;
-    ulong mtime_nsec;
-}
-
-struct Termios {
+struct Termios
+{
     uint c_iflag;
     uint c_oflag;
     uint c_cflag;
@@ -49,27 +62,41 @@ struct Termios {
     uint c_ospeed;
 }
 
-struct PollFd {
+struct PollFd
+{
     int fd;
     short events;
     short revents;
 }
 
-const short POLLIN = 0x0001;
-
-struct TimeVal {
+struct TimeVal
+{
     long tv_sec;
     long tv_usec;
 }
+
+struct Stamp
+{
+    ulong inode;
+    long size;
+    long mtime;
+    ulong nsec;
+}
+
+fn bool Stamp.same(self, Stamp other)
+{
+    return self.inode == other.inode && self.size == other.size && self.mtime == other.mtime && self.nsec == other.nsec;
+}
+
+alias SignalHandler = fn void(int sig);
 
 extern fn int ioctl(int fd, ulong request, ...);
 extern fn int isatty(int fd);
 extern fn char* getenv(char* name);
 extern fn int stat(char* path, Stat* buf);
-extern fn int usleep(uint usec);
 extern fn int gettimeofday(TimeVal* tv, void* tz);
-extern fn int tcgetattr(int fd, Termios* termios_p);
-extern fn int tcsetattr(int fd, int optional_actions, Termios* termios_p);
+extern fn int tcgetattr(int fd, Termios* termios);
+extern fn int tcsetattr(int fd, int actions, Termios* termios);
 extern fn int read(int fd, void* buf, ulong count);
 extern fn int write(int fd, void* buf, ulong count);
 extern fn int system(char* command);
@@ -77,515 +104,184 @@ extern fn char* getcwd(char* buf, ulong size);
 extern fn int chdir(char* path);
 extern fn int poll(PollFd* fds, ulong nfds, int timeout);
 extern fn void exit(int status);
-
-alias SignalHandler = fn void(int sig);
 extern fn SignalHandler signal(int signum, SignalHandler handler);
 
-struct Dirent {
-    ulong d_ino;
-    long d_off;
-    ushort d_reclen;
-    char d_type;
-    char[256] d_name;
-}
+Termios saved;
+bool raw;
+bool alternate;
 
-extern fn void* opendir(char* name);
-extern fn Dirent* readdir(void* dirp);
-extern fn int closedir(void* dirp);
-
-struct TreeNode {
-    char[128] path;
-    char[64] name;
-    int depth;
-    bool is_dir;
-    bool is_expanded;
-    bool is_current;
-    bool is_last;
-}
-
-struct FileTree {
-    TreeNode[128] nodes;
-    usz count;
-}
-
-fn bool dir_has_markdown(char* dir_path, int depth_limit)
+fn void out(String s)
 {
-    if (depth_limit <= 0) return false;
-    void* d = opendir(dir_path);
-    if (d == null) return false;
-
-    Dirent* ent = null;
-    bool found = false;
-    while ((ent = readdir(d)) != null)
-    {
-        char* name = &ent.d_name[0];
-        if (name[0] == '.') continue;
-        if (strutils::str_ends_with(name, ".md") || strutils::str_ends_with(name, ".markdown"))
-        {
-            found = true;
-            break;
-        }
-        if (ent.d_type == 4)
-        {
-            if (strutils::str_eq(name, "build") || strutils::str_eq(name, "node_modules") || strutils::str_eq(name, "target") || strutils::str_eq(name, ".git") || strutils::str_eq(name, "dist") || strutils::str_eq(name, ".cache"))
-            {
-                continue;
-            }
-            char[128] sub_path;
-            strutils::copy_str(&sub_path[0], dir_path, 128);
-            strutils::append_str(&sub_path[0], "/", 128);
-            strutils::append_str(&sub_path[0], name, 128);
-            if (dir_has_markdown(&sub_path[0], depth_limit - 1))
-            {
-                found = true;
-                break;
-            }
-        }
-    }
-    closedir(d);
-    return found;
+    write(1, s.ptr, s.len);
 }
 
-fn void scan_tree_recursive(
-    char* dir_path,
-    int depth,
-    int max_depth,
-    char* current_file,
-    FileTree* tree
-)
+fn int env(ZString name, int fallback)
 {
-    if (tree.count >= 120 || depth > max_depth) return;
-
-    void* d = opendir(dir_path);
-    if (d == null) return;
-
-    Dirent[64] dir_entries;
-    int dir_count = 0;
-    Dirent[64] file_entries;
-    int file_count = 0;
-
-    Dirent* ent = null;
-    while ((ent = readdir(d)) != null)
-    {
-        char* name = &ent.d_name[0];
-        if (name[0] == '.') continue;
-
-        if (ent.d_type == 4)
-        {
-            if (strutils::str_eq(name, "build") || strutils::str_eq(name, "node_modules") || strutils::str_eq(name, "target") || strutils::str_eq(name, ".git") || strutils::str_eq(name, "dist") || strutils::str_eq(name, ".cache"))
-            {
-                continue;
-            }
-            char[128] sub_path;
-            if (strutils::str_eq(dir_path, "."))
-            {
-                strutils::copy_str(&sub_path[0], name, 128);
-            }
-            else
-            {
-                strutils::copy_str(&sub_path[0], dir_path, 128);
-                strutils::append_str(&sub_path[0], "/", 128);
-                strutils::append_str(&sub_path[0], name, 128);
-            }
-            if (dir_has_markdown(&sub_path[0], 4) && dir_count < 60)
-            {
-                dir_entries[dir_count++] = *ent;
-            }
-        }
-        else if ((strutils::str_ends_with(name, ".md") || strutils::str_ends_with(name, ".markdown")) && file_count < 60)
-        {
-            file_entries[file_count++] = *ent;
-        }
-    }
-    closedir(d);
-
-    int total_entries = dir_count + file_count;
-    int cur_entry = 0;
-
-    // List files at current depth
-    for (int i = 0; i < file_count && tree.count < 120; i++)
-    {
-        cur_entry++;
-        char* name = &file_entries[i].d_name[0];
-        char[128] rel_path;
-        if (strutils::str_eq(dir_path, "."))
-        {
-            strutils::copy_str(&rel_path[0], name, 128);
-        }
-        else
-        {
-            strutils::copy_str(&rel_path[0], dir_path, 128);
-            strutils::append_str(&rel_path[0], "/", 128);
-            strutils::append_str(&rel_path[0], name, 128);
-        }
-
-        TreeNode* node = &tree.nodes[tree.count++];
-        strutils::copy_str(&node.path[0], &rel_path[0], 128);
-        strutils::copy_str(&node.name[0], name, 64);
-        node.depth = depth;
-        node.is_dir = false;
-        node.is_expanded = false;
-        node.is_last = (cur_entry == total_entries);
-        node.is_current = (current_file != null && (strutils::str_eq(&rel_path[0], current_file) || strutils::str_eq(name, current_file)));
-    }
-
-    // List directories at current depth
-    for (int i = 0; i < dir_count && tree.count < 120; i++)
-    {
-        cur_entry++;
-        char* name = &dir_entries[i].d_name[0];
-        char[128] rel_path;
-        if (strutils::str_eq(dir_path, "."))
-        {
-            strutils::copy_str(&rel_path[0], name, 128);
-        }
-        else
-        {
-            strutils::copy_str(&rel_path[0], dir_path, 128);
-            strutils::append_str(&rel_path[0], "/", 128);
-            strutils::append_str(&rel_path[0], name, 128);
-        }
-
-        TreeNode* node = &tree.nodes[tree.count++];
-        strutils::copy_str(&node.path[0], &rel_path[0], 128);
-        strutils::copy_str(&node.name[0], name, 64);
-        node.depth = depth;
-        node.is_dir = true;
-        node.is_expanded = (depth < 3); // Auto-expand up to 3 levels by default
-        node.is_last = (cur_entry == total_entries);
-        node.is_current = false;
-
-        scan_tree_recursive(&rel_path[0], depth + 1, max_depth, current_file, tree);
-    }
+    char* value = getenv(name);
+    if (value == null) return fallback;
+    int n = 0;
+    for (int i = 0; value[i] >= '0' && value[i] <= '9'; i++) n = n * 10 + value[i] - '0';
+    return n > 0 ? n : fallback;
 }
 
-fn void scan_file_tree(char* current_file, FileTree* out_tree)
-{
-    out_tree.count = 0;
-
-    // Parent directory entry
-    TreeNode* parent_node = &out_tree.nodes[out_tree.count++];
-    strutils::copy_str(&parent_node.path[0], "..", 128);
-    strutils::copy_str(&parent_node.name[0], "..", 64);
-    parent_node.depth = 0;
-    parent_node.is_dir = true;
-    parent_node.is_expanded = false;
-    parent_node.is_last = false;
-    parent_node.is_current = false;
-
-    scan_tree_recursive(".", 0, 5, current_file, out_tree);
-}
-
-Termios orig_termios;
-bool raw_mode_active = false;
-bool alt_screen_active = false;
-
-fn void handle_signal(int sig)
-{
-    disable_raw_mode();
-    leave_alt_screen();
-    exit(128 + sig);
-}
-
-fn void setup_signals()
-{
-    signal(2, &handle_signal);  // SIGINT
-    signal(15, &handle_signal); // SIGTERM
-    signal(1, &handle_signal);  // SIGHUP
-}
-
-fn int get_width()
+fn WinSize size()
 {
     WinSize ws;
-    // Try Linux TIOCGWINSZ (0x5413) and macOS / BSD TIOCGWINSZ (0x40087468)
-    if ((ioctl(1, 0x5413, &ws) == 0 || ioctl(1, 0x40087468, &ws) == 0) && ws.ws_col > 0)
-    {
-        return (int)ws.ws_col;
-    }
-    char* env_col = getenv("COLUMNS");
-    if (env_col != null && env_col[0] != 0)
-    {
-        int val = 0;
-        int i = 0;
-        while (env_col[i] >= '0' && env_col[i] <= '9')
-        {
-            val = val * 10 + (int)(env_col[i] - '0');
-            i++;
-        }
-        if (val > 0) return val;
-    }
-    return 80;
+    if (ioctl(1, 0x5413, &ws) != 0 && ioctl(1, 0x40087468, &ws) != 0) return {};
+    return ws;
 }
 
-fn int get_height()
+fn int width()
 {
-    WinSize ws;
-    if ((ioctl(1, 0x5413, &ws) == 0 || ioctl(1, 0x40087468, &ws) == 0) && ws.ws_row > 0)
-    {
-        return (int)ws.ws_row;
-    }
-    char* env_row = getenv("LINES");
-    if (env_row != null && env_row[0] != 0)
-    {
-        int val = 0;
-        int i = 0;
-        while (env_row[i] >= '0' && env_row[i] <= '9')
-        {
-            val = val * 10 + (int)(env_row[i] - '0');
-            i++;
-        }
-        if (val > 0) return val;
-    }
-    return 24;
+    ushort cols = size().ws_col;
+    return cols > 0 ? cols : env("COLUMNS", 80);
 }
 
-fn bool is_tty()
+fn int height()
+{
+    ushort rows = size().ws_row;
+    return rows > 0 ? rows : env("LINES", 24);
+}
+
+fn bool tty()
 {
     return isatty(1) != 0;
 }
 
-fn void write_direct(char* s)
+fn void onSignal(int sig)
 {
-    if (s == null) return;
-    int len = strutils::str_len(s);
-    if (len > 0)
-    {
-        write(1, (void*)s, (ulong)len);
-    }
+    cooked();
+    leave();
+    exit(128 + sig);
 }
 
-fn void enter_alt_screen()
+fn void enter()
 {
-    // Enable alternate screen + disable autowrap (\x1b[?7l) + progressive keyboard (\x1b[>1u) + clear + hide cursor
-    write_direct("\x1b[?1049h\x1b[?7l\x1b[>1u\x1b[2J\x1b[3J\x1b[H\x1b[?25l");
-    alt_screen_active = true;
+    out("\e[?1049h\e[?7l\e[>1u\e[2J\e[3J\e[H\e[?25l");
+    alternate = true;
 }
 
-fn void leave_alt_screen()
+fn void leave()
 {
-    if (!alt_screen_active) return;
-    // Reset keyboard mode (\x1b[<u) + enable autowrap (\x1b[?7h) + leave alternate screen + show cursor
-    write_direct("\x1b[<u\x1b[?7h\x1b[?1049l\x1b[?25h\x1b[0m");
-    alt_screen_active = false;
+    if (!alternate) return;
+    out("\e[<u\e[?7h\e[?1049l\e[?25h\e[0m");
+    alternate = false;
 }
 
-fn void clear_screen()
+fn void rawMode()
 {
-    write_direct("\x1b[2J\x1b[3J\x1b[H");
+    if (raw || isatty(0) == 0) return;
+    signal(2, &onSignal);
+    signal(15, &onSignal);
+    signal(1, &onSignal);
+    if (tcgetattr(0, &saved) != 0) return;
+    Termios t = saved;
+    t.c_lflag &= ~0x000Au;
+    t.c_cc[6] = 0;
+    t.c_cc[5] = 0;
+    tcsetattr(0, 0, &t);
+    raw = true;
+    out("\e[?25l");
 }
 
-fn void hide_cursor()
+fn void cooked()
 {
-    write_direct("\x1b[?25l");
+    if (!raw) return;
+    tcsetattr(0, 0, &saved);
+    raw = false;
+    out("\e[?25h");
 }
 
-fn void show_cursor()
+fn void edit(String path, int line)
 {
-    write_direct("\x1b[?25h");
-}
-
-fn void open_editor_at_line(char* filename, int src_line)
-{
-    if (filename == null || filename[0] == 0) return;
-
-    disable_raw_mode();
-    leave_alt_screen();
-
+    cooked();
+    leave();
     char* editor = getenv("EDITOR");
-    if (editor == null || editor[0] == 0)
+    if (editor == null || editor[0] == 0) editor = getenv("VISUAL");
+    if (editor == null || editor[0] == 0) editor = "nano";
+    @pool()
     {
-        editor = getenv("VISUAL");
-    }
-    if (editor == null || editor[0] == 0)
-    {
-        editor = "nano";
-    }
-
-    char[1024] cmd_buf;
-    strutils::copy_str(&cmd_buf[0], editor, 1024);
-    strutils::append_str(&cmd_buf[0], " +", 1024);
-
-    char[16] line_str;
-    strutils::int_to_str(src_line, &line_str[0], 16);
-    strutils::append_str(&cmd_buf[0], &line_str[0], 1024);
-
-    strutils::append_str(&cmd_buf[0], " '", 1024);
-    strutils::append_str(&cmd_buf[0], filename, 1024);
-    strutils::append_str(&cmd_buf[0], "'", 1024);
-
-    system(&cmd_buf[0]);
-
-    enable_raw_mode();
-    enter_alt_screen();
+        system(string::tformat("%s +%d '%s'", (ZString)editor, line, path).zstr_tcopy());
+    };
+    rawMode();
+    enter();
 }
 
-fn void sleep_ms(uint ms)
-{
-    usleep(ms * 1000);
-}
-
-fn ulong get_time_ms()
+fn ulong now()
 {
     TimeVal tv;
     gettimeofday(&tv, null);
     return (ulong)tv.tv_sec * 1000 + (ulong)(tv.tv_usec / 1000);
 }
 
-fn bool wait_for_input(int timeout_ms)
+fn bool wait(int ms)
 {
-    PollFd pfd;
-    pfd.fd = 0;
-    pfd.events = POLLIN;
-    pfd.revents = 0;
-    int res = poll(&pfd, 1, timeout_ms);
-    return res > 0 && (pfd.revents & POLLIN) != 0;
+    PollFd p = { .fd = 0, .events = 1 };
+    return poll(&p, 1, ms) > 0 && (p.revents & 1) != 0;
 }
 
-fn bool get_file_state(char* path, FileState* state)
+fn Stamp stamp(ZString path)
 {
     Stat st;
-    if (stat(path, &st) == 0)
+    if (stat(path, &st) != 0) return {};
+    return { st.st_ino, st.st_size, st.st_mtime, st.st_mtime_nsec };
+}
+
+const char[] ARROWS = { 'A', 'B', 'C', 'D', 'H', 'F' };
+const int[] ARROWKEYS = { UP, DOWN, RIGHT, LEFT, HOME, END };
+const char[] CONTROL = { 0x04, 0x15, 0x06, 0x02, 0x09, '\r', '\n', 0x7f, 0x08, 0x03 };
+const int[] CONTROLKEYS = { HALFDOWN, HALFUP, PAGEDOWN, PAGEUP, TAB, ENTER, ENTER, BACKSPACE, BACKSPACE, 'q' };
+
+fn int arrow(char a, char b, bool lower)
+{
+    foreach (i, c : ARROWS)
     {
-        state.inode = st.st_ino;
-        state.size = st.st_size;
-        state.mtime = st.st_mtime;
-        state.mtime_nsec = st.st_mtime_nsec;
-        return true;
+        if (i >= 4 && lower) break;
+        if (a == c || b == c || (lower && (a == c + 32 || b == c + 32))) return ARROWKEYS[i];
     }
-    return false;
+    return 0;
 }
 
-fn bool file_has_changed(FileState* prev, FileState* curr)
+fn int wheel(int button)
 {
-    if (prev.inode != curr.inode) return true;
-    if (prev.size != curr.size) return true;
-    if (prev.mtime != curr.mtime) return true;
-    if (prev.mtime_nsec != curr.mtime_nsec) return true;
-    return false;
+    if (button == 64) return WHEELUP;
+    if (button == 65) return WHEELDOWN;
+    return 0;
 }
 
-fn void enable_raw_mode()
-{
-    if (raw_mode_active || isatty(0) == 0) return;
-    setup_signals();
-    if (tcgetattr(0, &orig_termios) == 0)
-    {
-        Termios raw = orig_termios;
-        raw.c_lflag &= ~0x000Au; // disable ECHO (0x08) and ICANON (0x02)
-        raw.c_cc[6] = 0; // VMIN = 0
-        raw.c_cc[5] = 0; // VTIME = 0
-        tcsetattr(0, 0, &raw);
-        raw_mode_active = true;
-        hide_cursor();
-    }
-}
-
-fn void disable_raw_mode()
-{
-    if (!raw_mode_active) return;
-    tcsetattr(0, 0, &orig_termios);
-    raw_mode_active = false;
-    show_cursor();
-}
-
-fn int poll_key()
+fn int key()
 {
     char[64] buf;
-    int n = read(0, (void*)&buf[0], 64);
+    int n = read(0, &buf, 64);
     if (n <= 0) return 0;
-
-    if (buf[0] == 0x1b)
+    if (buf[0] != ESC)
     {
-        // If single ESC or partial escape sequence, wait briefly to gather complete sequence
-        if (n == 1)
-        {
-            if (wait_for_input(20))
-            {
-                int extra = read(0, (void*)&buf[1], 63);
-                if (extra > 0) n += extra;
-            }
-        }
-        else if (n == 2 && (buf[1] == '[' || buf[1] == 'O'))
-        {
-            if (wait_for_input(20))
-            {
-                int extra = read(0, (void*)&buf[2], 62);
-                if (extra > 0) n += extra;
-            }
-        }
-
-        if (n == 1) return 27; // Single Esc key
-
-        // SGR Mouse mode: \x1b[<button;col;row(M|m)
-        if (n >= 6 && buf[1] == '[' && buf[2] == '<')
-        {
-            int btn = 0;
-            int p = 3;
-            while (p < n && buf[p] >= '0' && buf[p] <= '9')
-            {
-                btn = btn * 10 + (int)(buf[p] - '0');
-                p++;
-            }
-            if (btn == 64) return 1012; // Mouse Wheel Up
-            if (btn == 65) return 1013; // Mouse Wheel Down
-            return 0; // Ignore clicks/drags for view scrolling
-        }
-
-        // X10 Mouse mode: \x1b[M(btn)(x)(y)
-        if (n >= 6 && buf[1] == '[' && buf[2] == 'M')
-        {
-            int btn = ((int)buf[3] & 0xFF) - 32;
-            if (btn == 64) return 1012; // Wheel Up
-            if (btn == 65) return 1013; // Wheel Down
-            return 0;
-        }
-
-        // Shift+Space / Mod-Space: \x1b[32;2u or \x1b[32;2~ or \x1b 
-        if (n >= 5 && buf[1] == '[' && buf[2] == '3' && buf[3] == '2')
-        {
-            return 1014; // Shift+Space
-        }
-        if (n == 2 && buf[1] == ' ')
-        {
-            return 1014; // Shift+Space / Alt+Space
-        }
-
-        // Application Cursor Keys: \x1bO...
-        if (n >= 3 && buf[1] == 'O')
-        {
-            char last = buf[n - 1];
-            if (buf[2] == 'A' || last == 'A') return 1001; // Up
-            if (buf[2] == 'B' || last == 'B') return 1000; // Down
-            if (buf[2] == 'C' || last == 'C') return 1007; // Right
-            if (buf[2] == 'D' || last == 'D') return 1006; // Left
-            if (buf[2] == 'H' || last == 'H') return 1008; // Home
-            if (buf[2] == 'F' || last == 'F') return 1009; // End
-            return 0;
-        }
-
-        // ANSI Cursor Keys: \x1b[...
-        if (n >= 3 && buf[1] == '[')
-        {
-            char last = buf[n - 1];
-            if (buf[2] == 'A' || last == 'A' || buf[2] == 'a' || last == 'a') return 1001; // Up
-            if (buf[2] == 'B' || last == 'B' || buf[2] == 'b' || last == 'b') return 1000; // Down
-            if (buf[2] == 'C' || last == 'C' || buf[2] == 'c' || last == 'c') return 1007; // Right
-            if (buf[2] == 'D' || last == 'D' || buf[2] == 'd' || last == 'd') return 1006; // Left
-            if (buf[2] == '5' && n >= 4 && buf[3] == '~') return 1003; // PgUp
-            if (buf[2] == '6' && n >= 4 && buf[3] == '~') return 1002; // PgDn
-            if (buf[2] == 'H' || last == 'H' || (buf[2] == '1' && last == '~') || (buf[2] == '7' && last == '~')) return 1008; // Home
-            if (buf[2] == 'F' || last == 'F' || (buf[2] == '4' && last == '~') || (buf[2] == '8' && last == '~')) return 1009; // End
-        }
-        return 27;
+        foreach (i, c : CONTROL) if (buf[0] == c) return CONTROLKEYS[i];
+        return buf[0];
     }
-
-    if (buf[0] == 0x03) return 'q'; // Ctrl+C
-    if (buf[0] == 0x04) return 1004; // Ctrl+D (half page down)
-    if (buf[0] == 0x15) return 1005; // Ctrl+U (half page up)
-    if (buf[0] == 0x06) return 1002; // Ctrl+F (page down)
-    if (buf[0] == 0x02) return 1003; // Ctrl+B (page up)
-    if (buf[0] == 0x09) return 9;    // Tab
-    if (buf[0] == '\r' || buf[0] == '\n') return 10; // Enter
-    if (buf[0] == 0x7f || buf[0] == 0x08) return 127; // Backspace
-    return (int)buf[0] & 0xFF;
+    if ((n == 1 || (n == 2 && (buf[1] == '[' || buf[1] == 'O'))) && wait(20))
+    {
+        int extra = read(0, &buf[n], (ulong)(64 - n));
+        if (extra > 0) n += extra;
+    }
+    if (n == 1) return ESC;
+    if (n >= 6 && buf[1] == '[' && buf[2] == '<')
+    {
+        int button = 0;
+        for (int p = 3; p < n && buf[p] >= '0' && buf[p] <= '9'; p++) button = button * 10 + buf[p] - '0';
+        return wheel(button);
+    }
+    if (n >= 6 && buf[1] == '[' && buf[2] == 'M') return wheel(buf[3] - 32);
+    if (n >= 5 && buf[1] == '[' && buf[2] == '3' && buf[3] == '2') return SHIFTSPACE;
+    if (n == 2 && buf[1] == ' ') return SHIFTSPACE;
+    char last = buf[n - 1];
+    if (n >= 3 && buf[1] == 'O') return arrow(buf[2], last, false);
+    if (n < 3 || buf[1] != '[') return ESC;
+    int k = arrow(buf[2], last, true);
+    if (k) return k;
+    if (buf[2] == '5' && n >= 4 && buf[3] == '~') return PAGEUP;
+    if (buf[2] == '6' && n >= 4 && buf[3] == '~') return PAGEDOWN;
+    if (buf[2] == 'H' || last == 'H' || (last == '~' && (buf[2] == '1' || buf[2] == '7'))) return HOME;
+    if (buf[2] == 'F' || last == 'F' || (last == '~' && (buf[2] == '4' || buf[2] == '8'))) return END;
+    return ESC;
 }

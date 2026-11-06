@@ -2,15 +2,14 @@ module math;
 
 import std::core::mem;
 import logic;
-import strutils;
-import buffer;
+import text;
 
 fn String transform_math(logic::Arena* arena, String input)
 {
     if (input.len == 0) return "";
 
-    buffer::ByteBuffer mb;
-    mb.init((usz)input.len * 4 + 256);
+    DString mb;
+    mb.init(mem, (usz)input.len * 4 + 256);
     defer mb.free();
 
     usz i = 0;
@@ -33,19 +32,19 @@ fn String transform_math(logic::Arena* arena, String input)
                 }
                 if (next_c == ',')
                 {
-                    mb.append_zstr(" ");
+                    mb.append(" ");
                     i += 2;
                     continue;
                 }
                 if (next_c == ':')
                 {
-                    mb.append_zstr(" ");
+                    mb.append(" ");
                     i += 2;
                     continue;
                 }
                 if (next_c == ';')
                 {
-                    mb.append_zstr(" ");
+                    mb.append(" ");
                     i += 2;
                     continue;
                 }
@@ -87,13 +86,13 @@ fn String transform_math(logic::Arena* arena, String input)
             // ── Quad Spacing ─────────────────────────────────────────────────
             if (cmd == "quad")
             {
-                mb.append_zstr(" ");
+                mb.append(" ");
                 i = cmd_end;
                 continue;
             }
             if (cmd == "qquad")
             {
-                mb.append_zstr("  ");
+                mb.append("  ");
                 i = cmd_end;
                 continue;
             }
@@ -112,23 +111,23 @@ fn String transform_math(logic::Arena* arena, String input)
                     if (i < (usz)input.len && input[i] == '}') i++;
 
                     String t_m = transform_math(arena, m_content);
-                    mb.append_zstr(" (");
-                    if (cmd == "pmod") mb.append_zstr("mod ");
-                    mb.append_slice(t_m);
+                    mb.append(" (");
+                    if (cmd == "pmod") mb.append("mod ");
+                    mb.append_string(t_m);
                     mb.append_char(')');
                     continue;
                 }
             }
             if (cmd == "bmod")
             {
-                mb.append_zstr(" mod ");
+                mb.append(" mod ");
                 i = cmd_end;
                 continue;
             }
 
             // ── Font Styles via Enum ─────────────────────────────────────────
-            MathFontStyle fstyle;
-            if (logic::lookup_font_style(cmd, &fstyle))
+            logic::Alphabet alphabet;
+            if (logic::font(cmd, &alphabet))
             {
                 i = cmd_end;
                 while (i < (usz)input.len && (input[i] == ' ' || input[i] == '*')) i++;
@@ -138,17 +137,10 @@ fn String transform_math(logic::Arena* arena, String input)
                     while (i < (usz)input.len && input[i] != '}')
                     {
                         char ch = input[i++];
-                        char* mapped = null;
-                        switch (fstyle)
+                        Char32 glyph = alphabet.map(ch);
+                        if (glyph)
                         {
-                            case MATHBB: mapped = logic::get_mathbb_char(ch);
-                            case MATHCAL: mapped = logic::get_mathcal_char(ch);
-                            case MATHFRAK: mapped = logic::get_mathfrak_char(ch);
-                            default: mapped = null;
-                        }
-                        if (mapped != null)
-                        {
-                            mb.append_zstr(mapped);
+                            mb.append_char32(glyph);
                         }
                         else
                         {
@@ -198,13 +190,13 @@ fn String transform_math(logic::Arena* arena, String input)
                     if (i < (usz)input.len && input[i] == '}') i++;
 
                     String t_arg = transform_math(arena, arg_content);
-                    mb.append_slice(t_arg);
-                    mb.append_zstr(combining);
+                    mb.append_string(t_arg);
+                    mb.zstr(combining);
                 }
                 else if (i < (usz)input.len)
                 {
                     mb.append_char(input[i++]);
-                    mb.append_zstr(combining);
+                    mb.zstr(combining);
                 }
                 continue;
             }
@@ -258,33 +250,33 @@ fn String transform_math(logic::Arena* arena, String input)
                         String t_num = transform_math(arena, num);
                         String t_den = transform_math(arena, den);
 
-                        if (t_num == "1" && t_den == "2") { mb.append_zstr("½"); continue; }
-                        if (t_num == "1" && t_den == "3") { mb.append_zstr("⅓"); continue; }
-                        if (t_num == "2" && t_den == "3") { mb.append_zstr("⅔"); continue; }
-                        if (t_num == "1" && t_den == "4") { mb.append_zstr("¼"); continue; }
-                        if (t_num == "3" && t_den == "4") { mb.append_zstr("¾"); continue; }
-                        if (t_num == "1" && t_den == "5") { mb.append_zstr("⅕"); continue; }
-                        if (t_num == "2" && t_den == "5") { mb.append_zstr("⅖"); continue; }
-                        if (t_num == "3" && t_den == "5") { mb.append_zstr("⅗"); continue; }
-                        if (t_num == "4" && t_den == "5") { mb.append_zstr("⅘"); continue; }
-                        if (t_num == "1" && t_den == "6") { mb.append_zstr("⅙"); continue; }
-                        if (t_num == "5" && t_den == "6") { mb.append_zstr("⅚"); continue; }
-                        if (t_num == "1" && t_den == "8") { mb.append_zstr("⅛"); continue; }
-                        if (t_num == "3" && t_den == "8") { mb.append_zstr("⅜"); continue; }
-                        if (t_num == "5" && t_den == "8") { mb.append_zstr("⅝"); continue; }
-                        if (t_num == "7" && t_den == "8") { mb.append_zstr("⅞"); continue; }
+                        if (t_num == "1" && t_den == "2") { mb.append("½"); continue; }
+                        if (t_num == "1" && t_den == "3") { mb.append("⅓"); continue; }
+                        if (t_num == "2" && t_den == "3") { mb.append("⅔"); continue; }
+                        if (t_num == "1" && t_den == "4") { mb.append("¼"); continue; }
+                        if (t_num == "3" && t_den == "4") { mb.append("¾"); continue; }
+                        if (t_num == "1" && t_den == "5") { mb.append("⅕"); continue; }
+                        if (t_num == "2" && t_den == "5") { mb.append("⅖"); continue; }
+                        if (t_num == "3" && t_den == "5") { mb.append("⅗"); continue; }
+                        if (t_num == "4" && t_den == "5") { mb.append("⅘"); continue; }
+                        if (t_num == "1" && t_den == "6") { mb.append("⅙"); continue; }
+                        if (t_num == "5" && t_den == "6") { mb.append("⅚"); continue; }
+                        if (t_num == "1" && t_den == "8") { mb.append("⅛"); continue; }
+                        if (t_num == "3" && t_den == "8") { mb.append("⅜"); continue; }
+                        if (t_num == "5" && t_den == "8") { mb.append("⅝"); continue; }
+                        if (t_num == "7" && t_den == "8") { mb.append("⅞"); continue; }
 
-                        bool has_op_num = strutils::string_contains(t_num, "+") || strutils::string_contains(t_num, "-") || strutils::string_contains(t_num, "=") || strutils::string_contains(t_num, " ");
-                        bool has_op_den = strutils::string_contains(t_den, "+") || strutils::string_contains(t_den, "-") || strutils::string_contains(t_den, "=") || strutils::string_contains(t_den, " ");
+                        bool has_op_num = t_num.contains("+") || t_num.contains("-") || t_num.contains("=") || t_num.contains(" ");
+                        bool has_op_den = t_den.contains("+") || t_den.contains("-") || t_den.contains("=") || t_den.contains(" ");
 
                         if (has_op_num) mb.append_char('(');
-                        mb.append_slice(t_num);
+                        mb.append_string(t_num);
                         if (has_op_num) mb.append_char(')');
 
                         mb.append_char('/');
 
                         if (has_op_den) mb.append_char('(');
-                        mb.append_slice(t_den);
+                        mb.append_string(t_den);
                         if (has_op_den) mb.append_char(')');
                         continue;
                     }
@@ -303,10 +295,10 @@ fn String transform_math(logic::Arena* arena, String input)
                     i++;
                     while (i < (usz)input.len && input[i] != ']')
                     {
-                        char* deg = get_superscript_char(input[i]);
-                        if (deg != null)
+                        String deg = SUPER.map(input[i]);
+                        if (deg.len)
                         {
-                            mb.append_zstr(deg);
+                            mb.append(deg);
                         }
                         else
                         {
@@ -317,7 +309,7 @@ fn String transform_math(logic::Arena* arena, String input)
                     if (i < (usz)input.len && input[i] == ']') i++;
                 }
 
-                mb.append_zstr("√");
+                mb.append("√");
 
                 while (i < (usz)input.len && input[i] == ' ') i++;
                 if (i < (usz)input.len && input[i] == '{')
@@ -341,16 +333,16 @@ fn String transform_math(logic::Arena* arena, String input)
                     if (i < (usz)input.len && input[i] == '}') i++;
 
                     String t_rad = transform_math(arena, rad);
-                    bool has_op_rad = strutils::string_contains(t_rad, "+") || strutils::string_contains(t_rad, "-") || strutils::string_contains(t_rad, "=") || strutils::string_contains(t_rad, " ");
+                    bool has_op_rad = t_rad.contains("+") || t_rad.contains("-") || t_rad.contains("=") || t_rad.contains(" ");
                     if (has_op_rad && (t_rad[0] != '(' || t_rad[t_rad.len - 1] != ')'))
                     {
                         mb.append_char('(');
-                        mb.append_slice(t_rad);
+                        mb.append_string(t_rad);
                         mb.append_char(')');
                     }
                     else
                     {
-                        mb.append_slice(t_rad);
+                        mb.append_string(t_rad);
                     }
                 }
                 continue;
@@ -360,7 +352,7 @@ fn String transform_math(logic::Arena* arena, String input)
             String sym_glyph;
             if (logic::lookup_symbol(cmd, &sym_glyph))
             {
-                mb.append_slice(sym_glyph);
+                mb.append_string(sym_glyph);
                 if (cmd_end < (usz)input.len && ((input[cmd_end] >= 'a' && input[cmd_end] <= 'z') || (input[cmd_end] >= 'A' && input[cmd_end] <= 'Z') || (input[cmd_end] >= '0' && input[cmd_end] <= '9')))
                 {
                     mb.append_char(' ');
@@ -370,7 +362,7 @@ fn String transform_math(logic::Arena* arena, String input)
             }
 
             // If unknown command, emit clean command name with space
-            mb.append_slice(cmd);
+            mb.append_string(cmd);
             if (cmd_end < (usz)input.len && ((input[cmd_end] >= 'a' && input[cmd_end] <= 'z') || (input[cmd_end] >= 'A' && input[cmd_end] <= 'Z') || (input[cmd_end] >= '0' && input[cmd_end] <= '9')))
             {
                 mb.append_char(' ');
@@ -395,32 +387,32 @@ fn String transform_math(logic::Arena* arena, String input)
                         while (s_end < (usz)input.len && ((input[s_end] >= 'a' && input[s_end] <= 'z') || (input[s_end] >= 'A' && input[s_end] <= 'Z'))) s_end++;
                         String scmd = input[s_start : s_end - s_start];
                         String sglyph;
-                        if (scmd == "alpha") { mb.append_zstr("ᵅ"); }
-                        else if (scmd == "beta") { mb.append_zstr("ᵝ"); }
-                        else if (scmd == "gamma") { mb.append_zstr("ᵞ"); }
-                        else if (scmd == "delta") { mb.append_zstr("ᵟ"); }
-                        else if (scmd == "epsilon") { mb.append_zstr("ᵋ"); }
-                        else if (scmd == "theta") { mb.append_zstr("ᶿ"); }
-                        else if (scmd == "phi") { mb.append_zstr("ᵠ"); }
-                        else if (scmd == "chi") { mb.append_zstr("ᵡ"); }
-                        else if (scmd == "infty") { mb.append_zstr("∞"); }
-                        else if (scmd == "to" || scmd == "rightarrow") { mb.append_zstr("→"); }
+                        if (scmd == "alpha") { mb.append("ᵅ"); }
+                        else if (scmd == "beta") { mb.append("ᵝ"); }
+                        else if (scmd == "gamma") { mb.append("ᵞ"); }
+                        else if (scmd == "delta") { mb.append("ᵟ"); }
+                        else if (scmd == "epsilon") { mb.append("ᵋ"); }
+                        else if (scmd == "theta") { mb.append("ᶿ"); }
+                        else if (scmd == "phi") { mb.append("ᵠ"); }
+                        else if (scmd == "chi") { mb.append("ᵡ"); }
+                        else if (scmd == "infty") { mb.append("∞"); }
+                        else if (scmd == "to" || scmd == "rightarrow") { mb.append("→"); }
                         else if (logic::lookup_symbol(scmd, &sglyph))
                         {
-                            mb.append_slice(sglyph);
+                            mb.append_string(sglyph);
                         }
                         else
                         {
-                            mb.append_slice(scmd);
+                            mb.append_string(scmd);
                         }
                         i = s_end;
                         continue;
                     }
 
-                    char* sup = get_superscript_char(input[i]);
-                    if (sup != null)
+                    String sup = SUPER.map(input[i]);
+                    if (sup.len)
                     {
-                        mb.append_zstr(sup);
+                        mb.append(sup);
                     }
                     else
                     {
@@ -433,10 +425,10 @@ fn String transform_math(logic::Arena* arena, String input)
             }
             else if (i < (usz)input.len)
             {
-                char* sup = get_superscript_char(input[i]);
-                if (sup != null)
+                String sup = SUPER.map(input[i]);
+                if (sup.len)
                 {
-                    mb.append_zstr(sup);
+                    mb.append(sup);
                     i++;
                     continue;
                 }
@@ -467,29 +459,29 @@ fn String transform_math(logic::Arena* arena, String input)
                         while (s_end < (usz)input.len && ((input[s_end] >= 'a' && input[s_end] <= 'z') || (input[s_end] >= 'A' && input[s_end] <= 'Z'))) s_end++;
                         String scmd = input[s_start : s_end - s_start];
                         String sglyph;
-                        if (scmd == "beta") { mb.append_zstr("ᵦ"); }
-                        else if (scmd == "gamma") { mb.append_zstr("ᵧ"); }
-                        else if (scmd == "rho") { mb.append_zstr("ᵨ"); }
-                        else if (scmd == "phi") { mb.append_zstr("ᵩ"); }
-                        else if (scmd == "chi") { mb.append_zstr("ᵪ"); }
-                        else if (scmd == "infty") { mb.append_zstr("∞"); }
-                        else if (scmd == "to" || scmd == "rightarrow") { mb.append_zstr("→"); }
+                        if (scmd == "beta") { mb.append("ᵦ"); }
+                        else if (scmd == "gamma") { mb.append("ᵧ"); }
+                        else if (scmd == "rho") { mb.append("ᵨ"); }
+                        else if (scmd == "phi") { mb.append("ᵩ"); }
+                        else if (scmd == "chi") { mb.append("ᵪ"); }
+                        else if (scmd == "infty") { mb.append("∞"); }
+                        else if (scmd == "to" || scmd == "rightarrow") { mb.append("→"); }
                         else if (logic::lookup_symbol(scmd, &sglyph))
                         {
-                            mb.append_slice(sglyph);
+                            mb.append_string(sglyph);
                         }
                         else
                         {
-                            mb.append_slice(scmd);
+                            mb.append_string(scmd);
                         }
                         i = s_end;
                         continue;
                     }
 
-                    char* sub = get_subscript_char(input[i]);
-                    if (sub != null)
+                    String sub = SUB.map(input[i]);
+                    if (sub.len)
                     {
-                        mb.append_zstr(sub);
+                        mb.append(sub);
                     }
                     else
                     {
@@ -502,10 +494,10 @@ fn String transform_math(logic::Arena* arena, String input)
             }
             else if (i < (usz)input.len)
             {
-                char* sub = get_subscript_char(input[i]);
-                if (sub != null)
+                String sub = SUB.map(input[i]);
+                if (sub.len)
                 {
-                    mb.append_zstr(sub);
+                    mb.append(sub);
                     i++;
                     continue;
                 }
@@ -531,19 +523,19 @@ fn String transform_math(logic::Arena* arena, String input)
             }
             if (prime_count == 1)
             {
-                mb.append_zstr("′");
+                mb.append("′");
             }
             else if (prime_count == 2)
             {
-                mb.append_zstr("″");
+                mb.append("″");
             }
             else if (prime_count == 3)
             {
-                mb.append_zstr("‴");
+                mb.append("‴");
             }
             else
             {
-                for (int p = 0; p < prime_count; p++) mb.append_zstr("′");
+                for (int p = 0; p < prime_count; p++) mb.append("′");
             }
             continue;
         }

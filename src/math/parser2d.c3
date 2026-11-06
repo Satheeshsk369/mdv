@@ -4,8 +4,7 @@ import std::core::mem;
 import std::collections::list;
 import logic;
 import ansi;
-import strutils;
-import buffer;
+import text;
 
 alias MathBoxList = List{MathBox};
 
@@ -88,89 +87,39 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
         String cmd = p.src[cmd_start : p.pos - cmd_start];
 
         // ── A. Font Styles via Enum ─────────────────────────────────────────
-        MathFontStyle fstyle;
-        if (logic::lookup_font_style(cmd, &fstyle))
+        logic::Alphabet alphabet;
+        if (logic::font(cmd, &alphabet))
         {
             p.skip_spaces();
             if (p.peek() == '*') p.get();
             p.skip_spaces();
-
-            switch (fstyle)
+            *prev_atom = MathAtomKind.ORD;
+            if (alphabet.upper == 0) return parse_math_group(p);
+            DString mb;
+            mb.init(mem, 32);
+            defer mb.free();
+            if (p.peek() == '{')
             {
-                case MATHBB:
-                    if (p.peek() == '{')
-                    {
-                        p.get();
-                        buffer::ByteBuffer mb;
-                        mb.init(32);
-                        defer mb.free();
-                        while (!p.eof() && p.peek() != '}')
-                        {
-                            char* bb = logic::get_mathbb_char(p.get());
-                            if (bb != null) mb.append_zstr(bb);
-                        }
-                        if (p.peek() == '}') p.get();
-                        *prev_atom = MathAtomKind.ORD;
-                        return box_from_string(p.arena, mb.to_arena_string(p.arena));
-                    }
-                    char single_bb = p.get();
-                    char* bb = logic::get_mathbb_char(single_bb);
-                    *prev_atom = MathAtomKind.ORD;
-                    if (bb != null) return box_from_zstr(p.arena, bb);
-                    char[2] ch_bb; ch_bb[0] = single_bb; ch_bb[1] = 0;
-                    return box_from_zstr(p.arena, &ch_bb[0]);
-
-                case MATHCAL:
-                    if (p.peek() == '{')
-                    {
-                        p.get();
-                        buffer::ByteBuffer mb;
-                        mb.init(32);
-                        defer mb.free();
-                        while (!p.eof() && p.peek() != '}')
-                        {
-                            char* cal = logic::get_mathcal_char(p.get());
-                            if (cal != null) mb.append_zstr(cal);
-                        }
-                        if (p.peek() == '}') p.get();
-                        *prev_atom = MathAtomKind.ORD;
-                        return box_from_string(p.arena, mb.to_arena_string(p.arena));
-                    }
-                    char single_cal = p.get();
-                    char* cal = logic::get_mathcal_char(single_cal);
-                    *prev_atom = MathAtomKind.ORD;
-                    if (cal != null) return box_from_zstr(p.arena, cal);
-                    char[2] ch_cal; ch_cal[0] = single_cal; ch_cal[1] = 0;
-                    return box_from_zstr(p.arena, &ch_cal[0]);
-
-                case MATHFRAK:
-                    if (p.peek() == '{')
-                    {
-                        p.get();
-                        buffer::ByteBuffer mb;
-                        mb.init(32);
-                        defer mb.free();
-                        while (!p.eof() && p.peek() != '}')
-                        {
-                            char* fk = logic::get_mathfrak_char(p.get());
-                            if (fk != null) mb.append_zstr(fk);
-                        }
-                        if (p.peek() == '}') p.get();
-                        *prev_atom = MathAtomKind.ORD;
-                        return box_from_string(p.arena, mb.to_arena_string(p.arena));
-                    }
-                    char single_fk = p.get();
-                    char* fk = logic::get_mathfrak_char(single_fk);
-                    *prev_atom = MathAtomKind.ORD;
-                    if (fk != null) return box_from_zstr(p.arena, fk);
-                    char[2] ch_fk; ch_fk[0] = single_fk; ch_fk[1] = 0;
-                    return box_from_zstr(p.arena, &ch_fk[0]);
-
-                default:
-                    MathBox grp = parse_math_group(p);
-                    *prev_atom = MathAtomKind.ORD;
-                    return grp;
+                p.get();
+                while (!p.eof() && p.peek() != '}')
+                {
+                    Char32 glyph = alphabet.map(p.get());
+                    if (glyph) mb.append_char32(glyph);
+                }
+                if (p.peek() == '}') p.get();
+                return box_from_string(p.arena, mb.str_view());
             }
+            char single = p.get();
+            Char32 glyph = alphabet.map(single);
+            if (glyph)
+            {
+                mb.append_char32(glyph);
+            }
+            else if (single)
+            {
+                mb.append_char(single);
+            }
+            return mb.len() ? box_from_string(p.arena, mb.str_view()) : box_empty(p.arena);
         }
 
         // ── B. Accents via Lookup ──────────────────────────────────────────
@@ -192,13 +141,13 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                 return box_underline(p.arena, inner);
             }
 
-            buffer::ByteBuffer mb;
-            mb.init(64);
+            DString mb;
+            mb.init(mem, 64);
             defer mb.free();
             if (inner.height > 0)
             {
-                mb.append_slice(inner.rows[0]);
-                mb.append_slice(combining);
+                mb.append_string(inner.rows[0]);
+                mb.append_string(combining);
             }
             *prev_atom = MathAtomKind.ORD;
             return box_from_string(p.arena, mb.to_arena_string(p.arena));
@@ -221,11 +170,11 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                     String raw_tag = p.src[t_start : p.pos - t_start];
                     if (p.peek() == '}') p.get();
 
-                    buffer::ByteBuffer tb;
-                    tb.init(64);
+                    DString tb;
+                    tb.init(mem, 64);
                     defer tb.free();
                     if (!starred) tb.append_char('(');
-                    tb.append_slice(raw_tag);
+                    tb.append_string(raw_tag);
                     if (!starred) tb.append_char(')');
                     *prev_atom = MathAtomKind.ORD;
                     return box_from_string(p.arena, tb.to_arena_string(p.arena));
@@ -284,17 +233,9 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                     String c_name = p.src[c_start : p.pos - c_start];
                     if (p.peek() == '}') p.get();
 
-                    char* ansi_col = ansi::fg_cyan;
-                    if (c_name == "red" || c_name == "pink") { ansi_col = ansi::fg_pink; }
-                    else if (c_name == "green") { ansi_col = ansi::fg_green; }
-                    else if (c_name == "orange") { ansi_col = ansi::fg_orange; }
-                    else if (c_name == "yellow") { ansi_col = ansi::fg_yellow; }
-                    else if (c_name == "purple" || c_name == "magenta") { ansi_col = ansi::fg_purple; }
-                    else if (c_name == "gray" || c_name == "grey") { ansi_col = ansi::fg_muted; }
-
                     MathBox col_inner = parse_math_group(p);
                     *prev_atom = MathAtomKind.INNER;
-                    return box_colorize(p.arena, col_inner, ansi_col);
+                    return box_colorize(p.arena, col_inner, ansi::named(c_name));
 
                 case FRAC:
                 case DFRAC:
@@ -497,12 +438,12 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
                 case PMOD:
                 case POD:
                     MathBox m_box = parse_math_group(p);
-                    buffer::ByteBuffer pmod_mb;
-                    pmod_mb.init(64);
+                    DString pmod_mb;
+                    pmod_mb.init(mem, 64);
                     defer pmod_mb.free();
-                    pmod_mb.append_zstr(" (");
-                    if (mcmd == MathCommand.PMOD) pmod_mb.append_zstr("mod ");
-                    if (m_box.rows.len > 0) pmod_mb.append_slice(m_box.rows[0]);
+                    pmod_mb.append(" (");
+                    if (mcmd == MathCommand.PMOD) pmod_mb.append("mod ");
+                    if (m_box.rows.len > 0) pmod_mb.append_string(m_box.rows[0]);
                     pmod_mb.append_char(')');
                     *prev_atom = MathAtomKind.ORD;
                     return box_from_string(p.arena, pmod_mb.to_arena_string(p.arena));
@@ -730,11 +671,11 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
             *prev_atom = sym_kind;
             if (sym_kind == MathAtomKind.REL || sym_kind == MathAtomKind.BIN)
             {
-                buffer::ByteBuffer mb;
-                mb.init(32);
+                DString mb;
+                mb.init(mem, 32);
                 defer mb.free();
                 mb.append_char(' ');
-                mb.append_slice(sym_glyph);
+                mb.append_string(sym_glyph);
                 mb.append_char(' ');
                 return box_from_string(p.arena, mb.to_arena_string(p.arena));
             }
@@ -771,10 +712,10 @@ fn MathBox parse_math_term(Math2DParser* p, MathAtomKind* prev_atom)
         if (prime_count == 1) return box_from_zstr(p.arena, "′");
         if (prime_count == 2) return box_from_zstr(p.arena, "″");
         if (prime_count == 3) return box_from_zstr(p.arena, "‴");
-        buffer::ByteBuffer pb;
-        pb.init(16);
+        DString pb;
+        pb.init(mem, 16);
         defer pb.free();
-        for (int k = 0; k < prime_count; k++) pb.append_zstr("′");
+        for (int k = 0; k < prime_count; k++) pb.append("′");
         return box_from_string(p.arena, pb.to_arena_string(p.arena));
     }
 

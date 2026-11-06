@@ -18,189 +18,59 @@ enum MathAtomKind {
     INNER   // Fractions, radicals, boxes
 }
 
-enum MathFontStyle {
-    MATHBB,
-    MATHCAL,
-    MATHFRAK,
-    MATHBF,
-    MATHRM,
-    MATHIT,
-    MATHSF,
-    MATHTT,
-    BOLDSYMBOL
+struct Alphabet
+{
+    Char32 upper;
+    Char32 lower;
+    Char32 digits;
+    String holes;
+    Char32[] fills;
 }
 
-bitstruct MathFontFlags : char {
-    bool blackboard : 0;
-    bool script     : 1;
-    bool fraktur    : 2;
-    bool bold       : 3;
-    bool roman      : 4;
-}
+const Alphabet DOUBLE = { 0x1D538, 0, 0x1D7D8, "CHNPQRZ", { 0x2102, 0x210D, 0x2115, 0x2119, 0x211A, 0x211D, 0x2124 } };
+const Alphabet SCRIPT = { 0x1D49C, 0, 0, "BEFHILMR", { 0x212C, 0x2130, 0x2131, 0x210B, 0x2110, 0x2112, 0x2133, 0x211B } };
+const Alphabet FRAKTUR = { 0x1D504, 0x1D51E, 0, "CHIRZ", { 0x212D, 0x210C, 0x2111, 0x211C, 0x2128 } };
 
-struct FontDef {
+struct Font
+{
     String name;
-    MathFontStyle style;
-    MathFontFlags flags;
+    Alphabet alphabet;
 }
 
-const FontDef[] FONTS = {
-    { "mathbb",     MathFontStyle.MATHBB,     { .blackboard } },
-    { "mathcal",    MathFontStyle.MATHCAL,    { .script } },
-    { "mathscr",    MathFontStyle.MATHCAL,    { .script } },
-    { "mathfrak",   MathFontStyle.MATHFRAK,   { .fraktur } },
-    { "frak",       MathFontStyle.MATHFRAK,   { .fraktur } },
-    { "mathbf",     MathFontStyle.MATHBF,     { .bold } },
-    { "boldsymbol", MathFontStyle.BOLDSYMBOL, { .bold } },
-    { "bm",         MathFontStyle.BOLDSYMBOL, { .bold } },
-    { "mathrm",     MathFontStyle.MATHRM,     { .roman } },
-    { "mathit",     MathFontStyle.MATHIT,     {} },
-    { "mathsf",     MathFontStyle.MATHSF,     {} },
-    { "mathtt",     MathFontStyle.MATHTT,     {} }
+const Font[] FONTS = {
+    { "mathbb", DOUBLE },
+    { "mathcal", SCRIPT },
+    { "mathscr", SCRIPT },
+    { "mathfrak", FRAKTUR },
+    { "frak", FRAKTUR },
+    { "mathbf", {} },
+    { "boldsymbol", {} },
+    { "bm", {} },
+    { "mathrm", {} },
+    { "mathit", {} },
+    { "mathsf", {} },
+    { "mathtt", {} },
 };
 
-fn bool lookup_font_style(String name, MathFontStyle* out_style, MathFontFlags* out_flags = null)
+fn bool font(String name, Alphabet* out)
 {
-    for (usz i = 0; i < FONTS.len; i++)
+    foreach (f : FONTS)
     {
-        if (name == FONTS[i].name)
-        {
-            *out_style = FONTS[i].style;
-            if (out_flags != null) *out_flags = FONTS[i].flags;
-            return true;
-        }
+        if (f.name != name) continue;
+        *out = f.alphabet;
+        return true;
     }
     return false;
 }
 
-fn char* get_mathbb_char(char c)
+fn Char32 Alphabet.map(&self, char c)
 {
-    switch (c)
-    {
-        case 'A': return "";
-        case 'B': return "";
-        case 'C': return "ℂ";
-        case 'D': return "";
-        case 'E': return "";
-        case 'F': return "";
-        case 'G': return "";
-        case 'H': return "ℍ";
-        case 'I': return "";
-        case 'J': return "";
-        case 'K': return "";
-        case 'L': return "";
-        case 'M': return "";
-        case 'N': return "ℕ";
-        case 'O': return "";
-        case 'P': return "ℙ";
-        case 'Q': return "ℚ";
-        case 'R': return "ℝ";
-        case 'S': return "";
-        case 'T': return "";
-        case 'U': return "";
-        case 'V': return "";
-        case 'W': return "";
-        case 'X': return "";
-        case 'Y': return "";
-        case 'Z': return "ℤ";
-        case '0': return "";
-        case '1': return "";
-        default: return null;
-    }
-}
-
-fn char* get_mathcal_char(char c)
-{
-    switch (c)
-    {
-        case 'A': return "";
-        case 'B': return "ℬ";
-        case 'C': return "";
-        case 'D': return "";
-        case 'E': return "ℰ";
-        case 'F': return "ℱ";
-        case 'G': return "";
-        case 'H': return "ℋ";
-        case 'I': return "ℐ";
-        case 'J': return "";
-        case 'K': return "";
-        case 'L': return "ℒ";
-        case 'M': return "ℳ";
-        case 'N': return "";
-        case 'O': return "";
-        case 'P': return "";
-        case 'Q': return "";
-        case 'R': return "ℛ";
-        case 'S': return "";
-        case 'T': return "";
-        case 'U': return "";
-        case 'V': return "";
-        case 'W': return "";
-        case 'X': return "";
-        case 'Y': return "";
-        case 'Z': return "";
-        default: return null;
-    }
-}
-
-fn char* get_mathfrak_char(char c)
-{
-    switch (c)
-    {
-        case 'A': return "";
-        case 'B': return "";
-        case 'C': return "ℭ";
-        case 'D': return "";
-        case 'E': return "";
-        case 'F': return "";
-        case 'G': return "";
-        case 'H': return "ℌ";
-        case 'I': return "ℑ";
-        case 'J': return "";
-        case 'K': return "";
-        case 'L': return "";
-        case 'M': return "";
-        case 'N': return "";
-        case 'O': return "";
-        case 'P': return "";
-        case 'Q': return "";
-        case 'R': return "ℜ";
-        case 'S': return "";
-        case 'T': return "";
-        case 'U': return "";
-        case 'V': return "";
-        case 'W': return "";
-        case 'X': return "";
-        case 'Y': return "";
-        case 'Z': return "ℨ";
-        case 'a': return "";
-        case 'b': return "";
-        case 'c': return "";
-        case 'd': return "";
-        case 'e': return "";
-        case 'f': return "";
-        case 'g': return "";
-        case 'h': return "";
-        case 'i': return "";
-        case 'j': return "";
-        case 'k': return "";
-        case 'l': return "";
-        case 'm': return "";
-        case 'n': return "";
-        case 'o': return "";
-        case 'p': return "";
-        case 'q': return "";
-        case 'r': return "";
-        case 's': return "";
-        case 't': return "";
-        case 'u': return "";
-        case 'v': return "";
-        case 'w': return "";
-        case 'x': return "";
-        case 'y': return "";
-        case 'z': return "";
-        default: return null;
-    }
+    if (self.upper == 0) return 0;
+    if (try i = self.holes.index_of_char(c)) return self.fills[i];
+    if (c >= 'A' && c <= 'Z') return self.upper + c - 'A';
+    if (c >= 'a' && c <= 'z' && self.lower) return self.lower + c - 'a';
+    if (c >= '0' && c <= '9' && self.digits) return self.digits + c - '0';
+    return 0;
 }
 
 bitstruct MathCmdFlags : uint {

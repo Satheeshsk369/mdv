@@ -4,8 +4,54 @@ import std::core::mem;
 import std::collections::list;
 import logic;
 import math;
-import strutils;
-import buffer;
+import text;
+
+struct HtmlEntityDef {
+    String entity;
+    String symbol;
+}
+
+const HtmlEntityDef[] HTML_ENTITIES = {
+    { "&copy;", "©" },
+    { "&trade;", "™" },
+    { "&reg;", "®" },
+    { "&mdash;", "—" },
+    { "&ndash;", "–" },
+    { "&hellip;", "…" },
+    { "&amp;", "&" },
+    { "&lt;", "<" },
+    { "&gt;", ">" },
+    { "&quot;", "\"" },
+    { "&apos;", "'" },
+    { "&plusmn;", "±" },
+    { "&times;", "×" },
+    { "&divide;", "÷" },
+    { "&deg;", "°" },
+    { "&infin;", "∞" },
+    { "&ne;", "≠" },
+    { "&le;", "≤" },
+    { "&ge;", "≥" },
+    { "&euro;", "€" },
+    { "&pound;", "£" },
+    { "&yen;", "¥" },
+    { "&check;", "✔" },
+    { "&cross;", "✗" },
+    { "&bull;", "•" }
+};
+
+fn bool match_html_entity(String s, String* out_symbol, usz* out_skip)
+{
+    for (usz k = 0; k < HTML_ENTITIES.len; k++)
+    {
+        if (s.starts_with(HTML_ENTITIES[k].entity))
+        {
+            *out_symbol = HTML_ENTITIES[k].symbol;
+            *out_skip = (usz)HTML_ENTITIES[k].entity.len;
+            return true;
+        }
+    }
+    return false;
+}
 
 fn bool is_alnum(char c)
 {
@@ -27,8 +73,8 @@ fn void push_text_span(List{Span}* l, logic::Arena* arena, String text)
 {
     if (text.len == 0) return;
 
-    buffer::ByteBuffer decoded;
-    decoded.init((usz)(text.len + 32));
+    DString decoded;
+    decoded.init(mem, (usz)(text.len + 32));
     defer decoded.free();
 
     usz i = 0;
@@ -40,9 +86,9 @@ fn void push_text_span(List{Span}* l, logic::Arena* arena, String text)
         {
             String symbol;
             usz skip = 0;
-            if (strutils::match_html_entity(text[i..], &symbol, &skip))
+            if (match_html_entity(text[i..], &symbol, &skip))
             {
-                decoded.append_slice(symbol);
+                decoded.append_string(symbol);
                 i += skip;
                 continue;
             }

@@ -1,7 +1,5 @@
 module logic;
 
-import ansi;
-
 enum SpanKind {
     TEXT,
     BOLD,
@@ -204,22 +202,4 @@ struct RenderConfig {
     int width;
     bool plain;
     bool no_wrap;
-}
-
-struct CalloutTheme {
-    String icon;
-    String label;
-    char* color;
-}
-
-fn CalloutTheme get_callout_theme(CalloutKind kind)
-{
-    switch (kind)
-    {
-        case NOTE: return { "ℹ", "NOTE", ansi::fg_cyan };
-        case TIP: return { "💡", "TIP", ansi::fg_green };
-        case WARNING: return { "⚠", "WARNING", ansi::fg_orange };
-        case IMPORTANT: return { "🔔", "IMPORTANT", ansi::fg_purple };
-        case CAUTION: return { "⛔", "CAUTION", ansi::fg_pink };
-    }
 }

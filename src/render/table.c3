@@ -4,8 +4,7 @@ import std::core::mem;
 import std::collections::list;
 import logic;
 import ansi;
-import strutils;
-import buffer;
+import text;
 
 alias EmitLineFn = fn void(void* ctx, String text, int src_line);
 
@@ -39,16 +38,16 @@ fn void measure_cell_metrics(Span[] spans, int* out_min_w, int* out_max_w)
             usz w_start = p;
             while (p < tlen && txt[p] != ' ' && txt[p] != '\t' && txt[p] != '\n') p++;
             String word = txt[w_start : p - w_start];
-            int ww = strutils::string_display_width(word);
+            int ww = text::width(word);
             if (ww > max_word_w) max_word_w = ww;
         }
 
-        int sw = strutils::string_display_width(txt);
+        int sw = text::width(txt);
         total_w += sw;
 
         if (sp.kind == SpanKind.LINK && sp.url.len > 0)
         {
-            int uw = strutils::string_display_width(sp.url) + 3;
+            int uw = text::width(sp.url) + 3;
             if (uw > max_word_w) max_word_w = uw;
             total_w += uw;
         }
@@ -71,8 +70,8 @@ fn void wrap_cell(logic::Arena* arena, Span[] spans, int max_w, bool plain, Wrap
         return;
     }
 
-    buffer::ByteBuffer cur_line;
-    cur_line.init(256);
+    DString cur_line;
+    cur_line.init(mem, 256);
     defer cur_line.free();
 
     int cur_w = 0;
@@ -81,22 +80,7 @@ fn void wrap_cell(logic::Arena* arena, Span[] spans, int max_w, bool plain, Wrap
     {
         Span sp = spans[s];
 
-        char* style_start = "";
-        char* style_end = "";
-        if (!plain)
-        {
-            switch (sp.kind)
-            {
-                case SpanKind.BOLD: style_start = ansi::BOLD; style_end = ansi::RESET;
-                case SpanKind.ITALIC: style_start = ansi::ITALIC; style_end = ansi::RESET;
-                case SpanKind.STRIKETHROUGH: style_start = ansi::STRIKE; style_end = ansi::RESET;
-                case SpanKind.CODE_INLINE: style_start = ansi::code_inline; style_end = ansi::RESET;
-                case SpanKind.MATH_INLINE: style_start = ""; style_end = "";
-                case SpanKind.FOOTNOTE_REF: style_start = ansi::fg_cyan; style_end = ansi::RESET;
-                case SpanKind.LINK: style_start = ansi::fg_cyan; style_end = ansi::RESET;
-                default: style_start = ""; style_end = "";
-            }
-        }
+        String style = plain ? "" : STYLES[sp.kind];
 
         String txt = sp.text;
         usz p = 0;
@@ -110,16 +94,16 @@ fn void wrap_cell(logic::Arena* arena, Span[] spans, int max_w, bool plain, Wrap
             usz w_start = p;
             while (p < tlen && txt[p] != ' ' && txt[p] != '\t' && txt[p] != '\n') p++;
             String word = txt[w_start : p - w_start];
-            int word_w = strutils::string_display_width(word);
+            int word_w = text::width(word);
 
             if (cur_w + 1 + word_w > max_w && cur_w > 0)
             {
                 WrappedCellLine wl;
-                wl.text = arena.dup_string(cur_line.to_string());
+                wl.text = arena.dup_string(cur_line.str_view());
                 wl.display_width = cur_w;
                 out_cell.lines.push(wl);
 
-                cur_line.reset();
+                cur_line.clear();
                 cur_w = 0;
             }
             else if (cur_w > 0)
@@ -128,23 +112,23 @@ fn void wrap_cell(logic::Arena* arena, Span[] spans, int max_w, bool plain, Wrap
                 cur_w++;
             }
 
-            if (style_start[0] != 0) cur_line.append_zstr(style_start);
-            cur_line.append_slice(word);
-            if (style_end[0] != 0) cur_line.append_zstr(style_end);
+            cur_line.append(style);
+            cur_line.append(word);
+            if (style.len) cur_line.append(ansi::RESET);
             cur_w += word_w;
         }
 
         if (sp.kind == SpanKind.LINK && sp.url.len > 0)
         {
-            int url_w = strutils::string_display_width(sp.url) + 3;
+            int url_w = text::width(sp.url) + 3;
             if (cur_w + 1 + url_w > max_w && cur_w > 0)
             {
                 WrappedCellLine wl;
-                wl.text = arena.dup_string(cur_line.to_string());
+                wl.text = arena.dup_string(cur_line.str_view());
                 wl.display_width = cur_w;
                 out_cell.lines.push(wl);
 
-                cur_line.reset();
+                cur_line.clear();
                 cur_w = 0;
             }
             else if (cur_w > 0)
@@ -153,26 +137,26 @@ fn void wrap_cell(logic::Arena* arena, Span[] spans, int max_w, bool plain, Wrap
                 cur_w++;
             }
 
-            if (!plain) cur_line.append_zstr(ansi::fg_muted);
+            if (!plain) cur_line.append(ansi::MUTED);
             cur_line.append_char('(');
-            cur_line.append_slice(sp.url);
+            cur_line.append_string(sp.url);
             cur_line.append_char(')');
-            if (!plain) cur_line.append_zstr(ansi::RESET);
+            if (!plain) cur_line.append(ansi::RESET);
             cur_w += url_w;
         }
     }
 
-    if (cur_line.len > 0 || out_cell.lines.size == 0)
+    if (cur_line.len() > 0 || out_cell.lines.size == 0)
     {
         WrappedCellLine wl;
-        wl.text = arena.dup_string(cur_line.to_string());
+        wl.text = arena.dup_string(cur_line.str_view());
         wl.display_width = cur_w;
         out_cell.lines.push(wl);
     }
 }
 
 fn void emit_wrapped_row(
-    buffer::ByteBuffer* tb,
+    DString* tb,
     WrappedCell[] wrapped_cells,
     Alignment[] alignments,
     int[] col_widths,
@@ -196,7 +180,7 @@ fn void emit_wrapped_row(
 
     for (int l = 0; l < max_lines; l++)
     {
-        tb.reset();
+        tb.clear();
 
         for (int c = 0; c < cols; c++)
         {
@@ -212,43 +196,43 @@ fn void emit_wrapped_row(
 
                 if (is_header && !plain)
                 {
-                    tb.append_zstr(ansi::fg_cyan);
-                    tb.append_zstr(ansi::BOLD);
+                    tb.append(ansi::CYAN);
+                    tb.append(ansi::BOLD);
                 }
 
                 if (align == Alignment.CENTER)
                 {
                     int lpad = pad / 2;
                     int rpad = pad - lpad;
-                    tb.append_spaces(lpad);
-                    tb.append_slice(line_info.text);
-                    tb.append_spaces(rpad);
+                    tb.spaces(lpad);
+                    tb.append_string(line_info.text);
+                    tb.spaces(rpad);
                 }
                 else if (align == Alignment.RIGHT)
                 {
-                    tb.append_spaces(pad);
-                    tb.append_slice(line_info.text);
+                    tb.spaces(pad);
+                    tb.append_string(line_info.text);
                 }
                 else // LEFT
                 {
-                    tb.append_slice(line_info.text);
-                    tb.append_spaces(pad);
+                    tb.append_string(line_info.text);
+                    tb.spaces(pad);
                 }
 
                 if (is_header && !plain)
                 {
-                    tb.append_zstr(ansi::RESET);
+                    tb.append(ansi::RESET);
                 }
             }
             else
             {
-                tb.append_spaces(w);
+                tb.spaces(w);
             }
 
-            if (c < cols - 1) tb.append_spaces(gap);
+            if (c < cols - 1) tb.spaces(gap);
         }
 
-        emit_fn(ctx, tb.to_string(), src_line);
+        emit_fn(ctx, tb.str_view(), src_line);
     }
 }
 
@@ -257,12 +241,13 @@ fn void render_table(TableBlock* table, int src_line, int term_width, bool plain
     if (table.col_count <= 0) return;
     int cols = table.col_count;
 
-    logic::LocalScratchScope scope = logic::enter_scratch_scope(&logic::g_ctx.scratch_arena);
-    defer scope.exit();
+    logic::Arena scratch;
+    scratch.init(32768);
+    defer scratch.free();
 
-    int* max_w_ptr = (int*)logic::g_ctx.scratch_arena.alloc((usz)cols * int::size);
-    int* min_w_ptr = (int*)logic::g_ctx.scratch_arena.alloc((usz)cols * int::size);
-    int* col_widths_ptr = (int*)logic::g_ctx.scratch_arena.alloc((usz)cols * int::size);
+    int* max_w_ptr = (int*)scratch.alloc((usz)cols * int::size);
+    int* min_w_ptr = (int*)scratch.alloc((usz)cols * int::size);
+    int* col_widths_ptr = (int*)scratch.alloc((usz)cols * int::size);
 
     int[] max_w = max_w_ptr[0 : (usz)cols];
     int[] min_w = min_w_ptr[0 : (usz)cols];
@@ -331,7 +316,7 @@ fn void render_table(TableBlock* table, int src_line, int term_width, bool plain
 
         // Iteratively satisfy short columns whose full max_w can be met
         bool changed = true;
-        bool* satisfied_ptr = (bool*)logic::g_ctx.scratch_arena.alloc((usz)cols * bool::size);
+        bool* satisfied_ptr = (bool*)scratch.alloc((usz)cols * bool::size);
         bool[] satisfied = satisfied_ptr[0 : (usz)cols];
         for (int c = 0; c < cols; c++) satisfied[c] = (col_widths[c] >= max_w[c]);
 
@@ -439,32 +424,32 @@ fn void render_table(TableBlock* table, int src_line, int term_width, bool plain
         }
     }
 
-    buffer::ByteBuffer tb;
-    tb.init(4096);
+    DString tb;
+    tb.init(mem, 4096);
     defer tb.free();
 
     // 5. Wrap header row
     bool any_wrapped = false;
-    WrappedCell* hcells = (WrappedCell*)logic::g_ctx.scratch_arena.alloc((usz)cols * WrappedCell::size);
+    WrappedCell* hcells = (WrappedCell*)scratch.alloc((usz)cols * WrappedCell::size);
     for (int c = 0; c < cols; c++)
     {
         Span[] hspans = (c < (int)table.headers.len) ? table.headers[c] : {};
-        wrap_cell(&logic::g_ctx.scratch_arena, hspans, col_widths[c], plain, &hcells[c]);
+        wrap_cell(&scratch, hspans, col_widths[c], plain, &hcells[c]);
         if (hcells[c].lines.size > 1) any_wrapped = true;
     }
 
     // 6. Wrap all body rows and detect if any row wrapped
     usz num_rows = table.rows.len;
-    WrappedCell[]* all_body_rows = (WrappedCell[]*)logic::g_ctx.scratch_arena.alloc(num_rows * WrappedCell[]::size);
+    WrappedCell[]* all_body_rows = (WrappedCell[]*)scratch.alloc(num_rows * WrappedCell[]::size);
 
     for (usz r = 0; r < num_rows; r++)
     {
         Span[][] row = table.rows[r];
-        WrappedCell* rcells = (WrappedCell*)logic::g_ctx.scratch_arena.alloc((usz)cols * WrappedCell::size);
+        WrappedCell* rcells = (WrappedCell*)scratch.alloc((usz)cols * WrappedCell::size);
         for (int c = 0; c < cols; c++)
         {
             Span[] cspans = (c < (int)row.len) ? row[c] : {};
-            wrap_cell(&logic::g_ctx.scratch_arena, cspans, col_widths[c], plain, &rcells[c]);
+            wrap_cell(&scratch, cspans, col_widths[c], plain, &rcells[c]);
             if (rcells[c].lines.size > 1) any_wrapped = true;
         }
         all_body_rows[r] = rcells[0 : (usz)cols];
@@ -475,15 +460,15 @@ fn void render_table(TableBlock* table, int src_line, int term_width, bool plain
     for (int c = 0; c < cols; c++) hcells[c].lines.free();
 
     // 8. Separator line under header
-    tb.reset();
-    if (!plain) tb.append_zstr(ansi::fg_muted);
+    tb.clear();
+    if (!plain) tb.append(ansi::MUTED);
     for (int c = 0; c < cols; c++)
     {
-        tb.append_repeat("─", col_widths[c]);
-        if (c < cols - 1) tb.append_spaces(gap);
+        tb.repeat("─", col_widths[c]);
+        if (c < cols - 1) tb.spaces(gap);
     }
-    if (!plain) tb.append_zstr(ansi::RESET);
-    emit_fn(ctx, tb.to_string(), src_line + 1);
+    if (!plain) tb.append(ansi::RESET);
+    emit_fn(ctx, tb.str_view(), src_line + 1);
 
     // 9. Emit body rows (with 1 blank line between rows ONLY if at least one row wrapped)
     for (usz r = 0; r < num_rows; r++)

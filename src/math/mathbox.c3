@@ -2,8 +2,7 @@ module math;
 
 import std::core::mem;
 import logic;
-import strutils;
-import buffer;
+import text;
 
 fn MathBox box_empty(logic::Arena* arena)
 {
@@ -20,7 +19,7 @@ fn MathBox box_empty(logic::Arena* arena)
 fn MathBox box_from_string(logic::Arena* arena, String text)
 {
     MathBox box;
-    box.width = strutils::string_display_width(text);
+    box.width = text::width(text);
     box.height = 1;
     box.baseline = 0;
     String* r = (String*)arena.alloc(String::size);
@@ -32,18 +31,16 @@ fn MathBox box_from_string(logic::Arena* arena, String text)
 fn MathBox box_from_zstr(logic::Arena* arena, char* text)
 {
     if (text == null || text[0] == 0) return box_empty(arena);
-    int len = strutils::str_len(text);
-    String s = (String)text[:len];
-    return box_from_string(arena, s);
+    return box_from_string(arena, ((ZString)text).str_view());
 }
 
 fn MathBox box_spaces(logic::Arena* arena, int count)
 {
     if (count <= 0) return box_empty(arena);
-    buffer::ByteBuffer mb;
-    mb.init((usz)(count + 1));
+    DString mb;
+    mb.init(mem, (usz)(count + 1));
     defer mb.free();
-    mb.append_spaces(count);
+    mb.spaces(count);
 
     MathBox box;
     box.width = count;
@@ -71,43 +68,43 @@ fn MathBox box_hconcat(logic::Arena* arena, MathBox left, MathBox right, int gap
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
 
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     for (int r = 0; r < new_h; r++)
     {
-        mb.reset();
+        mb.clear();
 
         // Left part
         int lr = r - (above - left.baseline);
         if (lr >= 0 && lr < left.height)
         {
-            mb.append_slice(left.rows[lr]);
-            int row_w = strutils::string_display_width(left.rows[lr]);
+            mb.append_string(left.rows[lr]);
+            int row_w = text::width(left.rows[lr]);
             int pad = left.width - row_w;
-            if (pad > 0) mb.append_spaces(pad);
+            if (pad > 0) mb.spaces(pad);
         }
         else
         {
-            mb.append_spaces(left.width);
+            mb.spaces(left.width);
         }
 
         // Gap
-        if (gap > 0) mb.append_spaces(gap);
+        if (gap > 0) mb.spaces(gap);
 
         // Right part
         int rr = r - (above - right.baseline);
         if (rr >= 0 && rr < right.height)
         {
-            mb.append_slice(right.rows[rr]);
-            int row_w = strutils::string_display_width(right.rows[rr]);
+            mb.append_string(right.rows[rr]);
+            int row_w = text::width(right.rows[rr]);
             int pad = right.width - row_w;
-            if (pad > 0) mb.append_spaces(pad);
+            if (pad > 0) mb.spaces(pad);
         }
         else
         {
-            mb.append_spaces(right.width);
+            mb.spaces(right.width);
         }
 
         r_buf[r] = mb.to_arena_string(arena);
@@ -131,40 +128,40 @@ fn MathBox box_fraction(logic::Arena* arena, MathBox num, MathBox den)
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
 
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     // Numerator rows (centered)
     for (int r = 0; r < num.height; r++)
     {
-        mb.reset();
-        int row_w = strutils::string_display_width(num.rows[r]);
+        mb.clear();
+        int row_w = text::width(num.rows[r]);
         int total_pad = w - row_w;
         int lpad = total_pad / 2;
         int rpad = total_pad - lpad;
-        if (lpad > 0) mb.append_spaces(lpad);
-        mb.append_slice(num.rows[r]);
-        if (rpad > 0) mb.append_spaces(rpad);
+        if (lpad > 0) mb.spaces(lpad);
+        mb.append_string(num.rows[r]);
+        if (rpad > 0) mb.spaces(rpad);
         r_buf[r] = mb.to_arena_string(arena);
     }
 
     // Fraction bar
-    mb.reset();
-    mb.append_repeat("─", w);
+    mb.clear();
+    mb.repeat("─", w);
     r_buf[num.height] = mb.to_arena_string(arena);
 
     // Denominator rows (centered)
     for (int r = 0; r < den.height; r++)
     {
-        mb.reset();
-        int row_w = strutils::string_display_width(den.rows[r]);
+        mb.clear();
+        int row_w = text::width(den.rows[r]);
         int total_pad = w - row_w;
         int lpad = total_pad / 2;
         int rpad = total_pad - lpad;
-        if (lpad > 0) mb.append_spaces(lpad);
-        mb.append_slice(den.rows[r]);
-        if (rpad > 0) mb.append_spaces(rpad);
+        if (lpad > 0) mb.spaces(lpad);
+        mb.append_string(den.rows[r]);
+        if (rpad > 0) mb.spaces(rpad);
         r_buf[num.height + 1 + r] = mb.to_arena_string(arena);
     }
 
@@ -188,66 +185,66 @@ fn MathBox box_sqrt(logic::Arena* arena, MathBox inner, MathBox degree)
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
 
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     // Top row 0 (vinculum overline): [deg] spaces + ╭ + ───
-    mb.reset();
+    mb.clear();
     if (deg_w > 0)
     {
-        mb.append_slice(degree.rows[0]);
+        mb.append_string(degree.rows[0]);
     }
     else
     {
         mb.append_char(' ');
     }
-    if (slant > 0) mb.append_spaces(slant);
-    mb.append_zstr("╭");
-    mb.append_repeat("─", inner.width);
+    if (slant > 0) mb.spaces(slant);
+    mb.append("╭");
+    mb.repeat("─", inner.width);
     r_buf[0] = mb.to_arena_string(arena);
 
     // Inner rows (1 .. inner.height)
     for (int r = 0; r < h; r++)
     {
-        mb.reset();
+        mb.clear();
         if (deg_w > 0)
         {
-            mb.append_spaces(deg_w);
+            mb.spaces(deg_w);
         }
 
         if (h == 1)
         {
             if (deg_w > 0)
             {
-                mb.append_zstr("√");
+                mb.append("√");
             }
             else
             {
-                mb.append_zstr("√ ");
+                mb.append("√ ");
             }
         }
         else
         {
             int indent = (h - 1 - r);
-            if (indent > 0) mb.append_spaces(indent);
+            if (indent > 0) mb.spaces(indent);
 
             if (r == h - 1)
             {
-                mb.append_zstr("√ ");
+                mb.append("√ ");
             }
             else
             {
-                mb.append_zstr("╱ ");
+                mb.append("╱ ");
             }
 
-            if (r > 0) mb.append_spaces(r);
+            if (r > 0) mb.spaces(r);
         }
 
-        mb.append_slice(inner.rows[r]);
-        int row_w = strutils::string_display_width(inner.rows[r]);
+        mb.append_string(inner.rows[r]);
+        int row_w = text::width(inner.rows[r]);
         int pad = inner.width - row_w;
-        if (pad > 0) mb.append_spaces(pad);
+        if (pad > 0) mb.spaces(pad);
 
         r_buf[r + 1] = mb.to_arena_string(arena);
     }
@@ -273,8 +270,8 @@ fn MathBox box_summation_op(logic::Arena* arena, MathBox sub, MathBox sup)
     int base = sup_h + 2;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     int cur_r = 0;
@@ -284,12 +281,12 @@ fn MathBox box_summation_op(logic::Arena* arena, MathBox sub, MathBox sup)
     {
         for (int r = 0; r < sup.height; r++)
         {
-            mb.reset();
-            int rw = strutils::string_display_width(sup.rows[r]);
+            mb.clear();
+            int rw = text::width(sup.rows[r]);
             int pad = (max_w - rw) / 2;
-            mb.append_spaces(pad);
-            mb.append_slice(sup.rows[r]);
-            mb.append_spaces(max_w - rw - pad);
+            mb.spaces(pad);
+            mb.append_string(sup.rows[r]);
+            mb.spaces(max_w - rw - pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -298,11 +295,11 @@ fn MathBox box_summation_op(logic::Arena* arena, MathBox sub, MathBox sup)
     char*[5] sig = { " ─── ", " \\   ", "  >  ", " /   ", " ─── " };
     for (int i = 0; i < 5; i++)
     {
-        mb.reset();
+        mb.clear();
         int pad = (max_w - sym_w) / 2;
-        mb.append_spaces(pad);
-        mb.append_zstr(sig[i]);
-        mb.append_spaces(max_w - sym_w - pad);
+        mb.spaces(pad);
+        mb.zstr(sig[i]);
+        mb.spaces(max_w - sym_w - pad);
         r_buf[cur_r++] = mb.to_arena_string(arena);
     }
 
@@ -311,12 +308,12 @@ fn MathBox box_summation_op(logic::Arena* arena, MathBox sub, MathBox sup)
     {
         for (int r = 0; r < sub.height; r++)
         {
-            mb.reset();
-            int rw = strutils::string_display_width(sub.rows[r]);
+            mb.clear();
+            int rw = text::width(sub.rows[r]);
             int pad = (max_w - rw) / 2;
-            mb.append_spaces(pad);
-            mb.append_slice(sub.rows[r]);
-            mb.append_spaces(max_w - rw - pad);
+            mb.spaces(pad);
+            mb.append_string(sub.rows[r]);
+            mb.spaces(max_w - rw - pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -342,8 +339,8 @@ fn MathBox box_product_op(logic::Arena* arena, MathBox sub, MathBox sup)
     int base = sup_h + 2;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     int cur_r = 0;
@@ -353,12 +350,12 @@ fn MathBox box_product_op(logic::Arena* arena, MathBox sub, MathBox sup)
     {
         for (int r = 0; r < sup.height; r++)
         {
-            mb.reset();
-            int rw = strutils::string_display_width(sup.rows[r]);
+            mb.clear();
+            int rw = text::width(sup.rows[r]);
             int pad = (max_w - rw) / 2;
-            mb.append_spaces(pad);
-            mb.append_slice(sup.rows[r]);
-            mb.append_spaces(max_w - rw - pad);
+            mb.spaces(pad);
+            mb.append_string(sup.rows[r]);
+            mb.spaces(max_w - rw - pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -367,11 +364,11 @@ fn MathBox box_product_op(logic::Arena* arena, MathBox sub, MathBox sup)
     char*[5] pi_lines = { " ─── ", " ┬ ┬ ", " │ │ ", " │ │ ", " ┴ ┴ " };
     for (int i = 0; i < 5; i++)
     {
-        mb.reset();
+        mb.clear();
         int pad = (max_w - sym_w) / 2;
-        mb.append_spaces(pad);
-        mb.append_zstr(pi_lines[i]);
-        mb.append_spaces(max_w - sym_w - pad);
+        mb.spaces(pad);
+        mb.zstr(pi_lines[i]);
+        mb.spaces(max_w - sym_w - pad);
         r_buf[cur_r++] = mb.to_arena_string(arena);
     }
 
@@ -380,12 +377,12 @@ fn MathBox box_product_op(logic::Arena* arena, MathBox sub, MathBox sup)
     {
         for (int r = 0; r < sub.height; r++)
         {
-            mb.reset();
-            int rw = strutils::string_display_width(sub.rows[r]);
+            mb.clear();
+            int rw = text::width(sub.rows[r]);
             int pad = (max_w - rw) / 2;
-            mb.append_spaces(pad);
-            mb.append_slice(sub.rows[r]);
-            mb.append_spaces(max_w - rw - pad);
+            mb.spaces(pad);
+            mb.append_string(sub.rows[r]);
+            mb.spaces(max_w - rw - pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -411,8 +408,8 @@ fn MathBox box_big_union_op(logic::Arena* arena, MathBox sub, MathBox sup, bool 
     int base = sup_h + 1;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     int cur_r = 0;
@@ -421,12 +418,12 @@ fn MathBox box_big_union_op(logic::Arena* arena, MathBox sub, MathBox sup, bool 
     {
         for (int r = 0; r < sup.height; r++)
         {
-            mb.reset();
-            int rw = strutils::string_display_width(sup.rows[r]);
+            mb.clear();
+            int rw = text::width(sup.rows[r]);
             int pad = (max_w - rw) / 2;
-            mb.append_spaces(pad);
-            mb.append_slice(sup.rows[r]);
-            mb.append_spaces(max_w - rw - pad);
+            mb.spaces(pad);
+            mb.append_string(sup.rows[r]);
+            mb.spaces(max_w - rw - pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -434,11 +431,11 @@ fn MathBox box_big_union_op(logic::Arena* arena, MathBox sub, MathBox sup, bool 
     char*[3] glyph = is_intersection ? { " ╭─╮ ", " │ │ ", " ╵ ╵ " } : { " ╷ ╷ ", " │ │ ", " ╰─╯ " };
     for (int i = 0; i < 3; i++)
     {
-        mb.reset();
+        mb.clear();
         int pad = (max_w - sym_w) / 2;
-        mb.append_spaces(pad);
-        mb.append_zstr(glyph[i]);
-        mb.append_spaces(max_w - sym_w - pad);
+        mb.spaces(pad);
+        mb.zstr(glyph[i]);
+        mb.spaces(max_w - sym_w - pad);
         r_buf[cur_r++] = mb.to_arena_string(arena);
     }
 
@@ -446,12 +443,12 @@ fn MathBox box_big_union_op(logic::Arena* arena, MathBox sub, MathBox sup, bool 
     {
         for (int r = 0; r < sub.height; r++)
         {
-            mb.reset();
-            int rw = strutils::string_display_width(sub.rows[r]);
+            mb.clear();
+            int rw = text::width(sub.rows[r]);
             int pad = (max_w - rw) / 2;
-            mb.append_spaces(pad);
-            mb.append_slice(sub.rows[r]);
-            mb.append_spaces(max_w - rw - pad);
+            mb.spaces(pad);
+            mb.append_string(sub.rows[r]);
+            mb.spaces(max_w - rw - pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -478,8 +475,8 @@ fn MathBox box_integral_op(logic::Arena* arena, MathBox sub, MathBox sup, int in
     int base = sup_h + (h / 2);
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     int cur_r = 0;
@@ -489,12 +486,12 @@ fn MathBox box_integral_op(logic::Arena* arena, MathBox sub, MathBox sup, int in
     {
         for (int r = 0; r < sup.height; r++)
         {
-            mb.reset();
-            mb.append_spaces(sym_w);
-            mb.append_slice(sup.rows[r]);
-            int rw = strutils::string_display_width(sup.rows[r]);
+            mb.clear();
+            mb.spaces(sym_w);
+            mb.append_string(sup.rows[r]);
+            int rw = text::width(sup.rows[r]);
             int pad = max_w - sym_w - rw;
-            if (pad > 0) mb.append_spaces(pad);
+            if (pad > 0) mb.spaces(pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -502,27 +499,27 @@ fn MathBox box_integral_op(logic::Arena* arena, MathBox sub, MathBox sup, int in
     // Integral rows
     for (int r = 0; r < h; r++)
     {
-        mb.reset();
+        mb.clear();
         if (int_order == 1)
         {
-            if (r == 0) { mb.append_zstr(" ⌠ "); }
-            else if (r == h - 1) { mb.append_zstr(" ⌡ "); }
-            else { mb.append_zstr(" │ "); }
+            if (r == 0) { mb.append(" ⌠ "); }
+            else if (r == h - 1) { mb.append(" ⌡ "); }
+            else { mb.append(" │ "); }
         }
         else if (int_order == 2)
         {
-            if (r == 0) { mb.append_zstr(" ⌠⌠ "); }
-            else if (r == h - 1) { mb.append_zstr(" ⌡⌡ "); }
-            else { mb.append_zstr(" ││ "); }
+            if (r == 0) { mb.append(" ⌠⌠ "); }
+            else if (r == h - 1) { mb.append(" ⌡⌡ "); }
+            else { mb.append(" ││ "); }
         }
         else
         {
-            if (r == 0) { mb.append_zstr(" ⌠⌠⌠ "); }
-            else if (r == h - 1) { mb.append_zstr(" ⌡⌡⌡ "); }
-            else { mb.append_zstr(" │││ "); }
+            if (r == 0) { mb.append(" ⌠⌠⌠ "); }
+            else if (r == h - 1) { mb.append(" ⌡⌡⌡ "); }
+            else { mb.append(" │││ "); }
         }
 
-        mb.append_spaces(max_w - sym_w);
+        mb.spaces(max_w - sym_w);
         r_buf[cur_r++] = mb.to_arena_string(arena);
     }
 
@@ -531,12 +528,12 @@ fn MathBox box_integral_op(logic::Arena* arena, MathBox sub, MathBox sup, int in
     {
         for (int r = 0; r < sub.height; r++)
         {
-            mb.reset();
-            mb.append_spaces(sym_w);
-            mb.append_slice(sub.rows[r]);
-            int rw = strutils::string_display_width(sub.rows[r]);
+            mb.clear();
+            mb.spaces(sym_w);
+            mb.append_string(sub.rows[r]);
+            int rw = text::width(sub.rows[r]);
             int pad = max_w - sym_w - rw;
-            if (pad > 0) mb.append_spaces(pad);
+            if (pad > 0) mb.spaces(pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -561,8 +558,8 @@ fn MathBox box_limits_op(logic::Arena* arena, MathBox op, MathBox sub, MathBox s
     int base = sup_h + op.baseline;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     int cur_r = 0;
@@ -572,12 +569,12 @@ fn MathBox box_limits_op(logic::Arena* arena, MathBox op, MathBox sub, MathBox s
     {
         for (int r = 0; r < sup.height; r++)
         {
-            mb.reset();
-            int rw = strutils::string_display_width(sup.rows[r]);
+            mb.clear();
+            int rw = text::width(sup.rows[r]);
             int pad = (max_w - rw) / 2;
-            mb.append_spaces(pad);
-            mb.append_slice(sup.rows[r]);
-            mb.append_spaces(max_w - rw - pad);
+            mb.spaces(pad);
+            mb.append_string(sup.rows[r]);
+            mb.spaces(max_w - rw - pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -585,12 +582,12 @@ fn MathBox box_limits_op(logic::Arena* arena, MathBox op, MathBox sub, MathBox s
     // Op in middle
     for (int r = 0; r < op.height; r++)
     {
-        mb.reset();
-        int rw = strutils::string_display_width(op.rows[r]);
+        mb.clear();
+        int rw = text::width(op.rows[r]);
         int pad = (max_w - rw) / 2;
-        mb.append_spaces(pad);
-        mb.append_slice(op.rows[r]);
-        mb.append_spaces(max_w - rw - pad);
+        mb.spaces(pad);
+        mb.append_string(op.rows[r]);
+        mb.spaces(max_w - rw - pad);
         r_buf[cur_r++] = mb.to_arena_string(arena);
     }
 
@@ -599,12 +596,12 @@ fn MathBox box_limits_op(logic::Arena* arena, MathBox op, MathBox sub, MathBox s
     {
         for (int r = 0; r < sub.height; r++)
         {
-            mb.reset();
-            int rw = strutils::string_display_width(sub.rows[r]);
+            mb.clear();
+            int rw = text::width(sub.rows[r]);
             int pad = (max_w - rw) / 2;
-            mb.append_spaces(pad);
-            mb.append_slice(sub.rows[r]);
-            mb.append_spaces(max_w - rw - pad);
+            mb.spaces(pad);
+            mb.append_string(sub.rows[r]);
+            mb.spaces(max_w - rw - pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -625,14 +622,14 @@ fn MathBox box_supsub(logic::Arena* arena, MathBox base, MathBox sup, MathBox su
     if (sup.width == 0 && base.height == 1 && sub.height <= 1)
     {
         String sub_txt = (sub.width > 0) ? sub.rows[0] : "";
-        String u_sub = (sub.width > 0) ? try_unicode_subscript(arena, sub_txt) : "";
+        String u_sub = (sub.width > 0) ? SUB.apply(arena, sub_txt) : "";
         if (u_sub.len > 0)
         {
-            buffer::ByteBuffer mb;
-            mb.init(128);
+            DString mb;
+            mb.init(mem, 128);
             defer mb.free();
-            mb.append_slice(base.rows[0]);
-            mb.append_slice(u_sub);
+            mb.append_string(base.rows[0]);
+            mb.append_string(u_sub);
             return box_from_string(arena, mb.to_arena_string(arena));
         }
     }
@@ -646,8 +643,8 @@ fn MathBox box_supsub(logic::Arena* arena, MathBox base, MathBox sup, MathBox su
     int new_w = base.width + script_w;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     int cur_r = 0;
@@ -657,12 +654,12 @@ fn MathBox box_supsub(logic::Arena* arena, MathBox base, MathBox sup, MathBox su
     {
         for (int r = 0; r < sup.height; r++)
         {
-            mb.reset();
-            mb.append_spaces(base.width);
-            mb.append_slice(sup.rows[r]);
-            int rw = strutils::string_display_width(sup.rows[r]);
+            mb.clear();
+            mb.spaces(base.width);
+            mb.append_string(sup.rows[r]);
+            int rw = text::width(sup.rows[r]);
             int pad = script_w - rw;
-            if (pad > 0) mb.append_spaces(pad);
+            if (pad > 0) mb.spaces(pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -670,12 +667,12 @@ fn MathBox box_supsub(logic::Arena* arena, MathBox base, MathBox sup, MathBox su
     // Base rows
     for (int r = 0; r < base.height; r++)
     {
-        mb.reset();
-        mb.append_slice(base.rows[r]);
-        int rw = strutils::string_display_width(base.rows[r]);
+        mb.clear();
+        mb.append_string(base.rows[r]);
+        int rw = text::width(base.rows[r]);
         int pad = base.width - rw;
-        if (pad > 0) mb.append_spaces(pad);
-        mb.append_spaces(script_w);
+        if (pad > 0) mb.spaces(pad);
+        mb.spaces(script_w);
         r_buf[cur_r++] = mb.to_arena_string(arena);
     }
 
@@ -684,12 +681,12 @@ fn MathBox box_supsub(logic::Arena* arena, MathBox base, MathBox sup, MathBox su
     {
         for (int r = 0; r < sub.height; r++)
         {
-            mb.reset();
-            mb.append_spaces(base.width);
-            mb.append_slice(sub.rows[r]);
-            int rw = strutils::string_display_width(sub.rows[r]);
+            mb.clear();
+            mb.spaces(base.width);
+            mb.append_string(sub.rows[r]);
+            int rw = text::width(sub.rows[r]);
             int pad = script_w - rw;
-            if (pad > 0) mb.append_spaces(pad);
+            if (pad > 0) mb.spaces(pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -714,8 +711,8 @@ fn MathBox box_xarrow(logic::Arena* arena, MathBox sup, MathBox sub, char arrow_
     int base = sup_h;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     int cur_r = 0;
@@ -725,33 +722,33 @@ fn MathBox box_xarrow(logic::Arena* arena, MathBox sup, MathBox sub, char arrow_
     {
         for (int r = 0; r < sup.height; r++)
         {
-            mb.reset();
-            int rw = strutils::string_display_width(sup.rows[r]);
+            mb.clear();
+            int rw = text::width(sup.rows[r]);
             int pad = (arrow_w - rw) / 2;
-            mb.append_spaces(pad);
-            mb.append_slice(sup.rows[r]);
-            mb.append_spaces(arrow_w - rw - pad);
+            mb.spaces(pad);
+            mb.append_string(sup.rows[r]);
+            mb.spaces(arrow_w - rw - pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
 
     // Arrow line: ───→, ←───, ←───→
-    mb.reset();
+    mb.clear();
     if (arrow_dir == 'R')
     {
-        mb.append_repeat("─", arrow_w - 1);
-        mb.append_zstr("→");
+        mb.repeat("─", arrow_w - 1);
+        mb.append("→");
     }
     else if (arrow_dir == 'L')
     {
-        mb.append_zstr("←");
-        mb.append_repeat("─", arrow_w - 1);
+        mb.append("←");
+        mb.repeat("─", arrow_w - 1);
     }
     else // 'B' (Both)
     {
-        mb.append_zstr("←");
-        mb.append_repeat("─", arrow_w - 2);
-        mb.append_zstr("→");
+        mb.append("←");
+        mb.repeat("─", arrow_w - 2);
+        mb.append("→");
     }
     r_buf[cur_r++] = mb.to_arena_string(arena);
 
@@ -760,12 +757,12 @@ fn MathBox box_xarrow(logic::Arena* arena, MathBox sup, MathBox sub, char arrow_
     {
         for (int r = 0; r < sub.height; r++)
         {
-            mb.reset();
-            int rw = strutils::string_display_width(sub.rows[r]);
+            mb.clear();
+            int rw = text::width(sub.rows[r]);
             int pad = (arrow_w - rw) / 2;
-            mb.append_spaces(pad);
-            mb.append_slice(sub.rows[r]);
-            mb.append_spaces(arrow_w - rw - pad);
+            mb.spaces(pad);
+            mb.append_string(sub.rows[r]);
+            mb.spaces(arrow_w - rw - pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -786,8 +783,8 @@ fn MathBox box_underline(logic::Arena* arena, MathBox inner)
     int new_base = inner.baseline;
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     for (int r = 0; r < inner.height; r++)
@@ -795,8 +792,8 @@ fn MathBox box_underline(logic::Arena* arena, MathBox inner)
         r_buf[r] = inner.rows[r];
     }
 
-    mb.reset();
-    mb.append_repeat("─", w);
+    mb.clear();
+    mb.repeat("─", w);
     r_buf[inner.height] = mb.to_arena_string(arena);
 
     MathBox res;
@@ -815,20 +812,20 @@ fn MathBox box_overarrow(logic::Arena* arena, MathBox inner, bool right_dir = tr
     int new_base = inner.baseline + 1;
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
-    mb.reset();
+    mb.clear();
     if (right_dir)
     {
-        if (w > 1) mb.append_repeat("─", w - 1);
-        mb.append_zstr("→");
+        if (w > 1) mb.repeat("─", w - 1);
+        mb.append("→");
     }
     else
     {
-        mb.append_zstr("←");
-        if (w > 1) mb.append_repeat("─", w - 1);
+        mb.append("←");
+        if (w > 1) mb.repeat("─", w - 1);
     }
     r_buf[0] = mb.to_arena_string(arena);
 
@@ -856,20 +853,20 @@ fn MathBox box_cancel(logic::Arena* arena, MathBox inner)
 {
     if (inner.height == 0) return inner;
     String* r_buf = (String*)arena.alloc((usz)inner.height * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     for (int r = 0; r < inner.height; r++)
     {
-        mb.reset();
+        mb.clear();
         String row = inner.rows[r];
         for (usz i = 0; i < (usz)row.len; i++)
         {
             mb.append_char(row[i]);
             if (row[i] != ' ')
             {
-                mb.append_zstr("̸");
+                mb.append("̸");
             }
         }
         r_buf[r] = mb.to_arena_string(arena);
@@ -883,20 +880,20 @@ fn MathBox box_cancel(logic::Arena* arena, MathBox inner)
     return res;
 }
 
-fn MathBox box_colorize(logic::Arena* arena, MathBox inner, char* ansi_color)
+fn MathBox box_colorize(logic::Arena* arena, MathBox inner, String color)
 {
-    if (inner.height == 0 || ansi_color == null) return inner;
+    if (inner.height == 0) return inner;
     String* r_buf = (String*)arena.alloc((usz)inner.height * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     for (int r = 0; r < inner.height; r++)
     {
-        mb.reset();
-        mb.append_zstr(ansi_color);
-        mb.append_slice(inner.rows[r]);
-        mb.append_zstr("\x1b[0m\x1b[38;2;255;216;102m\x1b[1m");
+        mb.clear();
+        mb.append(color);
+        mb.append_string(inner.rows[r]);
+        mb.append("\x1b[0m\x1b[38;2;255;216;102m\x1b[1m");
         r_buf[r] = mb.to_arena_string(arena);
     }
 
@@ -931,56 +928,56 @@ fn MathBox box_delimiters(logic::Arena* arena, MathBox inner, char open_ch, char
     int new_w = inner.width + l_pad + r_pad;
 
     String* r_buf = (String*)arena.alloc((usz)h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     for (int r = 0; r < h; r++)
     {
-        mb.reset();
+        mb.clear();
 
         // Left delimiter
         if (open_ch == '(')
         {
-            if (r == 0) { mb.append_zstr("⎛ "); }
-            else if (r == h - 1) { mb.append_zstr("⎝ "); }
-            else { mb.append_zstr("⎜ "); }
+            if (r == 0) { mb.append("⎛ "); }
+            else if (r == h - 1) { mb.append("⎝ "); }
+            else { mb.append("⎜ "); }
         }
         else if (open_ch == '[')
         {
-            if (r == 0) { mb.append_zstr("⎡ "); }
-            else if (r == h - 1) { mb.append_zstr("⎣ "); }
-            else { mb.append_zstr("⎢ "); }
+            if (r == 0) { mb.append("⎡ "); }
+            else if (r == h - 1) { mb.append("⎣ "); }
+            else { mb.append("⎢ "); }
         }
         else if (open_ch == '{')
         {
-            if (r == 0) { mb.append_zstr("⎧ "); }
-            else if (r == h - 1) { mb.append_zstr("⎩ "); }
-            else if (r == h / 2) { mb.append_zstr("⎨ "); }
-            else { mb.append_zstr("⎪ "); }
+            if (r == 0) { mb.append("⎧ "); }
+            else if (r == h - 1) { mb.append("⎩ "); }
+            else if (r == h / 2) { mb.append("⎨ "); }
+            else { mb.append("⎪ "); }
         }
         else if (open_ch == 'F') // Floor \lfloor
         {
-            if (r == h - 1) { mb.append_zstr("⎣ "); }
-            else { mb.append_zstr("⎢ "); }
+            if (r == h - 1) { mb.append("⎣ "); }
+            else { mb.append("⎢ "); }
         }
         else if (open_ch == 'C') // Ceil \lceil
         {
-            if (r == 0) { mb.append_zstr("⎡ "); }
-            else { mb.append_zstr("⎢ "); }
+            if (r == 0) { mb.append("⎡ "); }
+            else { mb.append("⎢ "); }
         }
         else if (open_ch == '<') // Angle \langle
         {
-            if (r == 0 || r == h - 1) { mb.append_zstr("⟨ "); }
-            else { mb.append_zstr("│ "); }
+            if (r == 0 || r == h - 1) { mb.append("⟨ "); }
+            else { mb.append("│ "); }
         }
         else if (open_ch == '|')
         {
-            mb.append_zstr("│ ");
+            mb.append("│ ");
         }
         else if (open_ch == 'V') // Norm \|
         {
-            mb.append_zstr("║ ");
+            mb.append("║ ");
         }
         else if (open_ch != 0)
         {
@@ -989,53 +986,53 @@ fn MathBox box_delimiters(logic::Arena* arena, MathBox inner, char open_ch, char
         }
 
         // Inner row
-        mb.append_slice(inner.rows[r]);
-        int row_w = strutils::string_display_width(inner.rows[r]);
+        mb.append_string(inner.rows[r]);
+        int row_w = text::width(inner.rows[r]);
         int pad = inner.width - row_w;
-        if (pad > 0) mb.append_spaces(pad);
+        if (pad > 0) mb.spaces(pad);
 
         // Right delimiter
         if (close_ch == ')')
         {
-            if (r == 0) { mb.append_zstr(" ⎞"); }
-            else if (r == h - 1) { mb.append_zstr(" ⎠"); }
-            else { mb.append_zstr(" ⎟"); }
+            if (r == 0) { mb.append(" ⎞"); }
+            else if (r == h - 1) { mb.append(" ⎠"); }
+            else { mb.append(" ⎟"); }
         }
         else if (close_ch == ']')
         {
-            if (r == 0) { mb.append_zstr(" ⎤"); }
-            else if (r == h - 1) { mb.append_zstr(" ⎦"); }
-            else { mb.append_zstr(" ⎥"); }
+            if (r == 0) { mb.append(" ⎤"); }
+            else if (r == h - 1) { mb.append(" ⎦"); }
+            else { mb.append(" ⎥"); }
         }
         else if (close_ch == '}')
         {
-            if (r == 0) { mb.append_zstr(" ⎫"); }
-            else if (r == h - 1) { mb.append_zstr(" ⎭"); }
-            else if (r == h / 2) { mb.append_zstr(" ⎬"); }
-            else { mb.append_zstr(" ⎪"); }
+            if (r == 0) { mb.append(" ⎫"); }
+            else if (r == h - 1) { mb.append(" ⎭"); }
+            else if (r == h / 2) { mb.append(" ⎬"); }
+            else { mb.append(" ⎪"); }
         }
         else if (close_ch == 'F') // Floor \rfloor
         {
-            if (r == h - 1) { mb.append_zstr(" ⎦"); }
-            else { mb.append_zstr(" ⎥"); }
+            if (r == h - 1) { mb.append(" ⎦"); }
+            else { mb.append(" ⎥"); }
         }
         else if (close_ch == 'C') // Ceil \rceil
         {
-            if (r == 0) { mb.append_zstr(" ⎤"); }
-            else { mb.append_zstr(" ⎥"); }
+            if (r == 0) { mb.append(" ⎤"); }
+            else { mb.append(" ⎥"); }
         }
         else if (close_ch == '>') // Angle \rangle
         {
-            if (r == 0 || r == h - 1) { mb.append_zstr(" ⟩"); }
-            else { mb.append_zstr(" │"); }
+            if (r == 0 || r == h - 1) { mb.append(" ⟩"); }
+            else { mb.append(" │"); }
         }
         else if (close_ch == '|')
         {
-            mb.append_zstr(" │");
+            mb.append(" │");
         }
         else if (close_ch == 'V')
         {
-            mb.append_zstr(" ║");
+            mb.append(" ║");
         }
         else if (close_ch != 0)
         {
@@ -1068,8 +1065,8 @@ fn MathBox box_vconcat_list(logic::Arena* arena, MathBox[] list)
     }
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     int cur_r = 0;
@@ -1078,11 +1075,11 @@ fn MathBox box_vconcat_list(logic::Arena* arena, MathBox[] list)
         MathBox b = list[i];
         for (int r = 0; r < b.height; r++)
         {
-            mb.reset();
-            mb.append_slice(b.rows[r]);
-            int rw = strutils::string_display_width(b.rows[r]);
+            mb.clear();
+            mb.append_string(b.rows[r]);
+            int rw = text::width(b.rows[r]);
             int pad = max_w - rw;
-            if (pad > 0) mb.append_spaces(pad);
+            if (pad > 0) mb.spaces(pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -1102,35 +1099,35 @@ fn MathBox box_boxed(logic::Arena* arena, MathBox inner)
     int new_base = inner.baseline + 1;
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     // Top border: ┌───┐
-    mb.reset();
-    mb.append_zstr("┌");
-    mb.append_repeat("─", inner.width + 2);
-    mb.append_zstr("┐");
+    mb.clear();
+    mb.append("┌");
+    mb.repeat("─", inner.width + 2);
+    mb.append("┐");
     r_buf[0] = mb.to_arena_string(arena);
 
     // Inner rows: │ text │
     for (int r = 0; r < inner.height; r++)
     {
-        mb.reset();
-        mb.append_zstr("│ ");
-        mb.append_slice(inner.rows[r]);
-        int rw = strutils::string_display_width(inner.rows[r]);
+        mb.clear();
+        mb.append("│ ");
+        mb.append_string(inner.rows[r]);
+        int rw = text::width(inner.rows[r]);
         int pad = inner.width - rw;
-        if (pad > 0) mb.append_spaces(pad);
-        mb.append_zstr(" │");
+        if (pad > 0) mb.spaces(pad);
+        mb.append(" │");
         r_buf[r + 1] = mb.to_arena_string(arena);
     }
 
     // Bottom border: └───┘
-    mb.reset();
-    mb.append_zstr("└");
-    mb.append_repeat("─", inner.width + 2);
-    mb.append_zstr("┘");
+    mb.clear();
+    mb.append("└");
+    mb.repeat("─", inner.width + 2);
+    mb.append("┘");
     r_buf[new_h - 1] = mb.to_arena_string(arena);
 
     MathBox res;
@@ -1149,12 +1146,12 @@ fn MathBox box_overline(logic::Arena* arena, MathBox inner)
     int new_base = inner.baseline + 1;
 
     String* r_buf = (String*)arena.alloc((usz)new_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
-    mb.reset();
-    mb.append_repeat("─", w);
+    mb.clear();
+    mb.repeat("─", w);
     r_buf[0] = mb.to_arena_string(arena);
 
     for (int r = 0; r < inner.height; r++)
@@ -1178,8 +1175,8 @@ fn MathBox box_overbrace(logic::Arena* arena, MathBox inner, MathBox label)
     int base = lab_h + 1 + inner.baseline;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     int cur_r = 0;
@@ -1189,33 +1186,33 @@ fn MathBox box_overbrace(logic::Arena* arena, MathBox inner, MathBox label)
     {
         for (int r = 0; r < label.height; r++)
         {
-            mb.reset();
-            int rw = strutils::string_display_width(label.rows[r]);
+            mb.clear();
+            int rw = text::width(label.rows[r]);
             int pad = (max_w - rw) / 2;
-            mb.append_spaces(pad);
-            mb.append_slice(label.rows[r]);
-            mb.append_spaces(max_w - rw - pad);
+            mb.spaces(pad);
+            mb.append_string(label.rows[r]);
+            mb.spaces(max_w - rw - pad);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
 
     // Overbrace glyph: ⏞ or ───┴───
-    mb.reset();
+    mb.clear();
     int pad = (max_w - inner.width) / 2;
-    mb.append_spaces(pad);
-    mb.append_repeat("⏞", inner.width);
-    mb.append_spaces(max_w - inner.width - pad);
+    mb.spaces(pad);
+    mb.repeat("⏞", inner.width);
+    mb.spaces(max_w - inner.width - pad);
     r_buf[cur_r++] = mb.to_arena_string(arena);
 
     // Inner rows
     for (int r = 0; r < inner.height; r++)
     {
-        mb.reset();
-        int rw = strutils::string_display_width(inner.rows[r]);
+        mb.clear();
+        int rw = text::width(inner.rows[r]);
         int pad2 = (max_w - rw) / 2;
-        mb.append_spaces(pad2);
-        mb.append_slice(inner.rows[r]);
-        mb.append_spaces(max_w - rw - pad2);
+        mb.spaces(pad2);
+        mb.append_string(inner.rows[r]);
+        mb.spaces(max_w - rw - pad2);
         r_buf[cur_r++] = mb.to_arena_string(arena);
     }
 
@@ -1235,8 +1232,8 @@ fn MathBox box_underbrace(logic::Arena* arena, MathBox inner, MathBox label)
     int base = inner.baseline;
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     int cur_r = 0;
@@ -1244,21 +1241,21 @@ fn MathBox box_underbrace(logic::Arena* arena, MathBox inner, MathBox label)
     // Inner rows
     for (int r = 0; r < inner.height; r++)
     {
-        mb.reset();
-        int rw = strutils::string_display_width(inner.rows[r]);
+        mb.clear();
+        int rw = text::width(inner.rows[r]);
         int pad = (max_w - rw) / 2;
-        mb.append_spaces(pad);
-        mb.append_slice(inner.rows[r]);
-        mb.append_spaces(max_w - rw - pad);
+        mb.spaces(pad);
+        mb.append_string(inner.rows[r]);
+        mb.spaces(max_w - rw - pad);
         r_buf[cur_r++] = mb.to_arena_string(arena);
     }
 
     // Underbrace glyph: ⏟ or ───┬───
-    mb.reset();
+    mb.clear();
     int pad = (max_w - inner.width) / 2;
-    mb.append_spaces(pad);
-    mb.append_repeat("⏟", inner.width);
-    mb.append_spaces(max_w - inner.width - pad);
+    mb.spaces(pad);
+    mb.repeat("⏟", inner.width);
+    mb.spaces(max_w - inner.width - pad);
     r_buf[cur_r++] = mb.to_arena_string(arena);
 
     // Label rows (centered)
@@ -1266,12 +1263,12 @@ fn MathBox box_underbrace(logic::Arena* arena, MathBox inner, MathBox label)
     {
         for (int r = 0; r < label.height; r++)
         {
-            mb.reset();
-            int rw = strutils::string_display_width(label.rows[r]);
+            mb.clear();
+            int rw = text::width(label.rows[r]);
             int pad2 = (max_w - rw) / 2;
-            mb.append_spaces(pad2);
-            mb.append_slice(label.rows[r]);
-            mb.append_spaces(max_w - rw - pad2);
+            mb.spaces(pad2);
+            mb.append_string(label.rows[r]);
+            mb.spaces(max_w - rw - pad2);
             r_buf[cur_r++] = mb.to_arena_string(arena);
         }
     }
@@ -1332,8 +1329,8 @@ fn MathBox box_grid_layout(logic::Arena* arena, MathBox[] grid, int num_rows, in
     }
 
     String* r_buf = (String*)arena.alloc((usz)total_h * String::size);
-    buffer::ByteBuffer mb;
-    mb.init(512);
+    DString mb;
+    mb.init(mem, 512);
     defer mb.free();
 
     int cur_r = 0;
@@ -1344,11 +1341,11 @@ fn MathBox box_grid_layout(logic::Arena* arena, MathBox[] grid, int num_rows, in
 
         for (int sub_r = 0; sub_r < rh; sub_r++)
         {
-            mb.reset();
+            mb.clear();
 
             for (int c = 0; c < num_cols; c++)
             {
-                if (c > 0) mb.append_spaces(col_gap);
+                if (c > 0) mb.spaces(col_gap);
 
                 MathBox cell = grid[(usz)(r * num_cols + c)];
                 int cell_r = sub_r - (rabove - cell.baseline);
@@ -1357,7 +1354,7 @@ fn MathBox box_grid_layout(logic::Arena* arena, MathBox[] grid, int num_rows, in
                 if (cell_r >= 0 && cell_r < cell.height)
                 {
                     String row_str = cell.rows[cell_r];
-                    int rw = strutils::string_display_width(row_str);
+                    int rw = text::width(row_str);
                     int pad = target_w - rw;
                     if (pad < 0) pad = 0;
 
@@ -1370,37 +1367,37 @@ fn MathBox box_grid_layout(logic::Arena* arena, MathBox[] grid, int num_rows, in
                     {
                         if (c % 2 == 0) // Right aligned
                         {
-                            mb.append_spaces(pad);
-                            mb.append_slice(row_str);
+                            mb.spaces(pad);
+                            mb.append_string(row_str);
                         }
                         else // Left aligned
                         {
-                            mb.append_slice(row_str);
-                            mb.append_spaces(pad);
+                            mb.append_string(row_str);
+                            mb.spaces(pad);
                         }
                     }
                     else if (align_mode == 'C')
                     {
                         int lpad = pad / 2;
                         int rpad = pad - lpad;
-                        mb.append_spaces(lpad);
-                        mb.append_slice(row_str);
-                        mb.append_spaces(rpad);
+                        mb.spaces(lpad);
+                        mb.append_string(row_str);
+                        mb.spaces(rpad);
                     }
                     else if (align_mode == 'R')
                     {
-                        mb.append_spaces(pad);
-                        mb.append_slice(row_str);
+                        mb.spaces(pad);
+                        mb.append_string(row_str);
                     }
                     else // 'L'
                     {
-                        mb.append_slice(row_str);
-                        mb.append_spaces(pad);
+                        mb.append_string(row_str);
+                        mb.spaces(pad);
                     }
                 }
                 else
                 {
-                    mb.append_spaces(target_w);
+                    mb.spaces(target_w);
                 }
             }
 

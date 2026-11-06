@@ -3,12 +3,11 @@ module parser;
 import std::core::mem;
 import std::collections::list;
 import logic;
-import strutils;
-import buffer;
+import text;
 
 fn bool is_thematic_break(String line)
 {
-    String trimmed = strutils::string_trim(line);
+    String trimmed = line.trim();
     if (trimmed.len < 3) return false;
 
     usz dashes = 0;
@@ -41,7 +40,7 @@ fn bool is_thematic_break(String line)
 
 fn bool is_table_sep_row(String line)
 {
-    String trimmed = strutils::string_trim(line);
+    String trimmed = line.trim();
     if (trimmed.len < 3) return false;
     bool has_dash = false;
 
@@ -92,15 +91,15 @@ fn bool is_heading_prefix(String s)
 
 fn bool is_block_start(String line)
 {
-    String trimmed = strutils::string_trim(line);
+    String trimmed = line.trim();
     if (trimmed.len == 0) return true;
     if (is_thematic_break(line)) return true;
     if (is_heading_prefix(trimmed)) return true;
-    if (strutils::string_starts_with(trimmed, "```") || strutils::string_starts_with(trimmed, "~~~")) return true;
-    if (strutils::string_starts_with(trimmed, "$$") || strutils::string_starts_with(trimmed, "\\begin{")) return true;
-    if (strutils::string_starts_with(trimmed, ">")) return true;
+    if (trimmed.starts_with("```") || trimmed.starts_with("~~~")) return true;
+    if (trimmed.starts_with("$$") || trimmed.starts_with("\\begin{")) return true;
+    if (trimmed.starts_with(">")) return true;
 
-    if (strutils::string_starts_with(trimmed, "[^"))
+    if (trimmed.starts_with("[^"))
     {
         usz col_pos = 2;
         while (col_pos + 1 < (usz)trimmed.len && !(trimmed[col_pos] == ']' && trimmed[col_pos + 1] == ':')) col_pos++;
@@ -142,7 +141,7 @@ fn String[] list_to_arena_strings(logic::Arena* arena, List{String}* l)
 
 fn Span[][] parse_table_row_cells(logic::Arena* arena, String line, usz* out_col_count)
 {
-    String trimmed = strutils::string_trim(line);
+    String trimmed = line.trim();
     usz len = (usz)trimmed.len;
     usz i = 0;
     if (i < len && trimmed[i] == '|') i++;
@@ -157,7 +156,7 @@ fn Span[][] parse_table_row_cells(logic::Arena* arena, String line, usz* out_col
         while (i < len && trimmed[i] != '|') i++;
         usz end = i;
 
-        String raw_cell = strutils::string_trim(trimmed[start : end - start]);
+        String raw_cell = trimmed[start : end - start].trim();
         Span[] parsed = parser::parse_inline(arena, raw_cell);
         cell_list.push(parsed);
 
@@ -177,7 +176,7 @@ fn Span[][] parse_table_row_cells(logic::Arena* arena, String line, usz* out_col
 
 fn Alignment[] parse_table_alignments(logic::Arena* arena, String sep_line, usz expected_cols)
 {
-    String trimmed = strutils::string_trim(sep_line);
+    String trimmed = sep_line.trim();
     usz len = (usz)trimmed.len;
     usz i = 0;
     if (i < len && trimmed[i] == '|') i++;
@@ -192,7 +191,7 @@ fn Alignment[] parse_table_alignments(logic::Arena* arena, String sep_line, usz 
         while (i < len && trimmed[i] != '|') i++;
         usz end = i;
 
-        String spec = strutils::string_trim(trimmed[start : end - start]);
+        String spec = trimmed[start : end - start].trim();
         if (spec.len > 0)
         {
             bool left = (spec[0] == ':');
@@ -268,11 +267,11 @@ fn Document parse_document(String content)
     while (line_idx < line_count)
     {
         String line = raw_lines.entries[line_idx];
-        String trimmed = strutils::string_trim(line);
+        String trimmed = line.trim();
         int src_start = (int)line_idx;
 
         // 0. YAML Frontmatter (at start of document)
-        if (line_idx == 0 && strutils::string_eq(trimmed, "---"))
+        if (line_idx == 0 && trimmed == "---")
         {
             usz fm_start = line_idx;
             line_idx++;
@@ -284,8 +283,8 @@ fn Document parse_document(String content)
             while (line_idx < line_count)
             {
                 String cur = raw_lines.entries[line_idx];
-                String cur_t = strutils::string_trim(cur);
-                if (strutils::string_eq(cur_t, "---") || strutils::string_eq(cur_t, "..."))
+                String cur_t = cur.trim();
+                if (cur_t == "---" || cur_t == "...")
                 {
                     break;
                 }
@@ -296,8 +295,8 @@ fn Document parse_document(String content)
 
                 if (c_pos < (usz)cur_t.len)
                 {
-                    String k = strutils::string_trim(cur_t[0:c_pos]);
-                    String v = strutils::string_trim(cur_t[c_pos + 1..]);
+                    String k = cur_t[0:c_pos].trim();
+                    String v = cur_t[c_pos + 1..].trim();
                     // Strip optional quotes
                     if (v.len >= 2 && ((v[0] == '"' && v[v.len - 1] == '"') || (v[0] == '\'' && v[v.len - 1] == '\'')))
                     {
@@ -341,7 +340,7 @@ fn Document parse_document(String content)
         }
 
         // 2. Fenced Code Block: ```... or ~~~...
-        if (strutils::string_starts_with(trimmed, "```") || strutils::string_starts_with(trimmed, "~~~"))
+        if (trimmed.starts_with("```") || trimmed.starts_with("~~~"))
         {
             char fence_char = trimmed[0];
             usz fence_len = 0;
@@ -350,7 +349,7 @@ fn Document parse_document(String content)
                 fence_len++;
             }
 
-            String lang = strutils::string_trim(trimmed[fence_len..]);
+            String lang = trimmed[fence_len..].trim();
 
             List{String} code_lines;
             code_lines.init(mem, 16);
@@ -360,7 +359,7 @@ fn Document parse_document(String content)
             while (line_idx < line_count)
             {
                 String cur_line = raw_lines.entries[line_idx];
-                String cur_trimmed = strutils::string_trim(cur_line);
+                String cur_trimmed = cur_line.trim();
 
                 bool is_closing_fence = false;
                 if ((usz)cur_trimmed.len >= fence_len && cur_trimmed[0] == fence_char)
@@ -372,7 +371,7 @@ fn Document parse_document(String content)
                     }
                     if (close_len >= fence_len)
                     {
-                        String rest = strutils::string_trim(cur_trimmed[close_len..]);
+                        String rest = cur_trimmed[close_len..].trim();
                         if (rest.len == 0)
                         {
                             is_closing_fence = true;
@@ -402,11 +401,11 @@ fn Document parse_document(String content)
         }
 
         // 3. Display Math Block ($$ ... $$ or \begin{equation} ... \end{equation})
-        if (strutils::string_starts_with(trimmed, "$$") || strutils::string_starts_with(trimmed, "\\begin{equation}") || strutils::string_starts_with(trimmed, "\\begin{align}") || strutils::string_starts_with(trimmed, "\\begin{gather}") || strutils::string_starts_with(trimmed, "\\begin{aligned}"))
+        if (trimmed.starts_with("$$") || trimmed.starts_with("\\begin{equation}") || trimmed.starts_with("\\begin{align}") || trimmed.starts_with("\\begin{gather}") || trimmed.starts_with("\\begin{aligned}"))
         {
-            if (strutils::string_starts_with(trimmed, "$$") && trimmed.len >= 4 && strutils::string_ends_with(trimmed, "$$") && trimmed.len > 4)
+            if (trimmed.starts_with("$$") && trimmed.len >= 4 && trimmed.ends_with("$$") && trimmed.len > 4)
             {
-                String math_content = strutils::string_trim(trimmed[2 : (usz)trimmed.len - 4]);
+                String math_content = (trimmed[2 : (usz)trimmed.len - 4]).trim();
                 Block b;
                 b.kind = BlockKind.MATH_BLOCK;
                 b.src_line_start = src_start;
@@ -417,7 +416,7 @@ fn Document parse_document(String content)
                 continue;
             }
 
-            bool is_dollar = strutils::string_starts_with(trimmed, "$$");
+            bool is_dollar = trimmed.starts_with("$$");
             String end_marker = is_dollar ? "$$" : "\\end{";
 
             List{String} math_lines;
@@ -437,13 +436,13 @@ fn Document parse_document(String content)
             while (line_idx < line_count)
             {
                 String cur_line = raw_lines.entries[line_idx];
-                String cur_trimmed = strutils::string_trim(cur_line);
+                String cur_trimmed = cur_line.trim();
 
                 if (is_dollar)
                 {
-                    if (strutils::string_ends_with(cur_trimmed, "$$") || strutils::string_starts_with(cur_trimmed, "$$"))
+                    if (cur_trimmed.ends_with("$$") || cur_trimmed.starts_with("$$"))
                     {
-                        if (cur_trimmed.len > 2 && !strutils::string_starts_with(cur_trimmed, "$$"))
+                        if (cur_trimmed.len > 2 && !cur_trimmed.starts_with("$$"))
                         {
                             math_lines.push(cur_trimmed[0 : (usz)cur_trimmed.len - 2]);
                         }
@@ -452,7 +451,7 @@ fn Document parse_document(String content)
                 }
                 else
                 {
-                    if (strutils::string_starts_with(cur_trimmed, end_marker))
+                    if (cur_trimmed.starts_with(end_marker))
                     {
                         math_lines.push(cur_line);
                         break;
@@ -463,14 +462,14 @@ fn Document parse_document(String content)
                 line_idx++;
             }
 
-            buffer::ByteBuffer mb;
-            mb.init(512);
+            DString mb;
+            mb.init(mem, 512);
             defer mb.free();
 
             for (sz m = 0; m < math_lines.size; m++)
             {
                 if (m > 0) mb.append_char(' ');
-                mb.append_slice(math_lines.entries[m]);
+                mb.append_string(math_lines.entries[m]);
             }
 
             Block b;
@@ -485,7 +484,7 @@ fn Document parse_document(String content)
         }
 
         // 4. Table: starts with | and next row is separator
-        if (strutils::string_starts_with(trimmed, "|") && line_idx + 1 < line_count && is_table_sep_row(raw_lines.entries[line_idx + 1]))
+        if (trimmed.starts_with("|") && line_idx + 1 < line_count && is_table_sep_row(raw_lines.entries[line_idx + 1]))
         {
             usz header_cols = 0;
             Span[][] header_row = parse_table_row_cells(&doc.arena, line, &header_cols);
@@ -502,8 +501,8 @@ fn Document parse_document(String content)
             while (line_idx < line_count)
             {
                 String row_line = raw_lines.entries[line_idx];
-                String row_trimmed = strutils::string_trim(row_line);
-                if (!strutils::string_starts_with(row_trimmed, "|") || row_trimmed.len == 0)
+                String row_trimmed = row_line.trim();
+                if (!row_trimmed.starts_with("|") || row_trimmed.len == 0)
                 {
                     break;
                 }
@@ -545,12 +544,12 @@ fn Document parse_document(String content)
         }
 
         // 6. Headings: # through ######
-        if (strutils::string_starts_with(trimmed, "# ") || strutils::string_starts_with(trimmed, "## ") || strutils::string_starts_with(trimmed, "### ") || strutils::string_starts_with(trimmed, "#### ") || strutils::string_starts_with(trimmed, "##### ") || strutils::string_starts_with(trimmed, "###### "))
+        if (trimmed.starts_with("# ") || trimmed.starts_with("## ") || trimmed.starts_with("### ") || trimmed.starts_with("#### ") || trimmed.starts_with("##### ") || trimmed.starts_with("###### "))
         {
             int level = 0;
             while ((usz)level < (usz)trimmed.len && trimmed[level] == '#') level++;
             usz text_offset = (usz)(level + 1);
-            String heading_text = strutils::string_trim(trimmed[text_offset..]);
+            String heading_text = trimmed[text_offset..].trim();
 
             Block b;
             b.kind = BlockKind.HEADING;
@@ -564,39 +563,39 @@ fn Document parse_document(String content)
         }
 
         // 7. Callouts / Admonitions: > [!NOTE], > [!TIP], > [!WARNING], > [!IMPORTANT], > [!CAUTION] (full multiline support)
-        if (strutils::string_starts_with(trimmed, "> [!"))
+        if (trimmed.starts_with("> [!"))
         {
             CalloutKind kind = CalloutKind.NOTE;
             String callout_title = "NOTE";
 
-            if (strutils::string_starts_with(trimmed, "> [!NOTE]") || strutils::string_starts_with(trimmed, "> [!INFO]"))
+            if (trimmed.starts_with("> [!NOTE]") || trimmed.starts_with("> [!INFO]"))
             {
                 kind = CalloutKind.NOTE;
                 callout_title = "NOTE";
             }
-            else if (strutils::string_starts_with(trimmed, "> [!TIP]") || strutils::string_starts_with(trimmed, "> [!SUCCESS]"))
+            else if (trimmed.starts_with("> [!TIP]") || trimmed.starts_with("> [!SUCCESS]"))
             {
                 kind = CalloutKind.TIP;
                 callout_title = "TIP";
             }
-            else if (strutils::string_starts_with(trimmed, "> [!WARNING]"))
+            else if (trimmed.starts_with("> [!WARNING]"))
             {
                 kind = CalloutKind.WARNING;
                 callout_title = "WARNING";
             }
-            else if (strutils::string_starts_with(trimmed, "> [!IMPORTANT]"))
+            else if (trimmed.starts_with("> [!IMPORTANT]"))
             {
                 kind = CalloutKind.IMPORTANT;
                 callout_title = "IMPORTANT";
             }
-            else if (strutils::string_starts_with(trimmed, "> [!DANGER]") || strutils::string_starts_with(trimmed, "> [!CAUTION]") || strutils::string_starts_with(trimmed, "> [!ERROR]"))
+            else if (trimmed.starts_with("> [!DANGER]") || trimmed.starts_with("> [!CAUTION]") || trimmed.starts_with("> [!ERROR]"))
             {
                 kind = CalloutKind.CAUTION;
                 callout_title = "CAUTION";
             }
 
-            buffer::ByteBuffer callout_body;
-            callout_body.init(512);
+            DString callout_body;
+            callout_body.init(mem, 512);
             defer callout_body.free();
 
             line_idx++;
@@ -605,8 +604,8 @@ fn Document parse_document(String content)
             while (line_idx < line_count)
             {
                 String q_raw = raw_lines.entries[line_idx];
-                String q_trim = strutils::string_trim(q_raw);
-                if (!strutils::string_starts_with(q_trim, ">"))
+                String q_trim = q_raw.trim();
+                if (!q_trim.starts_with(">"))
                 {
                     break;
                 }
@@ -614,8 +613,8 @@ fn Document parse_document(String content)
                 String q_text = q_trim[1..];
                 if (q_text.len > 0 && q_text[0] == ' ') q_text = q_text[1..];
 
-                if (callout_body.len > 0) callout_body.append_char(' ');
-                callout_body.append_slice(q_text);
+                if (callout_body.len() > 0) callout_body.append_char(' ');
+                callout_body.append_string(q_text);
 
                 last_callout_line = (int)line_idx;
                 line_idx++;
@@ -627,13 +626,13 @@ fn Document parse_document(String content)
             b.src_line_end = last_callout_line;
             b.callout.kind = kind;
             b.callout.title = doc.arena.dup_string(callout_title);
-            b.callout.spans = parser::parse_inline(&doc.arena, callout_body.to_string());
+            b.callout.spans = parser::parse_inline(&doc.arena, callout_body.str_view());
             block_list.push(b);
             continue;
         }
 
         // 8. Footnote Definitions: [^label]: ...
-        if (strutils::string_starts_with(trimmed, "[^"))
+        if (trimmed.starts_with("[^"))
         {
             usz col_pos = 2;
             while (col_pos + 1 < (usz)trimmed.len && !(trimmed[col_pos] == ']' && trimmed[col_pos + 1] == ':'))
@@ -644,7 +643,7 @@ fn Document parse_document(String content)
             if (col_pos + 1 < (usz)trimmed.len)
             {
                 String fn_label = trimmed[2 : col_pos - 2];
-                String fn_body = strutils::string_trim(trimmed[col_pos + 2..]);
+                String fn_body = trimmed[col_pos + 2..].trim();
 
                 Block b;
                 b.kind = BlockKind.FOOTNOTE_DEF;
@@ -659,10 +658,10 @@ fn Document parse_document(String content)
         }
 
         // 9. Blockquote: > ... (multiline support)
-        if (strutils::string_starts_with(trimmed, "> ") || strutils::string_eq(trimmed, ">"))
+        if (trimmed.starts_with("> ") || trimmed == ">")
         {
-            buffer::ByteBuffer quote_body;
-            quote_body.init(512);
+            DString quote_body;
+            quote_body.init(mem, 512);
             defer quote_body.free();
 
             int last_q_line = src_start;
@@ -670,8 +669,8 @@ fn Document parse_document(String content)
             while (line_idx < line_count)
             {
                 String q_raw = raw_lines.entries[line_idx];
-                String q_trim = strutils::string_trim(q_raw);
-                if (!strutils::string_starts_with(q_trim, ">") || strutils::string_starts_with(q_trim, "> [!"))
+                String q_trim = q_raw.trim();
+                if (!q_trim.starts_with(">") || q_trim.starts_with("> [!"))
                 {
                     break;
                 }
@@ -679,8 +678,8 @@ fn Document parse_document(String content)
                 String q_text = q_trim[1..];
                 if (q_text.len > 0 && q_text[0] == ' ') q_text = q_text[1..];
 
-                if (quote_body.len > 0) quote_body.append_char(' ');
-                quote_body.append_slice(q_text);
+                if (quote_body.len() > 0) quote_body.append_char(' ');
+                quote_body.append_string(q_text);
 
                 last_q_line = (int)line_idx;
                 line_idx++;
@@ -690,7 +689,7 @@ fn Document parse_document(String content)
             b.kind = BlockKind.BLOCKQUOTE;
             b.src_line_start = src_start;
             b.src_line_end = last_q_line;
-            b.blockquote.spans = parser::parse_inline(&doc.arena, quote_body.to_string());
+            b.blockquote.spans = parser::parse_inline(&doc.arena, quote_body.str_view());
             block_list.push(b);
             continue;
         }
@@ -702,7 +701,7 @@ fn Document parse_document(String content)
         if (indent + 5 < (usz)line.len)
         {
             String sub = line[indent..];
-            if (strutils::string_starts_with(sub, "- [ ] ") || strutils::string_starts_with(sub, "* [ ] "))
+            if (sub.starts_with("- [ ] ") || sub.starts_with("* [ ] "))
             {
                 String task_text = sub[6..];
                 Block b;
@@ -717,7 +716,7 @@ fn Document parse_document(String content)
                 line_idx++;
                 continue;
             }
-            if (strutils::string_starts_with(sub, "- [x] ") || strutils::string_starts_with(sub, "- [X] ") || strutils::string_starts_with(sub, "* [x] ") || strutils::string_starts_with(sub, "* [X] "))
+            if (sub.starts_with("- [x] ") || sub.starts_with("- [X] ") || sub.starts_with("* [x] ") || sub.starts_with("* [X] "))
             {
                 String task_text = sub[6..];
                 Block b;
@@ -771,8 +770,8 @@ fn Document parse_document(String content)
         }
 
         // 13. Paragraph: group consecutive regular lines into a unified reflowable paragraph
-        buffer::ByteBuffer para_buf;
-        para_buf.init(512);
+        DString para_buf;
+        para_buf.init(mem, 512);
         defer para_buf.free();
 
         int last_para_line = src_start;
@@ -785,14 +784,14 @@ fn Document parse_document(String content)
                 break;
             }
 
-            String cur_t = strutils::string_trim(cur_line);
+            String cur_t = cur_line.trim();
             if (cur_t.len == 0) break;
 
-            if (para_buf.len > 0)
+            if (para_buf.len() > 0)
             {
                 para_buf.append_char(' ');
             }
-            para_buf.append_slice(cur_t);
+            para_buf.append_string(cur_t);
 
             last_para_line = (int)line_idx;
             line_idx++;
@@ -802,7 +801,7 @@ fn Document parse_document(String content)
         b.kind = BlockKind.PARAGRAPH;
         b.src_line_start = src_start;
         b.src_line_end = last_para_line;
-        b.paragraph.spans = parser::parse_inline(&doc.arena, para_buf.to_string());
+        b.paragraph.spans = parser::parse_inline(&doc.arena, para_buf.str_view());
         block_list.push(b);
     }
 
