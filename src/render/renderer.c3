@@ -3,15 +3,15 @@ module render;
 import std::io;
 import std::core::mem;
 import std::collections::list;
-import logic;
+import ast;
 import ansi;
-import math;
+import tex;
 import std::math;
 import text;
 
 struct DocRenderContext {
     VisualDocument* vdoc;
-    logic::Arena* arena;
+    ast::Arena* arena;
     RenderConfig config;
     List{VisualLine} list;
 }
@@ -24,6 +24,8 @@ struct Theme
 }
 
 const String[] STYLES = { "", ansi::BOLD, ansi::ITALIC, ansi::STRIKE, ansi::INLINE, "", "", ansi::CYAN, ansi::CYAN, "" };
+
+const String[] BULLETS = { "• ", "◦ ", "▪ " };
 
 const Theme[] THEMES = {
     { "ℹ", "NOTE", ansi::CYAN },
@@ -57,7 +59,7 @@ const Look[] LOOKS = {
     { "🖼  ", ansi::CYAN +++ ansi::BOLD, "[", "]", ansi::RESET, false, true },
 };
 
-fn void render_span(DString* b, Span span, bool plain)
+fn void renderSpan(DString* b, Span span, bool plain)
 {
     Look look = LOOKS[span.kind];
     bool link = !plain && span.kind == SpanKind.LINK && span.url.len > 0;
@@ -72,7 +74,7 @@ fn void render_span(DString* b, Span span, bool plain)
     b.append(look.left);
     if (look.nested && span.children.len > 0)
     {
-        render_spans(b, span.children, plain);
+        renderSpans(b, span.children, plain);
     }
     else
     {
@@ -90,73 +92,73 @@ fn void render_span(DString* b, Span span, bool plain)
     if (!plain) b.append(ansi::RESET);
 }
 
-fn void render_spans(DString* b, Span[] spans, bool plain)
+fn void renderSpans(DString* b, Span[] spans, bool plain)
 {
-    foreach (span : spans) render_span(b, span, plain);
+    foreach (span : spans) renderSpan(b, span, plain);
 }
 
-fn void emit_table_line_cb(void* ctx_ptr, String text, int src_line)
+fn void emit(void* ctxPtr, String text, int srcLine)
 {
-    DocRenderContext* ctx = (DocRenderContext*)ctx_ptr;
+    DocRenderContext* ctx = (DocRenderContext*)ctxPtr;
     VisualLine vl;
-    vl.text = ctx.arena.dup_string(text);
-    vl.src_line = src_line;
-    vl.display_width = text::width(text);
+    vl.text = ctx.arena.copy(text);
+    vl.srcLine = srcLine;
+    vl.displayWidth = text::width(text);
     ctx.list.push(vl);
 }
 
-fn void render_wrapped_spans(
-    void* emit_ctx,
-    EmitLineFn emit_fn,
+fn void wrap(
+    void* emitCtx,
+    EmitLineFn emitFn,
     Span[] spans,
-    int src_line,
-    int max_w,
-    String prefix_str,
-    String first_prefix_str,
+    int srcLine,
+    int maxW,
+    String prefixStr,
+    String firstPrefixStr,
     bool plain,
-    bool no_wrap
+    bool noWrap
 )
 {
     if (spans.len == 0)
     {
-        if (first_prefix_str.len > 0)
+        if (firstPrefixStr.len > 0)
         {
-            emit_fn(emit_ctx, first_prefix_str, src_line);
+            emitFn(emitCtx, firstPrefixStr, srcLine);
         }
         return;
     }
 
-    if (no_wrap || max_w <= 20)
+    if (noWrap || maxW <= 20)
     {
         DString lb;
         lb.init(mem, 4096);
         defer lb.free();
-        if (first_prefix_str.len > 0) lb.append_string(first_prefix_str);
-        render_spans(&lb, spans, plain);
-        emit_fn(emit_ctx, lb.str_view(), src_line);
+        if (firstPrefixStr.len > 0) lb.append_string(firstPrefixStr);
+        renderSpans(&lb, spans, plain);
+        emitFn(emitCtx, lb.str_view(), srcLine);
         return;
     }
 
-    DString cur_line;
-    cur_line.init(mem, 4096);
-    defer cur_line.free();
+    DString curLine;
+    curLine.init(mem, 4096);
+    defer curLine.free();
 
-    int cur_w = 0;
-    if (first_prefix_str.len > 0)
+    int curW = 0;
+    if (firstPrefixStr.len > 0)
     {
-        cur_line.append_string(first_prefix_str);
-        cur_w = text::width(first_prefix_str);
+        curLine.append_string(firstPrefixStr);
+        curW = text::width(firstPrefixStr);
     }
 
-    int cont_prefix_w = 0;
-    if (prefix_str.len > 0)
+    int contPrefixW = 0;
+    if (prefixStr.len > 0)
     {
-        cont_prefix_w = text::width(prefix_str);
+        contPrefixW = text::width(prefixStr);
     }
 
-    for (usz s_idx = 0; s_idx < spans.len; s_idx++)
+    for (usz sIdx = 0; sIdx < spans.len; sIdx++)
     {
-        Span sp = spans[s_idx];
+        Span sp = spans[sIdx];
 
         String style = plain ? "" : STYLES[sp.kind];
 
@@ -172,78 +174,78 @@ fn void render_wrapped_spans(
             }
             if (p >= tlen) break;
 
-            usz w_start = p;
+            usz wStart = p;
             while (p < tlen && txt[p] != ' ' && txt[p] != '\t' && txt[p] != '\n')
             {
                 p++;
             }
-            String word = txt[w_start : p - w_start];
-            int word_w = text::width(word);
+            String word = txt[wStart : p - wStart];
+            int wordW = text::width(word);
 
-            if (cur_w + 1 + word_w > max_w && cur_w > (prefix_str.len > 0 ? cont_prefix_w : 0))
+            if (curW + 1 + wordW > maxW && curW > (prefixStr.len > 0 ? contPrefixW : 0))
             {
-                emit_fn(emit_ctx, cur_line.str_view(), src_line);
-                cur_line.clear();
-                if (prefix_str.len > 0)
+                emitFn(emitCtx, curLine.str_view(), srcLine);
+                curLine.clear();
+                if (prefixStr.len > 0)
                 {
-                    cur_line.append_string(prefix_str);
-                    cur_w = cont_prefix_w;
+                    curLine.append_string(prefixStr);
+                    curW = contPrefixW;
                 }
                 else
                 {
-                    cur_w = 0;
+                    curW = 0;
                 }
             }
-            else if (cur_w > (prefix_str.len > 0 ? cont_prefix_w : (first_prefix_str.len > 0 ? cont_prefix_w : 0)))
+            else if (curW > (prefixStr.len > 0 ? contPrefixW : (firstPrefixStr.len > 0 ? contPrefixW : 0)))
             {
-                cur_line.append_char(' ');
-                cur_w++;
+                curLine.append_char(' ');
+                curW++;
             }
 
-            cur_line.append(style);
-            cur_line.append(word);
-            if (style.len) cur_line.append(ansi::RESET);
-            cur_w += word_w;
+            curLine.append(style);
+            curLine.append(word);
+            if (style.len) curLine.append(ansi::RESET);
+            curW += wordW;
         }
 
         if (sp.kind == SpanKind.LINK && sp.url.len > 0)
         {
-            int url_w = text::width(sp.url) + 3;
-            if (cur_w + url_w > max_w && cur_w > cont_prefix_w)
+            int urlW = text::width(sp.url) + 3;
+            if (curW + urlW > maxW && curW > contPrefixW)
             {
-                emit_fn(emit_ctx, cur_line.str_view(), src_line);
-                cur_line.clear();
-                if (prefix_str.len > 0)
+                emitFn(emitCtx, curLine.str_view(), srcLine);
+                curLine.clear();
+                if (prefixStr.len > 0)
                 {
-                    cur_line.append_string(prefix_str);
-                    cur_w = cont_prefix_w;
+                    curLine.append_string(prefixStr);
+                    curW = contPrefixW;
                 }
                 else
                 {
-                    cur_w = 0;
+                    curW = 0;
                 }
             }
             else
             {
-                cur_line.append_char(' ');
-                cur_w++;
+                curLine.append_char(' ');
+                curW++;
             }
-            if (!plain) cur_line.append(ansi::MUTED);
-            cur_line.append_char('(');
-            cur_line.append_string(sp.url);
-            cur_line.append_char(')');
-            if (!plain) cur_line.append(ansi::RESET);
-            cur_w += url_w;
+            if (!plain) curLine.append(ansi::MUTED);
+            curLine.append_char('(');
+            curLine.append_string(sp.url);
+            curLine.append_char(')');
+            if (!plain) curLine.append(ansi::RESET);
+            curW += urlW;
         }
     }
 
-    if (cur_line.len() > 0)
+    if (curLine.len() > 0)
     {
-        emit_fn(emit_ctx, cur_line.str_view(), src_line);
+        emitFn(emitCtx, curLine.str_view(), srcLine);
     }
 }
 
-fn VisualDocument render_document(Document* doc, RenderConfig config)
+fn VisualDocument layout(Document* doc, RenderConfig config)
 {
     VisualDocument vdoc;
     vdoc.init();
@@ -262,27 +264,27 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
     int width = config.width;
     if (width < 20) width = 80;
 
-    for (usz b_idx = 0; b_idx < doc.blocks.len; b_idx++)
+    for (usz bIdx = 0; bIdx < doc.blocks.len; bIdx++)
     {
-        Block* b = &doc.blocks[b_idx];
+        Block* b = &doc.blocks[bIdx];
 
         switch (b.kind)
         {
             case BlockKind.FRONTMATTER:
-                int max_klen = 0;
+                int maxKlen = 0;
                 for (usz e = 0; e < b.frontmatter.entries.len; e++)
                 {
                     int klen = (int)b.frontmatter.entries[e].key.len;
-                    if (klen > max_klen && klen <= 20) max_klen = klen;
+                    if (klen > maxKlen && klen <= 20) maxKlen = klen;
                 }
-                if (max_klen < 5) max_klen = 5;
+                if (maxKlen < 5) maxKlen = 5;
 
                 for (usz e = 0; e < b.frontmatter.entries.len; e++)
                 {
                     FrontmatterEntry entry = b.frontmatter.entries[e];
-                    int key_len = (int)entry.key.len;
-                    int pad_spaces = max_klen - key_len;
-                    if (pad_spaces < 0) pad_spaces = 0;
+                    int keyLen = (int)entry.key.len;
+                    int padSpaces = maxKlen - keyLen;
+                    if (padSpaces < 0) padSpaces = 0;
 
                     lb.clear();
                     if (!plain)
@@ -293,54 +295,53 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                     lb.append_string(entry.key);
                     if (!plain) lb.append(ansi::RESET);
                     lb.append(":");
-                    for (int s = 0; s < pad_spaces + 1; s++) lb.append_char(' ');
+                    for (int s = 0; s < padSpaces + 1; s++) lb.append_char(' ');
 
                     if (!plain) lb.append(ansi::TEXT);
                     lb.append_string(entry.value);
                     if (!plain) lb.append(ansi::RESET);
-                    emit_table_line_cb((void*)&ctx, lb.str_view(), b.src_line_start + 1 + (int)e);
+                    emit((void*)&ctx, lb.str_view(), b.srcLineStart + 1 + (int)e);
                 }
 
-                // Divider line below metadata
                 lb.clear();
                 if (!plain) lb.append(ansi::MUTED);
-                int mbar_len = width > 20 ? width - 4 : 76;
-                lb.repeat("─", mbar_len);
+                int mbarLen = width > 20 ? width - 4 : 76;
+                lb.repeat("─", mbarLen);
                 if (!plain) lb.append(ansi::RESET);
-                emit_table_line_cb((void*)&ctx, lb.str_view(), b.src_line_end);
+                emit((void*)&ctx, lb.str_view(), b.srcLineEnd);
 
             case BlockKind.FOOTNOTE_DEF:
-                DString fn_pfx;
-                fn_pfx.init(mem, 64);
-                defer fn_pfx.free();
+                DString fnPfx;
+                fnPfx.init(mem, 64);
+                defer fnPfx.free();
 
-                fn_pfx.append("  [");
-                fn_pfx.append_string(b.footnote_def.label);
-                fn_pfx.append("] ");
+                fnPfx.append("  [");
+                fnPfx.append_string(b.footnoteDef.label);
+                fnPfx.append("] ");
 
-                int fn_w = text::width(fn_pfx.str_view());
-                DString fn_cont;
-                fn_cont.init(mem, 64);
-                defer fn_cont.free();
-                fn_cont.spaces(fn_w);
+                int fnW = text::width(fnPfx.str_view());
+                DString fnCont;
+                fnCont.init(mem, 64);
+                defer fnCont.free();
+                fnCont.spaces(fnW);
 
-                render_wrapped_spans((void*)&ctx, &emit_table_line_cb, b.footnote_def.spans, b.src_line_start, width - 4, fn_cont.str_view(), fn_pfx.str_view(), plain, config.no_wrap);
+                wrap((void*)&ctx, &emit, b.footnoteDef.spans, b.srcLineStart, width - 4, fnCont.str_view(), fnPfx.str_view(), plain, config.noWrap);
 
             case BlockKind.BLANK:
-                emit_table_line_cb((void*)&ctx, "", b.src_line_start);
+                emit((void*)&ctx, "", b.srcLineStart);
 
             case BlockKind.THEMATIC_BREAK:
                 lb.clear();
                 if (!plain) lb.append(ansi::MUTED);
-                int bar_len = width > 20 ? width - 4 : 76;
-                lb.repeat("─", bar_len);
+                int barLen = width > 20 ? width - 4 : 76;
+                lb.repeat("─", barLen);
                 if (!plain) lb.append(ansi::RESET);
-                emit_table_line_cb((void*)&ctx, lb.str_view(), b.src_line_start);
+                emit((void*)&ctx, lb.str_view(), b.srcLineStart);
 
             case BlockKind.HEADING:
-                if (b_idx > 0)
+                if (bIdx > 0)
                 {
-                    emit_table_line_cb((void*)&ctx, "", b.src_line_start > 0 ? b.src_line_start - 1 : 0);
+                    emit((void*)&ctx, "", b.srcLineStart > 0 ? b.srcLineStart - 1 : 0);
                 }
 
                 lb.clear();
@@ -354,21 +355,19 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                     lb.append_char(' ');
                 }
 
-                render_spans(&lb, b.heading.spans, plain);
+                renderSpans(&lb, b.heading.spans, plain);
                 if (!plain) lb.append(ansi::RESET);
-                emit_table_line_cb((void*)&ctx, lb.str_view(), b.src_line_start);
+                emit((void*)&ctx, lb.str_view(), b.srcLineStart);
 
             case BlockKind.CODE_BLOCK:
-                // Code block lines with exact indentation (zero leading padding for easy copy-paste)
                 for (usz l = 0; l < b.code.lines.len; l++)
                 {
                     lb.clear();
-                    highlight_code_line(&lb, b.code.lines[l], b.code.language, plain);
-                    emit_table_line_cb((void*)&ctx, lb.str_view(), b.src_line_start + (int)l);
+                    highlight(&lb, b.code.lines[l], b.code.language, plain);
+                    emit((void*)&ctx, lb.str_view(), b.srcLineStart + (int)l);
                 }
 
             case BlockKind.CALLOUT:
-                // Title line
                 lb.clear();
                 if (!plain)
                 {
@@ -387,91 +386,83 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                     lb.append_string(b.callout.title);
                     lb.append("]");
                 }
-                emit_table_line_cb((void*)&ctx, lb.str_view(), b.src_line_start);
+                emit((void*)&ctx, lb.str_view(), b.srcLineStart);
 
                 if (b.callout.spans.len > 0)
                 {
-                    render_wrapped_spans((void*)&ctx, &emit_table_line_cb, b.callout.spans, b.src_line_end, width - 6, "│ ", "│ ", plain, config.no_wrap);
+                    wrap((void*)&ctx, &emit, b.callout.spans, b.srcLineEnd, width - 6, "│ ", "│ ", plain, config.noWrap);
                 }
 
             case BlockKind.BLOCKQUOTE:
-                render_wrapped_spans((void*)&ctx, &emit_table_line_cb, b.blockquote.spans, b.src_line_start, width - 6, "│ ", "│ ", plain, config.no_wrap);
+                wrap((void*)&ctx, &emit, b.blockquote.spans, b.srcLineStart, width - 6, "│ ", "│ ", plain, config.noWrap);
 
             case BlockKind.LIST_ITEM:
-                DString pfx_indent;
-                pfx_indent.init(mem, 32);
-                defer pfx_indent.free();
-                pfx_indent.spaces(b.list_item.indent_level);
+                DString pfxIndent;
+                pfxIndent.init(mem, 32);
+                defer pfxIndent.free();
+                pfxIndent.spaces(b.listItem.indentLevel);
 
-                DString first_full;
-                first_full.init(mem, 64);
-                defer first_full.free();
-                first_full.append_string(pfx_indent.str_view());
+                DString firstFull;
+                firstFull.init(mem, 64);
+                defer firstFull.free();
+                firstFull.append_string(pfxIndent.str_view());
 
-                DString cont_full;
-                cont_full.init(mem, 64);
-                defer cont_full.free();
-                cont_full.append_string(pfx_indent.str_view());
+                DString contFull;
+                contFull.init(mem, 64);
+                defer contFull.free();
+                contFull.append_string(pfxIndent.str_view());
 
-                switch (b.list_item.kind)
+                switch (b.listItem.kind)
                 {
                     case ListKind.TASK_UNCHECKED:
-                        first_full.append("☐  ");
-                        cont_full.append("   ");
+                        firstFull.append("☐  ");
+                        contFull.append("   ");
 
                     case ListKind.TASK_CHECKED:
-                        first_full.append("✔  ");
-                        cont_full.append("   ");
+                        firstFull.append("✔  ");
+                        contFull.append("   ");
 
                     case ListKind.ORDERED:
-                        first_full.appendf("%d", b.list_item.order_number);
-                        first_full.append(". ");
-                        int ord_w = text::width(first_full.str_view()) - b.list_item.indent_level;
-                        cont_full.spaces(ord_w);
+                        firstFull.appendf("%d", b.listItem.orderNumber);
+                        firstFull.append(". ");
+                        int ordW = text::width(firstFull.str_view()) - b.listItem.indentLevel;
+                        contFull.spaces(ordW);
 
                     case ListKind.BULLET:
-                        char* b_glyph = "• ";
-                        if (b.list_item.indent_level >= 4)
-                        {
-                            b_glyph = "▪ ";
-                        }
-                        else if (b.list_item.indent_level >= 2)
-                        {
-                            b_glyph = "◦ ";
-                        }
-                        first_full.zstr(b_glyph);
-                        cont_full.spaces(text::width(((ZString)b_glyph).str_view()));
+                        String bullet = BULLETS[min(b.listItem.indentLevel / 2, 2)];
+                        firstFull.append(bullet);
+                        contFull.spaces(text::width(bullet));
 
                     default:
-                        first_full.append("• ");
-                        cont_full.append("  ");
+                        firstFull.append("• ");
+                        contFull.append("  ");
                 }
 
-                render_wrapped_spans((void*)&ctx, &emit_table_line_cb, b.list_item.spans, b.src_line_start, width - 4, cont_full.str_view(), first_full.str_view(), plain, config.no_wrap);
+                wrap((void*)&ctx, &emit, b.listItem.spans, b.srcLineStart, width - 4, contFull.str_view(), firstFull.str_view(), plain, config.noWrap);
 
             case BlockKind.TABLE:
-                render_table(&b.table, b.src_line_start, width, plain, (void*)&ctx, &emit_table_line_cb);
+                table(&b.table, b.srcLineStart, width, plain, (void*)&ctx, &emit);
 
             case BlockKind.MATH_BLOCK:
-                MathBox mbox = math::render_latex_to_box(ctx.arena, b.math_block.latex);
-                int pad_left = 4;
+                MathBox mbox = tex::latex(ctx.arena, b.mathBlock.latex);
+                int padLeft = 4;
 
-                emit_table_line_cb((void*)&ctx, "", b.src_line_start);
+                emit((void*)&ctx, "", b.srcLineStart);
 
                 for (int r = 0; r < mbox.height; r++)
                 {
                     lb.clear();
-                    lb.spaces(pad_left);
+                    lb.spaces(padLeft);
                     lb.append_string(mbox.rows[r]);
-                    emit_table_line_cb((void*)&ctx, lb.str_view(), b.src_line_start);
+                    emit((void*)&ctx, lb.str_view(), b.srcLineStart);
                 }
 
-                emit_table_line_cb((void*)&ctx, "", b.src_line_end);
+                emit((void*)&ctx, "", b.srcLineEnd);
 
             case BlockKind.IMAGE_BLOCK:
                 lb.clear();
                 lb.append("🖼  ");
-                if (b.image_block.alt.len > 0)
+                if (b.imageBlock.alt.len > 0)
                 {
                     if (!plain)
                     {
@@ -479,31 +470,31 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
                         lb.append(ansi::BOLD);
                     }
                     lb.append_char('[');
-                    lb.append_string(b.image_block.alt);
+                    lb.append_string(b.imageBlock.alt);
                     lb.append_char(']');
                     if (!plain) lb.append(ansi::RESET);
                     lb.append_char(' ');
                 }
                 if (!plain) lb.append(ansi::MUTED);
                 lb.append_char('(');
-                lb.append_string(b.image_block.url);
+                lb.append_string(b.imageBlock.url);
                 lb.append_char(')');
                 if (!plain) lb.append(ansi::RESET);
-                emit_table_line_cb((void*)&ctx, lb.str_view(), b.src_line_start);
+                emit((void*)&ctx, lb.str_view(), b.srcLineStart);
 
             case BlockKind.PARAGRAPH:
-                render_wrapped_spans((void*)&ctx, &emit_table_line_cb, b.paragraph.spans, b.src_line_start, width - 2, "", "", plain, config.no_wrap);
+                wrap((void*)&ctx, &emit, b.paragraph.spans, b.srcLineStart, width - 2, "", "", plain, config.noWrap);
         }
     }
 
     if (ctx.list.size > 0)
     {
-        VisualLine* v_buf = (VisualLine*)vdoc.arena.alloc((usz)ctx.list.size * VisualLine::size);
+        VisualLine* vBuf = (VisualLine*)vdoc.arena.alloc((usz)ctx.list.size * VisualLine::size);
         for (sz i = 0; i < ctx.list.size; i++)
         {
-            v_buf[i] = ctx.list.entries[i];
+            vBuf[i] = ctx.list.entries[i];
         }
-        vdoc.lines = v_buf[:(usz)ctx.list.size];
+        vdoc.lines = vBuf[:(usz)ctx.list.size];
     }
     else
     {
@@ -514,9 +505,9 @@ fn VisualDocument render_document(Document* doc, RenderConfig config)
     return vdoc;
 }
 
-fn void render_to_stdout(Document* doc, RenderConfig config)
+fn void print(Document* doc, RenderConfig config)
 {
-    VisualDocument vdoc = render_document(doc, config);
+    VisualDocument vdoc = layout(doc, config);
     defer vdoc.free();
 
     for (usz i = 0; i < vdoc.lines.len; i++)

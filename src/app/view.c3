@@ -4,7 +4,7 @@ import std::io;
 import std::math;
 import std::collections::list;
 import std::encoding::base64;
-import logic;
+import ast;
 import parser;
 import render;
 import ansi;
@@ -224,8 +224,8 @@ fn void View.index(&self)
         title.init(mem, 128);
         defer title.free();
         foreach (span : b.heading.spans) title.append(span.text);
-        String text = title.to_arena_string(&self.lines.arena);
-        int hint = self.lines.find_visual_line(b.src_line_start);
+        String text = title.keep(&self.lines.arena);
+        int hint = self.lines.visual(b.srcLineStart);
         int line = hint;
         bool found;
         for (int v = max(hint - 5, 0); v < min(hint + 25, total); v++)
@@ -238,14 +238,14 @@ fn void View.index(&self)
             }
         }
         if (!found) while (line < total && self.lines.lines[line].text.len == 0) line++;
-        self.outline.push({ b.heading.level, text, b.src_line_start, line });
+        self.outline.push({ b.heading.level, text, b.srcLineStart, line });
     }
 }
 
 fn void View.layout(&self)
 {
     self.lines.free();
-    self.lines = render::render_document(&self.doc, self.config);
+    self.lines = render::layout(&self.doc, self.config);
     self.index();
 }
 
@@ -273,7 +273,7 @@ fn void View.replace(&self, String fresh)
     free(self.content);
     self.content = fresh;
     self.doc.free();
-    self.doc = parser::parse_document(fresh);
+    self.doc = parser::parse(fresh);
     self.layout();
 }
 
@@ -285,7 +285,7 @@ fn void View.center(&self, int line, int above)
 fn int View.source(&self)
 {
     if (self.cursor < 0 || self.cursor >= self.total()) return -1;
-    return self.lines.lines[self.cursor].src_line;
+    return self.lines.lines[self.cursor].srcLine;
 }
 
 fn void View.copy(&self)
@@ -335,7 +335,7 @@ fn void View.goto(&self)
     self.jumpLen = 0;
     self.jump[0] = 0;
     if (line <= 0) return;
-    self.cursor = self.lines.find_visual_line(line - 1);
+    self.cursor = self.lines.visual(line - 1);
     self.center(self.cursor, self.rows / 3);
     @pool()
     {
@@ -351,7 +351,7 @@ fn void View.edit(&self)
     if (try fresh = load(self.name()))
     {
         self.replace(fresh);
-        self.cursor = self.lines.find_visual_line(line - 1);
+        self.cursor = self.lines.visual(line - 1);
         self.center(self.cursor, self.rows / 3);
         self.stamp = terminal::stamp((ZString)&self.path);
     }
@@ -430,10 +430,10 @@ fn void View.normal(&self, Act act)
         case RIGHT:
             self.left += 4 * self.velocity.next(2, 6, 180);
         case WRAP:
-            self.config.no_wrap = !self.config.no_wrap;
+            self.config.noWrap = !self.config.noWrap;
             self.left = 0;
             self.layout();
-            self.say(self.config.no_wrap ? "No-Wrap Mode (← / → to scroll)" : "Wrap Mode Active");
+            self.say(self.config.noWrap ? "No-Wrap Mode (← / → to scroll)" : "Wrap Mode Active");
         case HALFDOWN:
             self.cursor = min(self.cursor + half, self.last());
             self.top = min(self.top + half, self.last());
@@ -683,14 +683,14 @@ fn void View.drawOutline(&self, DString* fb)
 fn void View.drawFiles(&self, DString* fb)
 {
     char[256] buf;
-    char* cwd = terminal::getcwd(&buf[0], 256);
+    ZString cwd = (ZString)terminal::getcwd(&buf[0], 256);
     self.badge(fb);
     fb.append(ansi::GREEN);
     fb.append(ansi::BOLD);
     fb.append("Tree: ");
     fb.append(ansi::RESET);
     fb.append(ansi::TEXT);
-    fb.zstr(cwd != null ? cwd : ".");
+    fb.append(cwd ? cwd.str_view() : ".");
     fb.append(ansi::RESET);
     fb.append("\e[K\n");
     rule(fb, self.width);
@@ -871,7 +871,7 @@ fn void View.drawStatus(&self, DString* fb)
         case self.status[0] != 0:
             fb.append(ansi::STATUS);
             fb.append(" ");
-            fb.zstr(&self.status[0]);
+            fb.append(((ZString)&self.status).str_view());
             fb.append(" ");
             fb.append(ansi::RESET);
             fb.append("\e[K");
@@ -933,7 +933,7 @@ fn void View.watch(&self)
     if (diff >= 0) self.changed = diff;
     self.config.width = self.width;
     self.replace(fresh);
-    if (diff >= 0) self.center(self.lines.find_visual_line(diff), max(self.rows / 3, 5));
+    if (diff >= 0) self.center(self.lines.visual(diff), max(self.rows / 3, 5));
     self.draw();
 }
 
@@ -956,7 +956,7 @@ fn bool run(String file, int line, bool noWrap, bool picker)
     view.width = terminal::width();
     view.height = terminal::height();
     view.rows = max(view.height - 2, 2);
-    view.config = { .width = view.width, .no_wrap = noWrap };
+    view.config = { .width = view.width, .noWrap = noWrap };
     view.changed = line > 0 ? line - 1 : -1;
     view.frame.init(mem, 262144);
     view.outline.init(mem, 32);
@@ -965,7 +965,7 @@ fn bool run(String file, int line, bool noWrap, bool picker)
     defer view.free();
     if (line > 0)
     {
-        view.cursor = view.lines.find_visual_line(line - 1);
+        view.cursor = view.lines.visual(line - 1);
         view.center(view.cursor, max(view.rows / 3, 5));
     }
     terminal::rawMode();

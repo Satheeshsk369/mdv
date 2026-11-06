@@ -1,7 +1,7 @@
-module math;
+module tex;
 
 import std::core::mem;
-import logic;
+import ast;
 import text;
 
 struct Script
@@ -28,7 +28,7 @@ fn String Script.map(&self, char c)
     return "";
 }
 
-fn String Script.apply(&self, logic::Arena* arena, String s)
+fn String Script.apply(&self, ast::Arena* arena, String s)
 {
     if (s.len == 0) return "";
     DString mb;
@@ -40,5 +40,5 @@ fn String Script.apply(&self, logic::Arena* arena, String s)
         if (glyph.len == 0) return "";
         mb.append(glyph);
     }
-    return mb.to_arena_string(arena);
+    return mb.keep(arena);
 }

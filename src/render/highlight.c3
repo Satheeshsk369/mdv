@@ -3,7 +3,7 @@ module render;
 import std::core::mem;
 import ansi;
 import text;
-import logic;
+import ast;
 
 const String[] KEYWORDS = {
     "fn", "def", "return", "struct", "class", "import", "export", "module",
@@ -24,7 +24,7 @@ const String[] TYPES_AND_LITERALS = {
     "self", "this", "NULL", "TRUE", "FALSE"
 };
 
-fn bool is_keyword_token(String s)
+fn bool keyword(String s)
 {
     for (usz i = 0; i < KEYWORDS.len; i++)
     {
@@ -33,7 +33,7 @@ fn bool is_keyword_token(String s)
     return false;
 }
 
-fn bool is_type_or_literal_token(String s)
+fn bool literal(String s)
 {
     for (usz i = 0; i < TYPES_AND_LITERALS.len; i++)
     {
@@ -42,7 +42,7 @@ fn bool is_type_or_literal_token(String s)
     return false;
 }
 
-fn void highlight_code_line(DString* b, String line, String lang, bool plain)
+fn void highlight(DString* b, String line, String lang, bool plain)
 {
     if (plain || line.len == 0)
     {
@@ -52,9 +52,8 @@ fn void highlight_code_line(DString* b, String line, String lang, bool plain)
 
     String trimmed = line.trim();
 
-    // Fast check for whole-line comment
-    bool is_hash_comment_lang = lang == "python" || lang == "py" || lang == "bash" || lang == "sh" || lang == "yaml" || lang == "yml" || lang == "toml" || lang == "r";
-    if ((is_hash_comment_lang && trimmed.starts_with("#")) || trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("* ") || trimmed.starts_with("<!--"))
+    bool isHashCommentLang = lang == "python" || lang == "py" || lang == "bash" || lang == "sh" || lang == "yaml" || lang == "yml" || lang == "toml" || lang == "r";
+    if ((isHashCommentLang && trimmed.starts_with("#")) || trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("* ") || trimmed.starts_with("<!--"))
     {
         b.append(ansi::MUTED);
         b.append(ansi::ITALIC);
@@ -70,8 +69,7 @@ fn void highlight_code_line(DString* b, String line, String lang, bool plain)
     {
         char c = line[i];
 
-        // 1. Comments
-        if ((c == '/' && i + 1 < len && line[i + 1] == '/') || (is_hash_comment_lang && c == '#'))
+        if ((c == '/' && i + 1 < len && line[i + 1] == '/') || (isHashCommentLang && c == '#'))
         {
             b.append(ansi::MUTED);
             b.append(ansi::ITALIC);
@@ -80,11 +78,10 @@ fn void highlight_code_line(DString* b, String line, String lang, bool plain)
             break;
         }
 
-        // 2. String Literals
         if (c == '"' || c == '\'' || c == '`')
         {
             char quote = c;
-            usz s_start = i;
+            usz sStart = i;
             i++;
             while (i < len)
             {
@@ -101,49 +98,47 @@ fn void highlight_code_line(DString* b, String line, String lang, bool plain)
                 i++;
             }
             b.append(ansi::YELLOW);
-            b.append_string(line[s_start : i - s_start]);
+            b.append_string(line[sStart : i - sStart]);
             b.append(ansi::RESET);
             continue;
         }
 
-        // 3. Numbers
         if (c >= '0' && c <= '9')
         {
-            usz n_start = i;
+            usz nStart = i;
             while (i < len && ((line[i] >= '0' && line[i] <= '9') || (line[i] >= 'a' && line[i] <= 'f') || (line[i] >= 'A' && line[i] <= 'F') || line[i] == 'x' || line[i] == 'b' || line[i] == '.' || line[i] == '_'))
             {
                 i++;
             }
             b.append(ansi::PURPLE);
-            b.append_string(line[n_start : i - n_start]);
+            b.append_string(line[nStart : i - nStart]);
             b.append(ansi::RESET);
             continue;
         }
 
-        // 4. Identifiers / Keywords / Types
         if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '@' || c == '$')
         {
-            usz id_start = i;
+            usz idStart = i;
             while (i < len && ((line[i] >= 'a' && line[i] <= 'z') || (line[i] >= 'A' && line[i] <= 'Z') || (line[i] >= '0' && line[i] <= '9') || line[i] == '_' || line[i] == '$' || line[i] == '@'))
             {
                 i++;
             }
-            String id = line[id_start : i - id_start];
+            String id = line[idStart : i - idStart];
 
-            if (is_keyword_token(id))
+            if (keyword(id))
             {
                 b.append(ansi::PINK);
                 b.append(ansi::BOLD);
                 b.append_string(id);
                 b.append(ansi::RESET);
             }
-            else if (is_type_or_literal_token(id))
+            else if (literal(id))
             {
                 b.append(ansi::CYAN);
                 b.append_string(id);
                 b.append(ansi::RESET);
             }
-            else if (i < len && line[i] == '(') // Function call
+            else if (i < len && line[i] == '(')
             {
                 b.append(ansi::GREEN);
                 b.append_string(id);
@@ -164,7 +159,6 @@ fn void highlight_code_line(DString* b, String line, String lang, bool plain)
             continue;
         }
 
-        // 5. Punctuation & Operators
         if (c == '=' || c == '+' || c == '-' || c == '*' || c == '/' || c == '<' || c == '>' || c == '!' || c == '&' || c == '|' || c == '^' || c == '~')
         {
             b.append(ansi::PINK);
@@ -174,7 +168,6 @@ fn void highlight_code_line(DString* b, String line, String lang, bool plain)
             continue;
         }
 
-        // 6. Other characters (spaces, braces, brackets, commas, semicolons)
         b.append_char(c);
         i++;
     }

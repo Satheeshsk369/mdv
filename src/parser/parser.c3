@@ -2,10 +2,10 @@ module parser;
 
 import std::core::mem;
 import std::collections::list;
-import logic;
+import ast;
 import text;
 
-fn bool is_thematic_break(String line)
+fn bool thematic(String line)
 {
     String trimmed = line.trim();
     if (trimmed.len < 3) return false;
@@ -38,28 +38,28 @@ fn bool is_thematic_break(String line)
     return dashes >= 3 || stars >= 3 || underscores >= 3;
 }
 
-fn bool is_table_sep_row(String line)
+fn bool separator(String line)
 {
     String trimmed = line.trim();
     if (trimmed.len < 3) return false;
-    bool has_dash = false;
+    bool hasDash = false;
 
     for (usz i = 0; i < (usz)trimmed.len; i++)
     {
         char c = trimmed[i];
         if (c == '-')
         {
-            has_dash = true;
+            hasDash = true;
         }
         else if (c != '|' && c != ':' && c != ' ' && c != '\t')
         {
             return false;
         }
     }
-    return has_dash;
+    return hasDash;
 }
 
-fn bool is_ordered_list(String line, usz indent, int* out_num, usz* out_prefix_len)
+fn bool ordered(String line, usz indent, int* outNum, usz* outPrefixLen)
 {
     usz p = indent;
     usz len = (usz)line.len;
@@ -74,14 +74,14 @@ fn bool is_ordered_list(String line, usz indent, int* out_num, usz* out_prefix_l
 
     if (p < len && (line[p] == '.' || line[p] == ')') && p + 1 < len && (line[p + 1] == ' ' || line[p + 1] == '\t'))
     {
-        *out_num = num;
-        *out_prefix_len = p + 2;
+        *outNum = num;
+        *outPrefixLen = p + 2;
         return true;
     }
     return false;
 }
 
-fn bool is_heading_prefix(String s)
+fn bool headingPrefix(String s)
 {
     if (s.len < 2 || s[0] != '#') return false;
     usz h = 0;
@@ -89,35 +89,35 @@ fn bool is_heading_prefix(String s)
     return h >= 1 && h <= 6 && h < (usz)s.len && (s[h] == ' ' || s[h] == '\t');
 }
 
-fn bool is_block_start(String line)
+fn bool blockStart(String line)
 {
     String trimmed = line.trim();
     if (trimmed.len == 0) return true;
-    if (is_thematic_break(line)) return true;
-    if (is_heading_prefix(trimmed)) return true;
+    if (thematic(line)) return true;
+    if (headingPrefix(trimmed)) return true;
     if (trimmed.starts_with("```") || trimmed.starts_with("~~~")) return true;
     if (trimmed.starts_with("$$") || trimmed.starts_with("\\begin{")) return true;
     if (trimmed.starts_with(">")) return true;
 
     if (trimmed.starts_with("[^"))
     {
-        usz col_pos = 2;
-        while (col_pos + 1 < (usz)trimmed.len && !(trimmed[col_pos] == ']' && trimmed[col_pos + 1] == ':')) col_pos++;
-        if (col_pos + 1 < (usz)trimmed.len) return true;
+        usz colPos = 2;
+        while (colPos + 1 < (usz)trimmed.len && !(trimmed[colPos] == ']' && trimmed[colPos + 1] == ':')) colPos++;
+        if (colPos + 1 < (usz)trimmed.len) return true;
     }
 
     usz indent = 0;
     while (indent < (usz)line.len && line[indent] == ' ') indent++;
     if (indent + 1 < (usz)line.len && (line[indent] == '*' || line[indent] == '-' || line[indent] == '+') && line[indent + 1] == ' ') return true;
 
-    int ord_num = 0;
-    usz ord_len = 0;
-    if (is_ordered_list(line, indent, &ord_num, &ord_len)) return true;
+    int ordNum = 0;
+    usz ordLen = 0;
+    if (ordered(line, indent, &ordNum, &ordLen)) return true;
 
     return false;
 }
 
-fn Block[] list_to_arena_blocks(logic::Arena* arena, List{Block}* l)
+fn Block[] keepBlocks(ast::Arena* arena, List{Block}* l)
 {
     if (l.size == 0) return {};
     Block* buf = (Block*)arena.alloc((usz)l.size * Block::size);
@@ -128,7 +128,7 @@ fn Block[] list_to_arena_blocks(logic::Arena* arena, List{Block}* l)
     return buf[:(usz)l.size];
 }
 
-fn String[] list_to_arena_strings(logic::Arena* arena, List{String}* l)
+fn String[] keepStrings(ast::Arena* arena, List{String}* l)
 {
     if (l.size == 0) return {};
     String* buf = (String*)arena.alloc((usz)l.size * String::size);
@@ -139,16 +139,16 @@ fn String[] list_to_arena_strings(logic::Arena* arena, List{String}* l)
     return buf[:(usz)l.size];
 }
 
-fn Span[][] parse_table_row_cells(logic::Arena* arena, String line, usz* out_col_count)
+fn Span[][] cells(ast::Arena* arena, String line, usz* outColCount)
 {
     String trimmed = line.trim();
     usz len = (usz)trimmed.len;
     usz i = 0;
     if (i < len && trimmed[i] == '|') i++;
 
-    List{Span[]} cell_list;
-    cell_list.init(mem, 8);
-    defer cell_list.free();
+    List{Span[]} cellList;
+    cellList.init(mem, 8);
+    defer cellList.free();
 
     while (i < len)
     {
@@ -156,34 +156,34 @@ fn Span[][] parse_table_row_cells(logic::Arena* arena, String line, usz* out_col
         while (i < len && trimmed[i] != '|') i++;
         usz end = i;
 
-        String raw_cell = trimmed[start : end - start].trim();
-        Span[] parsed = parser::parse_inline(arena, raw_cell);
-        cell_list.push(parsed);
+        String rawCell = trimmed[start : end - start].trim();
+        Span[] parsed = parser::spans(arena, rawCell);
+        cellList.push(parsed);
 
         if (i < len && trimmed[i] == '|') i++;
     }
 
-    *out_col_count = (usz)cell_list.size;
-    if (cell_list.size == 0) return {};
+    *outColCount = (usz)cellList.size;
+    if (cellList.size == 0) return {};
 
-    Span[]* buf = (Span[]*)arena.alloc((usz)cell_list.size * Span[]::size);
-    for (sz c = 0; c < cell_list.size; c++)
+    Span[]* buf = (Span[]*)arena.alloc((usz)cellList.size * Span[]::size);
+    for (sz c = 0; c < cellList.size; c++)
     {
-        buf[c] = cell_list.entries[c];
+        buf[c] = cellList.entries[c];
     }
-    return buf[:(usz)cell_list.size];
+    return buf[:(usz)cellList.size];
 }
 
-fn Alignment[] parse_table_alignments(logic::Arena* arena, String sep_line, usz expected_cols)
+fn Alignment[] alignments(ast::Arena* arena, String sepLine, usz expectedCols)
 {
-    String trimmed = sep_line.trim();
+    String trimmed = sepLine.trim();
     usz len = (usz)trimmed.len;
     usz i = 0;
     if (i < len && trimmed[i] == '|') i++;
 
-    List{Alignment} align_list;
-    align_list.init(mem, 8);
-    defer align_list.free();
+    List{Alignment} alignList;
+    alignList.init(mem, 8);
+    defer alignList.free();
 
     while (i < len)
     {
@@ -198,503 +198,490 @@ fn Alignment[] parse_table_alignments(logic::Arena* arena, String sep_line, usz 
             bool right = (spec[spec.len - 1] == ':');
             if (left && right)
             {
-                align_list.push(Alignment.CENTER);
+                alignList.push(Alignment.CENTER);
             }
             else if (right)
             {
-                align_list.push(Alignment.RIGHT);
+                alignList.push(Alignment.RIGHT);
             }
             else
             {
-                align_list.push(Alignment.LEFT);
+                alignList.push(Alignment.LEFT);
             }
         }
 
         if (i < len && trimmed[i] == '|') i++;
     }
 
-    while ((usz)align_list.size < expected_cols)
+    while ((usz)alignList.size < expectedCols)
     {
-        align_list.push(Alignment.LEFT);
+        alignList.push(Alignment.LEFT);
     }
 
-    if (align_list.size == 0) return {};
+    if (alignList.size == 0) return {};
 
-    Alignment* buf = (Alignment*)arena.alloc((usz)align_list.size * Alignment::size);
-    for (sz c = 0; c < align_list.size; c++)
+    Alignment* buf = (Alignment*)arena.alloc((usz)alignList.size * Alignment::size);
+    for (sz c = 0; c < alignList.size; c++)
     {
-        buf[c] = align_list.entries[c];
+        buf[c] = alignList.entries[c];
     }
-    return buf[:(usz)align_list.size];
+    return buf[:(usz)alignList.size];
 }
 
-fn Document parse_document(String content)
+fn Document parse(String content)
 {
     Document doc;
     doc.init();
 
     if (content.len == 0) return doc;
 
-    List{String} raw_lines;
-    raw_lines.init(mem, 128);
-    defer raw_lines.free();
+    List{String} rawLines;
+    rawLines.init(mem, 128);
+    defer rawLines.free();
 
     usz cursor = 0;
-    usz total_len = (usz)content.len;
+    usz totalLen = (usz)content.len;
 
-    while (cursor < total_len)
+    while (cursor < totalLen)
     {
-        usz line_start = cursor;
-        while (cursor < total_len && content[cursor] != '\n') cursor++;
-        usz line_end = cursor;
+        usz lineStart = cursor;
+        while (cursor < totalLen && content[cursor] != '\n') cursor++;
+        usz lineEnd = cursor;
 
-        if (line_end > line_start && content[line_end - 1] == '\r')
+        if (lineEnd > lineStart && content[lineEnd - 1] == '\r')
         {
-            line_end--;
+            lineEnd--;
         }
 
-        raw_lines.push(content[line_start : line_end - line_start]);
-        if (cursor < total_len && content[cursor] == '\n') cursor++;
+        rawLines.push(content[lineStart : lineEnd - lineStart]);
+        if (cursor < totalLen && content[cursor] == '\n') cursor++;
     }
 
-    List{Block} block_list;
-    block_list.init(mem, 64);
-    defer block_list.free();
+    List{Block} blockList;
+    blockList.init(mem, 64);
+    defer blockList.free();
 
-    usz line_idx = 0;
-    usz line_count = (usz)raw_lines.size;
+    usz lineIdx = 0;
+    usz lineCount = (usz)rawLines.size;
 
-    while (line_idx < line_count)
+    while (lineIdx < lineCount)
     {
-        String line = raw_lines.entries[line_idx];
+        String line = rawLines.entries[lineIdx];
         String trimmed = line.trim();
-        int src_start = (int)line_idx;
+        int srcStart = (int)lineIdx;
 
-        // 0. YAML Frontmatter (at start of document)
-        if (line_idx == 0 && trimmed == "---")
+        if (lineIdx == 0 && trimmed == "---")
         {
-            usz fm_start = line_idx;
-            line_idx++;
+            usz fmStart = lineIdx;
+            lineIdx++;
 
             List{FrontmatterEntry} entries;
             entries.init(mem, 16);
             defer entries.free();
 
-            while (line_idx < line_count)
+            while (lineIdx < lineCount)
             {
-                String cur = raw_lines.entries[line_idx];
-                String cur_t = cur.trim();
-                if (cur_t == "---" || cur_t == "...")
+                String cur = rawLines.entries[lineIdx];
+                String curT = cur.trim();
+                if (curT == "---" || curT == "...")
                 {
                     break;
                 }
 
-                // Find ':'
-                usz c_pos = 0;
-                while (c_pos < (usz)cur_t.len && cur_t[c_pos] != ':') c_pos++;
+                usz cPos = 0;
+                while (cPos < (usz)curT.len && curT[cPos] != ':') cPos++;
 
-                if (c_pos < (usz)cur_t.len)
+                if (cPos < (usz)curT.len)
                 {
-                    String k = cur_t[0:c_pos].trim();
-                    String v = cur_t[c_pos + 1..].trim();
-                    // Strip optional quotes
+                    String k = curT[0:cPos].trim();
+                    String v = curT[cPos + 1..].trim();
                     if (v.len >= 2 && ((v[0] == '"' && v[v.len - 1] == '"') || (v[0] == '\'' && v[v.len - 1] == '\'')))
                     {
                         v = v[1 : (usz)v.len - 2];
                     }
                     FrontmatterEntry entry;
-                    entry.key = doc.arena.dup_string(k);
-                    entry.value = doc.arena.dup_string(v);
+                    entry.key = doc.arena.copy(k);
+                    entry.value = doc.arena.copy(v);
                     entries.push(entry);
                 }
-                line_idx++;
+                lineIdx++;
             }
 
             if (entries.size > 0)
             {
-                FrontmatterEntry* e_buf = (FrontmatterEntry*)doc.arena.alloc((usz)entries.size * FrontmatterEntry::size);
-                for (sz e = 0; e < entries.size; e++) e_buf[e] = entries.entries[e];
+                FrontmatterEntry* eBuf = (FrontmatterEntry*)doc.arena.alloc((usz)entries.size * FrontmatterEntry::size);
+                for (sz e = 0; e < entries.size; e++) eBuf[e] = entries.entries[e];
 
                 Block b;
                 b.kind = BlockKind.FRONTMATTER;
-                b.src_line_start = (int)fm_start;
-                b.src_line_end = (int)line_idx;
-                b.frontmatter.entries = e_buf[:(usz)entries.size];
-                block_list.push(b);
+                b.srcLineStart = (int)fmStart;
+                b.srcLineEnd = (int)lineIdx;
+                b.frontmatter.entries = eBuf[:(usz)entries.size];
+                blockList.push(b);
             }
 
-            line_idx++;
+            lineIdx++;
             continue;
         }
 
-        // 1. Blank Line
         if (trimmed.len == 0)
         {
             Block b;
             b.kind = BlockKind.BLANK;
-            b.src_line_start = src_start;
-            b.src_line_end = src_start;
-            block_list.push(b);
-            line_idx++;
+            b.srcLineStart = srcStart;
+            b.srcLineEnd = srcStart;
+            blockList.push(b);
+            lineIdx++;
             continue;
         }
 
-        // 2. Fenced Code Block: ```... or ~~~...
         if (trimmed.starts_with("```") || trimmed.starts_with("~~~"))
         {
-            char fence_char = trimmed[0];
-            usz fence_len = 0;
-            while (fence_len < (usz)trimmed.len && trimmed[fence_len] == fence_char)
+            char fenceChar = trimmed[0];
+            usz fenceLen = 0;
+            while (fenceLen < (usz)trimmed.len && trimmed[fenceLen] == fenceChar)
             {
-                fence_len++;
+                fenceLen++;
             }
 
-            String lang = trimmed[fence_len..].trim();
+            String lang = trimmed[fenceLen..].trim();
 
-            List{String} code_lines;
-            code_lines.init(mem, 16);
-            defer code_lines.free();
+            List{String} codeLines;
+            codeLines.init(mem, 16);
+            defer codeLines.free();
 
-            line_idx++;
-            while (line_idx < line_count)
+            lineIdx++;
+            while (lineIdx < lineCount)
             {
-                String cur_line = raw_lines.entries[line_idx];
-                String cur_trimmed = cur_line.trim();
+                String curLine = rawLines.entries[lineIdx];
+                String curTrimmed = curLine.trim();
 
-                bool is_closing_fence = false;
-                if ((usz)cur_trimmed.len >= fence_len && cur_trimmed[0] == fence_char)
+                bool closingFence = false;
+                if ((usz)curTrimmed.len >= fenceLen && curTrimmed[0] == fenceChar)
                 {
-                    usz close_len = 0;
-                    while (close_len < (usz)cur_trimmed.len && cur_trimmed[close_len] == fence_char)
+                    usz closeLen = 0;
+                    while (closeLen < (usz)curTrimmed.len && curTrimmed[closeLen] == fenceChar)
                     {
-                        close_len++;
+                        closeLen++;
                     }
-                    if (close_len >= fence_len)
+                    if (closeLen >= fenceLen)
                     {
-                        String rest = cur_trimmed[close_len..].trim();
+                        String rest = curTrimmed[closeLen..].trim();
                         if (rest.len == 0)
                         {
-                            is_closing_fence = true;
+                            closingFence = true;
                         }
                     }
                 }
 
-                if (is_closing_fence)
+                if (closingFence)
                 {
                     break;
                 }
 
-                code_lines.push(doc.arena.dup_string(cur_line));
-                line_idx++;
+                codeLines.push(doc.arena.copy(curLine));
+                lineIdx++;
             }
 
             Block b;
             b.kind = BlockKind.CODE_BLOCK;
-            b.src_line_start = src_start;
-            b.src_line_end = (int)line_idx;
-            b.code.language = doc.arena.dup_string(lang);
-            b.code.lines = list_to_arena_strings(&doc.arena, &code_lines);
-            block_list.push(b);
+            b.srcLineStart = srcStart;
+            b.srcLineEnd = (int)lineIdx;
+            b.code.language = doc.arena.copy(lang);
+            b.code.lines = keepStrings(&doc.arena, &codeLines);
+            blockList.push(b);
 
-            line_idx++;
+            lineIdx++;
             continue;
         }
 
-        // 3. Display Math Block ($$ ... $$ or \begin{equation} ... \end{equation})
         if (trimmed.starts_with("$$") || trimmed.starts_with("\\begin{equation}") || trimmed.starts_with("\\begin{align}") || trimmed.starts_with("\\begin{gather}") || trimmed.starts_with("\\begin{aligned}"))
         {
             if (trimmed.starts_with("$$") && trimmed.len >= 4 && trimmed.ends_with("$$") && trimmed.len > 4)
             {
-                String math_content = (trimmed[2 : (usz)trimmed.len - 4]).trim();
+                String mathContent = (trimmed[2 : (usz)trimmed.len - 4]).trim();
                 Block b;
                 b.kind = BlockKind.MATH_BLOCK;
-                b.src_line_start = src_start;
-                b.src_line_end = src_start;
-                b.math_block.latex = doc.arena.dup_string(math_content);
-                block_list.push(b);
-                line_idx++;
+                b.srcLineStart = srcStart;
+                b.srcLineEnd = srcStart;
+                b.mathBlock.latex = doc.arena.copy(mathContent);
+                blockList.push(b);
+                lineIdx++;
                 continue;
             }
 
-            bool is_dollar = trimmed.starts_with("$$");
-            String end_marker = is_dollar ? "$$" : "\\end{";
+            bool isDollar = trimmed.starts_with("$$");
+            String endMarker = isDollar ? "$$" : "\\end{";
 
-            List{String} math_lines;
-            math_lines.init(mem, 16);
-            defer math_lines.free();
+            List{String} mathLines;
+            mathLines.init(mem, 16);
+            defer mathLines.free();
 
-            if (is_dollar && trimmed.len > 2)
+            if (isDollar && trimmed.len > 2)
             {
-                math_lines.push(trimmed[2..]);
+                mathLines.push(trimmed[2..]);
             }
-            else if (!is_dollar)
+            else if (!isDollar)
             {
-                math_lines.push(line);
+                mathLines.push(line);
             }
 
-            line_idx++;
-            while (line_idx < line_count)
+            lineIdx++;
+            while (lineIdx < lineCount)
             {
-                String cur_line = raw_lines.entries[line_idx];
-                String cur_trimmed = cur_line.trim();
+                String curLine = rawLines.entries[lineIdx];
+                String curTrimmed = curLine.trim();
 
-                if (is_dollar)
+                if (isDollar)
                 {
-                    if (cur_trimmed.ends_with("$$") || cur_trimmed.starts_with("$$"))
+                    if (curTrimmed.ends_with("$$") || curTrimmed.starts_with("$$"))
                     {
-                        if (cur_trimmed.len > 2 && !cur_trimmed.starts_with("$$"))
+                        if (curTrimmed.len > 2 && !curTrimmed.starts_with("$$"))
                         {
-                            math_lines.push(cur_trimmed[0 : (usz)cur_trimmed.len - 2]);
+                            mathLines.push(curTrimmed[0 : (usz)curTrimmed.len - 2]);
                         }
                         break;
                     }
                 }
                 else
                 {
-                    if (cur_trimmed.starts_with(end_marker))
+                    if (curTrimmed.starts_with(endMarker))
                     {
-                        math_lines.push(cur_line);
+                        mathLines.push(curLine);
                         break;
                     }
                 }
 
-                math_lines.push(cur_line);
-                line_idx++;
+                mathLines.push(curLine);
+                lineIdx++;
             }
 
             DString mb;
             mb.init(mem, 512);
             defer mb.free();
 
-            for (sz m = 0; m < math_lines.size; m++)
+            for (sz m = 0; m < mathLines.size; m++)
             {
                 if (m > 0) mb.append_char(' ');
-                mb.append_string(math_lines.entries[m]);
+                mb.append_string(mathLines.entries[m]);
             }
 
             Block b;
             b.kind = BlockKind.MATH_BLOCK;
-            b.src_line_start = src_start;
-            b.src_line_end = (int)line_idx;
-            b.math_block.latex = mb.to_arena_string(&doc.arena);
-            block_list.push(b);
+            b.srcLineStart = srcStart;
+            b.srcLineEnd = (int)lineIdx;
+            b.mathBlock.latex = mb.keep(&doc.arena);
+            blockList.push(b);
 
-            line_idx++;
+            lineIdx++;
             continue;
         }
 
-        // 4. Table: starts with | and next row is separator
-        if (trimmed.starts_with("|") && line_idx + 1 < line_count && is_table_sep_row(raw_lines.entries[line_idx + 1]))
+        if (trimmed.starts_with("|") && lineIdx + 1 < lineCount && separator(rawLines.entries[lineIdx + 1]))
         {
-            usz header_cols = 0;
-            Span[][] header_row = parse_table_row_cells(&doc.arena, line, &header_cols);
+            usz headerCols = 0;
+            Span[][] headerRow = cells(&doc.arena, line, &headerCols);
 
-            String sep_line = raw_lines.entries[line_idx + 1];
-            Alignment[] alignments = parse_table_alignments(&doc.arena, sep_line, header_cols);
+            String sepLine = rawLines.entries[lineIdx + 1];
+            Alignment[] aligns = alignments(&doc.arena, sepLine, headerCols);
 
-            List{Span[][]} body_rows;
-            body_rows.init(mem, 32);
-            defer body_rows.free();
+            List{Span[][]} bodyRows;
+            bodyRows.init(mem, 32);
+            defer bodyRows.free();
 
-            line_idx += 2;
+            lineIdx += 2;
 
-            while (line_idx < line_count)
+            while (lineIdx < lineCount)
             {
-                String row_line = raw_lines.entries[line_idx];
-                String row_trimmed = row_line.trim();
-                if (!row_trimmed.starts_with("|") || row_trimmed.len == 0)
+                String rowLine = rawLines.entries[lineIdx];
+                String rowTrimmed = rowLine.trim();
+                if (!rowTrimmed.starts_with("|") || rowTrimmed.len == 0)
                 {
                     break;
                 }
 
                 usz rcols = 0;
-                Span[][] cell_row = parse_table_row_cells(&doc.arena, row_line, &rcols);
-                body_rows.push(cell_row);
-                line_idx++;
+                Span[][] cellRow = cells(&doc.arena, rowLine, &rcols);
+                bodyRows.push(cellRow);
+                lineIdx++;
             }
 
-            Span[][]* rows_buf = (Span[][]*)doc.arena.alloc((usz)body_rows.size * Span[][]::size);
-            for (sz r = 0; r < body_rows.size; r++)
+            Span[][]* rowsBuf = (Span[][]*)doc.arena.alloc((usz)bodyRows.size * Span[][]::size);
+            for (sz r = 0; r < bodyRows.size; r++)
             {
-                rows_buf[r] = body_rows.entries[r];
+                rowsBuf[r] = bodyRows.entries[r];
             }
 
             Block b;
             b.kind = BlockKind.TABLE;
-            b.src_line_start = src_start;
-            b.src_line_end = (int)(line_idx - 1);
-            b.table.col_count = (int)header_cols;
-            b.table.alignments = alignments;
-            b.table.headers = header_row;
-            b.table.rows = rows_buf[:(usz)body_rows.size];
-            block_list.push(b);
+            b.srcLineStart = srcStart;
+            b.srcLineEnd = (int)(lineIdx - 1);
+            b.table.colCount = (int)headerCols;
+            b.table.alignments = aligns;
+            b.table.headers = headerRow;
+            b.table.rows = rowsBuf[:(usz)bodyRows.size];
+            blockList.push(b);
             continue;
         }
 
-        // 5. Thematic Break / Horizontal Rule (---, ***, ___)
-        if (is_thematic_break(line))
+        if (thematic(line))
         {
             Block b;
             b.kind = BlockKind.THEMATIC_BREAK;
-            b.src_line_start = src_start;
-            b.src_line_end = src_start;
-            block_list.push(b);
-            line_idx++;
+            b.srcLineStart = srcStart;
+            b.srcLineEnd = srcStart;
+            blockList.push(b);
+            lineIdx++;
             continue;
         }
 
-        // 6. Headings: # through ######
         if (trimmed.starts_with("# ") || trimmed.starts_with("## ") || trimmed.starts_with("### ") || trimmed.starts_with("#### ") || trimmed.starts_with("##### ") || trimmed.starts_with("###### "))
         {
             int level = 0;
             while ((usz)level < (usz)trimmed.len && trimmed[level] == '#') level++;
-            usz text_offset = (usz)(level + 1);
-            String heading_text = trimmed[text_offset..].trim();
+            usz textOffset = (usz)(level + 1);
+            String headingText = trimmed[textOffset..].trim();
 
             Block b;
             b.kind = BlockKind.HEADING;
-            b.src_line_start = src_start;
-            b.src_line_end = src_start;
+            b.srcLineStart = srcStart;
+            b.srcLineEnd = srcStart;
             b.heading.level = level;
-            b.heading.spans = parser::parse_inline(&doc.arena, heading_text);
-            block_list.push(b);
-            line_idx++;
+            b.heading.spans = parser::spans(&doc.arena, headingText);
+            blockList.push(b);
+            lineIdx++;
             continue;
         }
 
-        // 7. Callouts / Admonitions: > [!NOTE], > [!TIP], > [!WARNING], > [!IMPORTANT], > [!CAUTION] (full multiline support)
         if (trimmed.starts_with("> [!"))
         {
             CalloutKind kind = CalloutKind.NOTE;
-            String callout_title = "NOTE";
+            String calloutTitle = "NOTE";
 
             if (trimmed.starts_with("> [!NOTE]") || trimmed.starts_with("> [!INFO]"))
             {
                 kind = CalloutKind.NOTE;
-                callout_title = "NOTE";
+                calloutTitle = "NOTE";
             }
             else if (trimmed.starts_with("> [!TIP]") || trimmed.starts_with("> [!SUCCESS]"))
             {
                 kind = CalloutKind.TIP;
-                callout_title = "TIP";
+                calloutTitle = "TIP";
             }
             else if (trimmed.starts_with("> [!WARNING]"))
             {
                 kind = CalloutKind.WARNING;
-                callout_title = "WARNING";
+                calloutTitle = "WARNING";
             }
             else if (trimmed.starts_with("> [!IMPORTANT]"))
             {
                 kind = CalloutKind.IMPORTANT;
-                callout_title = "IMPORTANT";
+                calloutTitle = "IMPORTANT";
             }
             else if (trimmed.starts_with("> [!DANGER]") || trimmed.starts_with("> [!CAUTION]") || trimmed.starts_with("> [!ERROR]"))
             {
                 kind = CalloutKind.CAUTION;
-                callout_title = "CAUTION";
+                calloutTitle = "CAUTION";
             }
 
-            DString callout_body;
-            callout_body.init(mem, 512);
-            defer callout_body.free();
+            DString calloutBody;
+            calloutBody.init(mem, 512);
+            defer calloutBody.free();
 
-            line_idx++;
-            int last_callout_line = src_start;
+            lineIdx++;
+            int lastCalloutLine = srcStart;
 
-            while (line_idx < line_count)
+            while (lineIdx < lineCount)
             {
-                String q_raw = raw_lines.entries[line_idx];
-                String q_trim = q_raw.trim();
-                if (!q_trim.starts_with(">"))
+                String qRaw = rawLines.entries[lineIdx];
+                String qTrim = qRaw.trim();
+                if (!qTrim.starts_with(">"))
                 {
                     break;
                 }
 
-                String q_text = q_trim[1..];
-                if (q_text.len > 0 && q_text[0] == ' ') q_text = q_text[1..];
+                String qText = qTrim[1..];
+                if (qText.len > 0 && qText[0] == ' ') qText = qText[1..];
 
-                if (callout_body.len() > 0) callout_body.append_char(' ');
-                callout_body.append_string(q_text);
+                if (calloutBody.len() > 0) calloutBody.append_char(' ');
+                calloutBody.append_string(qText);
 
-                last_callout_line = (int)line_idx;
-                line_idx++;
+                lastCalloutLine = (int)lineIdx;
+                lineIdx++;
             }
 
             Block b;
             b.kind = BlockKind.CALLOUT;
-            b.src_line_start = src_start;
-            b.src_line_end = last_callout_line;
+            b.srcLineStart = srcStart;
+            b.srcLineEnd = lastCalloutLine;
             b.callout.kind = kind;
-            b.callout.title = doc.arena.dup_string(callout_title);
-            b.callout.spans = parser::parse_inline(&doc.arena, callout_body.str_view());
-            block_list.push(b);
+            b.callout.title = doc.arena.copy(calloutTitle);
+            b.callout.spans = parser::spans(&doc.arena, calloutBody.str_view());
+            blockList.push(b);
             continue;
         }
 
-        // 8. Footnote Definitions: [^label]: ...
         if (trimmed.starts_with("[^"))
         {
-            usz col_pos = 2;
-            while (col_pos + 1 < (usz)trimmed.len && !(trimmed[col_pos] == ']' && trimmed[col_pos + 1] == ':'))
+            usz colPos = 2;
+            while (colPos + 1 < (usz)trimmed.len && !(trimmed[colPos] == ']' && trimmed[colPos + 1] == ':'))
             {
-                col_pos++;
+                colPos++;
             }
 
-            if (col_pos + 1 < (usz)trimmed.len)
+            if (colPos + 1 < (usz)trimmed.len)
             {
-                String fn_label = trimmed[2 : col_pos - 2];
-                String fn_body = trimmed[col_pos + 2..].trim();
+                String fnLabel = trimmed[2 : colPos - 2];
+                String fnBody = trimmed[colPos + 2..].trim();
 
                 Block b;
                 b.kind = BlockKind.FOOTNOTE_DEF;
-                b.src_line_start = src_start;
-                b.src_line_end = src_start;
-                b.footnote_def.label = doc.arena.dup_string(fn_label);
-                b.footnote_def.spans = parser::parse_inline(&doc.arena, fn_body);
-                block_list.push(b);
-                line_idx++;
+                b.srcLineStart = srcStart;
+                b.srcLineEnd = srcStart;
+                b.footnoteDef.label = doc.arena.copy(fnLabel);
+                b.footnoteDef.spans = parser::spans(&doc.arena, fnBody);
+                blockList.push(b);
+                lineIdx++;
                 continue;
             }
         }
 
-        // 9. Blockquote: > ... (multiline support)
         if (trimmed.starts_with("> ") || trimmed == ">")
         {
-            DString quote_body;
-            quote_body.init(mem, 512);
-            defer quote_body.free();
+            DString quoteBody;
+            quoteBody.init(mem, 512);
+            defer quoteBody.free();
 
-            int last_q_line = src_start;
+            int lastQLine = srcStart;
 
-            while (line_idx < line_count)
+            while (lineIdx < lineCount)
             {
-                String q_raw = raw_lines.entries[line_idx];
-                String q_trim = q_raw.trim();
-                if (!q_trim.starts_with(">") || q_trim.starts_with("> [!"))
+                String qRaw = rawLines.entries[lineIdx];
+                String qTrim = qRaw.trim();
+                if (!qTrim.starts_with(">") || qTrim.starts_with("> [!"))
                 {
                     break;
                 }
 
-                String q_text = q_trim[1..];
-                if (q_text.len > 0 && q_text[0] == ' ') q_text = q_text[1..];
+                String qText = qTrim[1..];
+                if (qText.len > 0 && qText[0] == ' ') qText = qText[1..];
 
-                if (quote_body.len() > 0) quote_body.append_char(' ');
-                quote_body.append_string(q_text);
+                if (quoteBody.len() > 0) quoteBody.append_char(' ');
+                quoteBody.append_string(qText);
 
-                last_q_line = (int)line_idx;
-                line_idx++;
+                lastQLine = (int)lineIdx;
+                lineIdx++;
             }
 
             Block b;
             b.kind = BlockKind.BLOCKQUOTE;
-            b.src_line_start = src_start;
-            b.src_line_end = last_q_line;
-            b.blockquote.spans = parser::parse_inline(&doc.arena, quote_body.str_view());
-            block_list.push(b);
+            b.srcLineStart = srcStart;
+            b.srcLineEnd = lastQLine;
+            b.blockquote.spans = parser::spans(&doc.arena, quoteBody.str_view());
+            blockList.push(b);
             continue;
         }
 
-        // 10. Task lists / Checkboxes (- [ ] or - [x])
         usz indent = 0;
         while (indent < (usz)line.len && line[indent] == ' ') indent++;
 
@@ -703,108 +690,105 @@ fn Document parse_document(String content)
             String sub = line[indent..];
             if (sub.starts_with("- [ ] ") || sub.starts_with("* [ ] "))
             {
-                String task_text = sub[6..];
+                String taskText = sub[6..];
                 Block b;
                 b.kind = BlockKind.LIST_ITEM;
-                b.src_line_start = src_start;
-                b.src_line_end = src_start;
-                b.list_item.kind = ListKind.TASK_UNCHECKED;
-                b.list_item.indent_level = (int)indent;
-                b.list_item.order_number = 0;
-                b.list_item.spans = parser::parse_inline(&doc.arena, task_text);
-                block_list.push(b);
-                line_idx++;
+                b.srcLineStart = srcStart;
+                b.srcLineEnd = srcStart;
+                b.listItem.kind = ListKind.TASK_UNCHECKED;
+                b.listItem.indentLevel = (int)indent;
+                b.listItem.orderNumber = 0;
+                b.listItem.spans = parser::spans(&doc.arena, taskText);
+                blockList.push(b);
+                lineIdx++;
                 continue;
             }
             if (sub.starts_with("- [x] ") || sub.starts_with("- [X] ") || sub.starts_with("* [x] ") || sub.starts_with("* [X] "))
             {
-                String task_text = sub[6..];
+                String taskText = sub[6..];
                 Block b;
                 b.kind = BlockKind.LIST_ITEM;
-                b.src_line_start = src_start;
-                b.src_line_end = src_start;
-                b.list_item.kind = ListKind.TASK_CHECKED;
-                b.list_item.indent_level = (int)indent;
-                b.list_item.order_number = 0;
-                b.list_item.spans = parser::parse_inline(&doc.arena, task_text);
-                block_list.push(b);
-                line_idx++;
+                b.srcLineStart = srcStart;
+                b.srcLineEnd = srcStart;
+                b.listItem.kind = ListKind.TASK_CHECKED;
+                b.listItem.indentLevel = (int)indent;
+                b.listItem.orderNumber = 0;
+                b.listItem.spans = parser::spans(&doc.arena, taskText);
+                blockList.push(b);
+                lineIdx++;
                 continue;
             }
         }
 
-        // 11. Bullet Lists (* , - , + )
         if (indent + 1 < (usz)line.len && (line[indent] == '*' || line[indent] == '-' || line[indent] == '+') && line[indent + 1] == ' ')
         {
-            String item_text = line[indent + 2..];
+            String itemText = line[indent + 2..];
             Block b;
             b.kind = BlockKind.LIST_ITEM;
-            b.src_line_start = src_start;
-            b.src_line_end = src_start;
-            b.list_item.kind = ListKind.BULLET;
-            b.list_item.indent_level = (int)indent;
-            b.list_item.order_number = 0;
-            b.list_item.spans = parser::parse_inline(&doc.arena, item_text);
-            block_list.push(b);
-            line_idx++;
+            b.srcLineStart = srcStart;
+            b.srcLineEnd = srcStart;
+            b.listItem.kind = ListKind.BULLET;
+            b.listItem.indentLevel = (int)indent;
+            b.listItem.orderNumber = 0;
+            b.listItem.spans = parser::spans(&doc.arena, itemText);
+            blockList.push(b);
+            lineIdx++;
             continue;
         }
 
-        // 12. Ordered Lists (1. , 2. , 1) etc.)
-        int ord_num = 0;
-        usz ord_prefix_len = 0;
-        if (is_ordered_list(line, indent, &ord_num, &ord_prefix_len))
+        int ordNum = 0;
+        usz ordPrefixLen = 0;
+        if (ordered(line, indent, &ordNum, &ordPrefixLen))
         {
-            String item_text = line[ord_prefix_len..];
+            String itemText = line[ordPrefixLen..];
             Block b;
             b.kind = BlockKind.LIST_ITEM;
-            b.src_line_start = src_start;
-            b.src_line_end = src_start;
-            b.list_item.kind = ListKind.ORDERED;
-            b.list_item.indent_level = (int)indent;
-            b.list_item.order_number = ord_num;
-            b.list_item.spans = parser::parse_inline(&doc.arena, item_text);
-            block_list.push(b);
-            line_idx++;
+            b.srcLineStart = srcStart;
+            b.srcLineEnd = srcStart;
+            b.listItem.kind = ListKind.ORDERED;
+            b.listItem.indentLevel = (int)indent;
+            b.listItem.orderNumber = ordNum;
+            b.listItem.spans = parser::spans(&doc.arena, itemText);
+            blockList.push(b);
+            lineIdx++;
             continue;
         }
 
-        // 13. Paragraph: group consecutive regular lines into a unified reflowable paragraph
-        DString para_buf;
-        para_buf.init(mem, 512);
-        defer para_buf.free();
+        DString paraBuf;
+        paraBuf.init(mem, 512);
+        defer paraBuf.free();
 
-        int last_para_line = src_start;
+        int lastParaLine = srcStart;
 
-        while (line_idx < line_count)
+        while (lineIdx < lineCount)
         {
-            String cur_line = raw_lines.entries[line_idx];
-            if (is_block_start(cur_line))
+            String curLine = rawLines.entries[lineIdx];
+            if (blockStart(curLine))
             {
                 break;
             }
 
-            String cur_t = cur_line.trim();
-            if (cur_t.len == 0) break;
+            String curT = curLine.trim();
+            if (curT.len == 0) break;
 
-            if (para_buf.len() > 0)
+            if (paraBuf.len() > 0)
             {
-                para_buf.append_char(' ');
+                paraBuf.append_char(' ');
             }
-            para_buf.append_string(cur_t);
+            paraBuf.append_string(curT);
 
-            last_para_line = (int)line_idx;
-            line_idx++;
+            lastParaLine = (int)lineIdx;
+            lineIdx++;
         }
 
         Block b;
         b.kind = BlockKind.PARAGRAPH;
-        b.src_line_start = src_start;
-        b.src_line_end = last_para_line;
-        b.paragraph.spans = parser::parse_inline(&doc.arena, para_buf.str_view());
-        block_list.push(b);
+        b.srcLineStart = srcStart;
+        b.srcLineEnd = lastParaLine;
+        b.paragraph.spans = parser::spans(&doc.arena, paraBuf.str_view());
+        blockList.push(b);
     }
 
-    doc.blocks = list_to_arena_blocks(&doc.arena, &block_list);
+    doc.blocks = keepBlocks(&doc.arena, &blockList);
     return doc;
 }

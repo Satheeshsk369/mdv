@@ -1,4 +1,4 @@
-module logic;
+module ast;
 
 enum SpanKind {
     TEXT,
@@ -77,7 +77,7 @@ enum Alignment {
 }
 
 struct HeadingBlock {
-    int level;          // 1 - 6
+    int level;
     Span[] spans;
 }
 
@@ -102,13 +102,13 @@ struct CalloutBlock {
 
 struct ListItemBlock {
     ListKind kind;
-    int indent_level;
-    int order_number;
+    int indentLevel;
+    int orderNumber;
     Span[] spans;
 }
 
 struct TableBlock {
-    int col_count;
+    int colCount;
     Alignment[] alignments;
     Span[][] headers;
     Span[][][] rows;
@@ -120,8 +120,8 @@ struct MathBlock {
 
 struct Block {
     BlockKind kind;
-    int src_line_start;
-    int src_line_end;
+    int srcLineStart;
+    int srcLineEnd;
     union
     {
         FrontmatterBlock frontmatter;
@@ -130,11 +130,11 @@ struct Block {
         CodeBlock code;
         BlockquoteBlock blockquote;
         CalloutBlock callout;
-        ListItemBlock list_item;
+        ListItemBlock listItem;
         TableBlock table;
-        MathBlock math_block;
-        FootnoteDefBlock footnote_def;
-        ImageBlock image_block;
+        MathBlock mathBlock;
+        FootnoteDefBlock footnoteDef;
+        ImageBlock imageBlock;
     }
 }
 
@@ -157,8 +157,8 @@ fn void Document.free(Document* doc)
 
 struct VisualLine {
     String text;
-    int src_line;
-    int display_width;
+    int srcLine;
+    int displayWidth;
 }
 
 struct VisualDocument {
@@ -172,18 +172,18 @@ fn void VisualDocument.init(VisualDocument* doc)
     doc.arena.init(65536);
 }
 
-fn int VisualDocument.get_total_lines(VisualDocument* doc)
+fn int VisualDocument.count(VisualDocument* doc)
 {
     return (int)doc.lines.len;
 }
 
-fn int VisualDocument.find_visual_line(VisualDocument* doc, int src_target)
+fn int VisualDocument.visual(VisualDocument* doc, int srcTarget)
 {
-    if (src_target < 0) return 0;
+    if (srcTarget < 0) return 0;
     int total = (int)doc.lines.len;
     for (int i = 0; i < total; i++)
     {
-        if (doc.lines[i].src_line >= src_target)
+        if (doc.lines[i].srcLine >= srcTarget)
         {
             return i;
         }
@@ -201,5 +201,5 @@ fn void VisualDocument.free(VisualDocument* doc)
 struct RenderConfig {
     int width;
     bool plain;
-    bool no_wrap;
+    bool noWrap;
 }

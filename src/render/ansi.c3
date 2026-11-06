@@ -2,7 +2,6 @@ module ansi;
 
 const String RESET = "\e[0m";
 const String BOLD = "\e[1m";
-const String DIM = "\e[2m";
 const String ITALIC = "\e[3m";
 const String UNDERLINE = "\e[4m";
 const String STRIKE = "\e[9m";
@@ -22,9 +21,7 @@ const String YELLOW = "\e[38;2;230;219;116m";
 const String PURPLE = "\e[38;2;174;129;255m";
 const String MUTED = "\e[38;2;117;113;94m";
 const String TEXT = "\e[38;2;248;248;242m";
-const String MATH = "\e[38;2;255;216;102m\e[1m";
 
-const String CODE = "\e[48;2;39;40;34m";
 const String CALLOUT = "\e[48;2;30;32;36m";
 const String INLINE = "\e[48;2;39;40;34m\e[38;2;102;217;239m";
 

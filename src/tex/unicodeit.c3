@@ -1,10 +1,10 @@
-module math;
+module tex;
 
 import std::core::mem;
-import logic;
+import ast;
 import text;
 
-fn String transform_math(logic::Arena* arena, String input)
+fn String unicode(ast::Arena* arena, String input)
 {
     if (input.len == 0) return "";
 
@@ -18,54 +18,53 @@ fn String transform_math(logic::Arena* arena, String input)
     {
         char c = input[i];
 
-        // ── 1. LaTeX Math Backslash Commands & Spaces ────────────────────────
         if (c == '\\')
         {
             if (i + 1 < (usz)input.len)
             {
-                char next_c = input[i + 1];
-                if (next_c == '{' || next_c == '}')
+                char nextC = input[i + 1];
+                if (nextC == '{' || nextC == '}')
                 {
-                    mb.append_char(next_c);
+                    mb.append_char(nextC);
                     i += 2;
                     continue;
                 }
-                if (next_c == ',')
+                if (nextC == ',')
                 {
                     mb.append(" ");
                     i += 2;
                     continue;
                 }
-                if (next_c == ':')
+                if (nextC == ':')
                 {
                     mb.append(" ");
                     i += 2;
                     continue;
                 }
-                if (next_c == ';')
+                if (nextC == ';')
                 {
                     mb.append(" ");
                     i += 2;
                     continue;
                 }
-                if (next_c == '!')
+                if (nextC == '!')
                 {
                     i += 2;
                     continue;
                 }
-                if (next_c == ' ')
+                if (nextC == ' ')
                 {
                     mb.append_char(' ');
                     i += 2;
                     continue;
                 }
-                if (next_c == '%')
+                if (nextC == '%')
                 {
                     mb.append_char('%');
                     i += 2;
                     continue;
                 }
-                if (next_c == '$')
+                if (nextC == '$')
                 {
                     mb.append_char('$');
                     i += 2;
@@ -73,47 +72,44 @@ fn String transform_math(logic::Arena* arena, String input)
                 }
             }
 
-            // Command name scanner
-            usz cmd_start = i + 1;
-            usz cmd_end = cmd_start;
-            while (cmd_end < (usz)input.len && ((input[cmd_end] >= 'a' && input[cmd_end] <= 'z') || (input[cmd_end] >= 'A' && input[cmd_end] <= 'Z')))
+            usz cmdStart = i + 1;
+            usz cmdEnd = cmdStart;
+            while (cmdEnd < (usz)input.len && ((input[cmdEnd] >= 'a' && input[cmdEnd] <= 'z') || (input[cmdEnd] >= 'A' && input[cmdEnd] <= 'Z')))
             {
-                cmd_end++;
+                cmdEnd++;
             }
 
-            String cmd = input[cmd_start : cmd_end - cmd_start];
+            String cmd = input[cmdStart : cmdEnd - cmdStart];
 
-            // ── Quad Spacing ─────────────────────────────────────────────────
             if (cmd == "quad")
             {
                 mb.append(" ");
-                i = cmd_end;
+                i = cmdEnd;
                 continue;
             }
             if (cmd == "qquad")
             {
                 mb.append("  ");
-                i = cmd_end;
+                i = cmdEnd;
                 continue;
             }
 
-            // ── Modulo ───────────────────────────────────────────────────────
             if (cmd == "pmod" || cmd == "pod")
             {
-                i = cmd_end;
+                i = cmdEnd;
                 while (i < (usz)input.len && input[i] == ' ') i++;
                 if (i < (usz)input.len && input[i] == '{')
                 {
                     i++;
-                    usz m_start = i;
+                    usz mStart = i;
                     while (i < (usz)input.len && input[i] != '}') i++;
-                    String m_content = input[m_start : i - m_start];
+                    String mContent = input[mStart : i - mStart];
                     if (i < (usz)input.len && input[i] == '}') i++;
 
-                    String t_m = transform_math(arena, m_content);
+                    String tM = unicode(arena, mContent);
                     mb.append(" (");
                     if (cmd == "pmod") mb.append("mod ");
-                    mb.append_string(t_m);
+                    mb.append_string(tM);
                     mb.append_char(')');
                     continue;
                 }
@@ -121,15 +117,14 @@ fn String transform_math(logic::Arena* arena, String input)
             if (cmd == "bmod")
             {
                 mb.append(" mod ");
-                i = cmd_end;
+                i = cmdEnd;
                 continue;
             }
 
-            // ── Font Styles via Enum ─────────────────────────────────────────
-            logic::Alphabet alphabet;
-            if (logic::font(cmd, &alphabet))
+            Alphabet alphabet;
+            if (font(cmd, &alphabet))
             {
-                i = cmd_end;
+                i = cmdEnd;
                 while (i < (usz)input.len && (input[i] == ' ' || input[i] == '*')) i++;
                 if (i < (usz)input.len && input[i] == '{')
                 {
@@ -152,10 +147,9 @@ fn String transform_math(logic::Arena* arena, String input)
                 continue;
             }
 
-            // ── Operatorname / Text / Style Wrappers ─────────────────────────
             if (cmd == "operatorname" || cmd == "text" || cmd == "hspace" || cmd == "vspace")
             {
-                i = cmd_end;
+                i = cmdEnd;
                 while (i < (usz)input.len && (input[i] == ' ' || input[i] == '*')) i++;
                 if (i < (usz)input.len && input[i] == '{')
                 {
@@ -174,42 +168,40 @@ fn String transform_math(logic::Arena* arena, String input)
                 continue;
             }
 
-            // ── Accents via Enum ─────────────────────────────────────────────
-            MathAccent accent;
-            if (logic::lookup_accent(cmd, &accent))
+            MathAccent mark;
+            String diacritic;
+            if (accent(cmd, &mark, &diacritic))
             {
-                char* combining = logic::get_accent_combining(accent);
-                i = cmd_end;
+                i = cmdEnd;
                 while (i < (usz)input.len && input[i] == ' ') i++;
                 if (i < (usz)input.len && input[i] == '{')
                 {
                     i++;
-                    usz arg_start = i;
+                    usz argStart = i;
                     while (i < (usz)input.len && input[i] != '}') i++;
-                    String arg_content = input[arg_start : i - arg_start];
+                    String argContent = input[argStart : i - argStart];
                     if (i < (usz)input.len && input[i] == '}') i++;
 
-                    String t_arg = transform_math(arena, arg_content);
-                    mb.append_string(t_arg);
-                    mb.zstr(combining);
+                    String tArg = unicode(arena, argContent);
+                    mb.append_string(tArg);
+                    mb.append(diacritic);
                 }
                 else if (i < (usz)input.len)
                 {
                     mb.append_char(input[i++]);
-                    mb.zstr(combining);
+                    mb.append(diacritic);
                 }
                 continue;
             }
 
-            // ── Fractions: \frac{num}{den} ───────────────────────────────────
             if (cmd == "frac" || cmd == "dfrac" || cmd == "tfrac")
             {
-                i = cmd_end;
+                i = cmdEnd;
                 while (i < (usz)input.len && input[i] == ' ') i++;
                 if (i < (usz)input.len && input[i] == '{')
                 {
                     i++;
-                    usz n_start = i;
+                    usz nStart = i;
                     int depth = 1;
                     while (i < (usz)input.len && depth > 0)
                     {
@@ -223,14 +215,14 @@ fn String transform_math(logic::Arena* arena, String input)
                         }
                         if (depth > 0) i++;
                     }
-                    String num = input[n_start : i - n_start];
+                    String num = input[nStart : i - nStart];
                     if (i < (usz)input.len && input[i] == '}') i++;
 
                     while (i < (usz)input.len && input[i] == ' ') i++;
                     if (i < (usz)input.len && input[i] == '{')
                     {
                         i++;
-                        usz d_start = i;
+                        usz dStart = i;
                         depth = 1;
                         while (i < (usz)input.len && depth > 0)
                         {
@@ -244,52 +236,50 @@ fn String transform_math(logic::Arena* arena, String input)
                             }
                             if (depth > 0) i++;
                         }
-                        String den = input[d_start : i - d_start];
+                        String den = input[dStart : i - dStart];
                         if (i < (usz)input.len && input[i] == '}') i++;
 
-                        String t_num = transform_math(arena, num);
-                        String t_den = transform_math(arena, den);
+                        String tNum = unicode(arena, num);
+                        String tDen = unicode(arena, den);
 
-                        if (t_num == "1" && t_den == "2") { mb.append("½"); continue; }
-                        if (t_num == "1" && t_den == "3") { mb.append("⅓"); continue; }
-                        if (t_num == "2" && t_den == "3") { mb.append("⅔"); continue; }
-                        if (t_num == "1" && t_den == "4") { mb.append("¼"); continue; }
-                        if (t_num == "3" && t_den == "4") { mb.append("¾"); continue; }
-                        if (t_num == "1" && t_den == "5") { mb.append("⅕"); continue; }
-                        if (t_num == "2" && t_den == "5") { mb.append("⅖"); continue; }
-                        if (t_num == "3" && t_den == "5") { mb.append("⅗"); continue; }
-                        if (t_num == "4" && t_den == "5") { mb.append("⅘"); continue; }
-                        if (t_num == "1" && t_den == "6") { mb.append("⅙"); continue; }
-                        if (t_num == "5" && t_den == "6") { mb.append("⅚"); continue; }
-                        if (t_num == "1" && t_den == "8") { mb.append("⅛"); continue; }
-                        if (t_num == "3" && t_den == "8") { mb.append("⅜"); continue; }
-                        if (t_num == "5" && t_den == "8") { mb.append("⅝"); continue; }
-                        if (t_num == "7" && t_den == "8") { mb.append("⅞"); continue; }
+                        if (tNum == "1" && tDen == "2") { mb.append("½"); continue; }
+                        if (tNum == "1" && tDen == "3") { mb.append("⅓"); continue; }
+                        if (tNum == "2" && tDen == "3") { mb.append("⅔"); continue; }
+                        if (tNum == "1" && tDen == "4") { mb.append("¼"); continue; }
+                        if (tNum == "3" && tDen == "4") { mb.append("¾"); continue; }
+                        if (tNum == "1" && tDen == "5") { mb.append("⅕"); continue; }
+                        if (tNum == "2" && tDen == "5") { mb.append("⅖"); continue; }
+                        if (tNum == "3" && tDen == "5") { mb.append("⅗"); continue; }
+                        if (tNum == "4" && tDen == "5") { mb.append("⅘"); continue; }
+                        if (tNum == "1" && tDen == "6") { mb.append("⅙"); continue; }
+                        if (tNum == "5" && tDen == "6") { mb.append("⅚"); continue; }
+                        if (tNum == "1" && tDen == "8") { mb.append("⅛"); continue; }
+                        if (tNum == "3" && tDen == "8") { mb.append("⅜"); continue; }
+                        if (tNum == "5" && tDen == "8") { mb.append("⅝"); continue; }
+                        if (tNum == "7" && tDen == "8") { mb.append("⅞"); continue; }
 
-                        bool has_op_num = t_num.contains("+") || t_num.contains("-") || t_num.contains("=") || t_num.contains(" ");
-                        bool has_op_den = t_den.contains("+") || t_den.contains("-") || t_den.contains("=") || t_den.contains(" ");
+                        bool hasOpNum = tNum.contains("+") || tNum.contains("-") || tNum.contains("=") || tNum.contains(" ");
+                        bool hasOpDen = tDen.contains("+") || tDen.contains("-") || tDen.contains("=") || tDen.contains(" ");
 
-                        if (has_op_num) mb.append_char('(');
-                        mb.append_string(t_num);
-                        if (has_op_num) mb.append_char(')');
+                        if (hasOpNum) mb.append_char('(');
+                        mb.append_string(tNum);
+                        if (hasOpNum) mb.append_char(')');
 
                         mb.append_char('/');
 
-                        if (has_op_den) mb.append_char('(');
-                        mb.append_string(t_den);
-                        if (has_op_den) mb.append_char(')');
+                        if (hasOpDen) mb.append_char('(');
+                        mb.append_string(tDen);
+                        if (hasOpDen) mb.append_char(')');
                         continue;
                     }
                 }
             }
 
-            // ── Roots: \sqrt[n]{...} or \sqrt{...} ───────────────────────────
             if (cmd == "sqrt")
             {
-                i = cmd_end;
+                i = cmdEnd;
                 while (i < (usz)input.len && input[i] == ' ') i++;
 
-                // Optional degree: [n]
                 if (i < (usz)input.len && input[i] == '[')
                 {
                     i++;
@@ -315,7 +305,7 @@ fn String transform_math(logic::Arena* arena, String input)
                 if (i < (usz)input.len && input[i] == '{')
                 {
                     i++;
-                    usz rad_start = i;
+                    usz radStart = i;
                     int depth = 1;
                     while (i < (usz)input.len && depth > 0)
                     {
@@ -329,49 +319,46 @@ fn String transform_math(logic::Arena* arena, String input)
                         }
                         if (depth > 0) i++;
                     }
-                    String rad = input[rad_start : i - rad_start];
+                    String rad = input[radStart : i - radStart];
                     if (i < (usz)input.len && input[i] == '}') i++;
 
-                    String t_rad = transform_math(arena, rad);
-                    bool has_op_rad = t_rad.contains("+") || t_rad.contains("-") || t_rad.contains("=") || t_rad.contains(" ");
-                    if (has_op_rad && (t_rad[0] != '(' || t_rad[t_rad.len - 1] != ')'))
+                    String tRad = unicode(arena, rad);
+                    bool hasOpRad = tRad.contains("+") || tRad.contains("-") || tRad.contains("=") || tRad.contains(" ");
+                    if (hasOpRad && (tRad[0] != '(' || tRad[tRad.len - 1] != ')'))
                     {
                         mb.append_char('(');
-                        mb.append_string(t_rad);
+                        mb.append_string(tRad);
                         mb.append_char(')');
                     }
                     else
                     {
-                        mb.append_string(t_rad);
+                        mb.append_string(tRad);
                     }
                 }
                 continue;
             }
 
-            // ── Symbol Table Lookup via Modular Table ─────────────────────────
-            String sym_glyph;
-            if (logic::lookup_symbol(cmd, &sym_glyph))
+            String symGlyph;
+            if (symbol(cmd, &symGlyph))
             {
-                mb.append_string(sym_glyph);
-                if (cmd_end < (usz)input.len && ((input[cmd_end] >= 'a' && input[cmd_end] <= 'z') || (input[cmd_end] >= 'A' && input[cmd_end] <= 'Z') || (input[cmd_end] >= '0' && input[cmd_end] <= '9')))
+                mb.append_string(symGlyph);
+                if (cmdEnd < (usz)input.len && ((input[cmdEnd] >= 'a' && input[cmdEnd] <= 'z') || (input[cmdEnd] >= 'A' && input[cmdEnd] <= 'Z') || (input[cmdEnd] >= '0' && input[cmdEnd] <= '9')))
                 {
                     mb.append_char(' ');
                 }
-                i = cmd_end;
+                i = cmdEnd;
                 continue;
             }
 
-            // If unknown command, emit clean command name with space
             mb.append_string(cmd);
-            if (cmd_end < (usz)input.len && ((input[cmd_end] >= 'a' && input[cmd_end] <= 'z') || (input[cmd_end] >= 'A' && input[cmd_end] <= 'Z') || (input[cmd_end] >= '0' && input[cmd_end] <= '9')))
+            if (cmdEnd < (usz)input.len && ((input[cmdEnd] >= 'a' && input[cmdEnd] <= 'z') || (input[cmdEnd] >= 'A' && input[cmdEnd] <= 'Z') || (input[cmdEnd] >= '0' && input[cmdEnd] <= '9')))
             {
                 mb.append_char(' ');
             }
-            i = cmd_end;
+            i = cmdEnd;
             continue;
         }
 
-        // ── 2. Superscripts: ^2, ^{n+1}, etc. ────────────────────────────────
         if (c == '^')
         {
             i++;
@@ -382,10 +369,10 @@ fn String transform_math(logic::Arena* arena, String input)
                 {
                     if (input[i] == '\\')
                     {
-                        usz s_start = i + 1;
-                        usz s_end = s_start;
-                        while (s_end < (usz)input.len && ((input[s_end] >= 'a' && input[s_end] <= 'z') || (input[s_end] >= 'A' && input[s_end] <= 'Z'))) s_end++;
-                        String scmd = input[s_start : s_end - s_start];
+                        usz sStart = i + 1;
+                        usz sEnd = sStart;
+                        while (sEnd < (usz)input.len && ((input[sEnd] >= 'a' && input[sEnd] <= 'z') || (input[sEnd] >= 'A' && input[sEnd] <= 'Z'))) sEnd++;
+                        String scmd = input[sStart : sEnd - sStart];
                         String sglyph;
                         if (scmd == "alpha") { mb.append("ᵅ"); }
                         else if (scmd == "beta") { mb.append("ᵝ"); }
@@ -397,7 +384,7 @@ fn String transform_math(logic::Arena* arena, String input)
                         else if (scmd == "chi") { mb.append("ᵡ"); }
                         else if (scmd == "infty") { mb.append("∞"); }
                         else if (scmd == "to" || scmd == "rightarrow") { mb.append("→"); }
-                        else if (logic::lookup_symbol(scmd, &sglyph))
+                        else if (symbol(scmd, &sglyph))
                         {
                             mb.append_string(sglyph);
                         }
@@ -405,7 +392,7 @@ fn String transform_math(logic::Arena* arena, String input)
                         {
                             mb.append_string(scmd);
                         }
-                        i = s_end;
+                        i = sEnd;
                         continue;
                     }
 
@@ -443,7 +430,6 @@ fn String transform_math(logic::Arena* arena, String input)
             continue;
         }
 
-        // ── 3. Subscripts: _i, _{10}, etc. ───────────────────────────────────
         if (c == '_')
         {
             i++;
@@ -454,10 +440,10 @@ fn String transform_math(logic::Arena* arena, String input)
                 {
                     if (input[i] == '\\')
                     {
-                        usz s_start = i + 1;
-                        usz s_end = s_start;
-                        while (s_end < (usz)input.len && ((input[s_end] >= 'a' && input[s_end] <= 'z') || (input[s_end] >= 'A' && input[s_end] <= 'Z'))) s_end++;
-                        String scmd = input[s_start : s_end - s_start];
+                        usz sStart = i + 1;
+                        usz sEnd = sStart;
+                        while (sEnd < (usz)input.len && ((input[sEnd] >= 'a' && input[sEnd] <= 'z') || (input[sEnd] >= 'A' && input[sEnd] <= 'Z'))) sEnd++;
+                        String scmd = input[sStart : sEnd - sStart];
                         String sglyph;
                         if (scmd == "beta") { mb.append("ᵦ"); }
                         else if (scmd == "gamma") { mb.append("ᵧ"); }
@@ -466,7 +452,7 @@ fn String transform_math(logic::Arena* arena, String input)
                         else if (scmd == "chi") { mb.append("ᵪ"); }
                         else if (scmd == "infty") { mb.append("∞"); }
                         else if (scmd == "to" || scmd == "rightarrow") { mb.append("→"); }
-                        else if (logic::lookup_symbol(scmd, &sglyph))
+                        else if (symbol(scmd, &sglyph))
                         {
                             mb.append_string(sglyph);
                         }
@@ -474,7 +460,7 @@ fn String transform_math(logic::Arena* arena, String input)
                         {
                             mb.append_string(scmd);
                         }
-                        i = s_end;
+                        i = sEnd;
                         continue;
                     }
 
@@ -512,38 +498,36 @@ fn String transform_math(logic::Arena* arena, String input)
             continue;
         }
 
-        // ── 4. Primes: ', '', ''' ───────────────────────────────────────────
         if (c == '\'')
         {
-            int prime_count = 0;
+            int primeCount = 0;
             while (i < (usz)input.len && input[i] == '\'')
             {
-                prime_count++;
+                primeCount++;
                 i++;
             }
-            if (prime_count == 1)
+            if (primeCount == 1)
             {
                 mb.append("′");
             }
-            else if (prime_count == 2)
+            else if (primeCount == 2)
             {
                 mb.append("″");
             }
-            else if (prime_count == 3)
+            else if (primeCount == 3)
             {
                 mb.append("‴");
             }
             else
             {
-                for (int p = 0; p < prime_count; p++) mb.append("′");
+                for (int p = 0; p < primeCount; p++) mb.append("′");
             }
             continue;
         }
 
-        // ── Normal Characters ────────────────────────────────────────────────
         mb.append_char(c);
         i++;
     }
 
-    return mb.to_arena_string(arena);
+    return mb.keep(arena);
 }

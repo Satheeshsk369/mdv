@@ -264,7 +264,7 @@ fn void Tree.draw(&self, DString* fb, int rows)
         Node* node = &self.nodes[self.shown[v]];
         bool active = v == self.cursor;
         String name = ((ZString)&node.name).str_view();
-        fb.zstr(active ? "  " : "    ");
+        fb.append(active ? "  " : "    ");
         if (active)
         {
             fb.append(ansi::ACTIVE);

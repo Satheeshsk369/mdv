@@ -63,11 +63,6 @@ fn int width(String s)
     return total;
 }
 
-fn void DString.zstr(&self, char* s)
-{
-    if (s) self.append_string(((ZString)s).str_view());
-}
-
 fn void DString.repeat(&self, String s, int count)
 {
     if (count > 0) self.append_string_repeat(s, count);

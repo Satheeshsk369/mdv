@@ -1,4 +1,4 @@
-module logic;
+module ast;
 
 import std::core::mem;
 
@@ -36,14 +36,14 @@ fn void* Arena.alloc(&self, usz bytes, usz align = 8)
         }
     }
     usz capacity = max(self.size, need + 256);
-    char[] raw = mem::alloc_array(char, ArenaBlock::size + capacity);
+    char[] raw = mem::alloc_array(char, (sz)(ArenaBlock::size + capacity));
     ArenaBlock* block = (ArenaBlock*)raw.ptr;
     *block = { self.head, capacity, need, raw.ptr + ArenaBlock::size };
     self.head = block;
     return block.data;
 }
 
-fn String Arena.dup_string(&self, String s)
+fn String Arena.copy(&self, String s)
 {
     if (s.len == 0) return "";
     char* buf = self.alloc(s.len + 1, 1);
@@ -63,8 +63,8 @@ fn void Arena.free(&self)
     self.head = null;
 }
 
-fn String DString.to_arena_string(&self, Arena* arena)
+fn String DString.keep(&self, Arena* arena)
 {
     if (self.len() == 0) return "";
-    return arena.dup_string(self.str_view());
+    return arena.copy(self.str_view());
 }

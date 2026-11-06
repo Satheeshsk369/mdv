@@ -3,7 +3,7 @@ module main;
 import std::io;
 import std::core::mem;
 import ansi;
-import logic;
+import ast;
 import terminal;
 import text;
 import parser;
@@ -30,9 +30,9 @@ Options:
 
 fn void print(String content, RenderConfig config)
 {
-    Document doc = parser::parse_document(content);
+    Document doc = parser::parse(content);
     defer doc.free();
-    render::render_to_stdout(&doc, config);
+    render::print(&doc, config);
 }
 
 fn int main(String[] args)
@@ -77,7 +77,7 @@ fn int main(String[] args)
 
     if (width <= 0) width = terminal::width();
 
-    RenderConfig config = { .width = width, .plain = plain, .no_wrap = noWrap };
+    RenderConfig config = { .width = width, .plain = plain, .noWrap = noWrap };
 
     if (file.len == 0 || file == "-")
     {
