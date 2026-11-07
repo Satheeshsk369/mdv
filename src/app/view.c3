@@ -29,6 +29,9 @@ struct View
     List{Heading} outline;
     int heading;
     int headingTop;
+    int choice;
+    int choiceTop;
+    bool focus;
     Tree tree;
     DString query;
     DString jump;

@@ -34,13 +34,15 @@ cat notes.md | mdv      # render stdin
 
 | Key | Action |
 | :--- | :--- |
-| `j` `k` `↓` `↑` | Scroll; speeds up while held |
-| `d` `u` `Space` `Ctrl+D` `Ctrl+U` | Half page |
-| `g` `G` | Top / bottom |
-| `h` `l` `←` `→` | Horizontal scroll in no-wrap mode |
+| `↓` `↑` | Scroll; speeds up while held |
+| `PgDn` `PgUp` | Half page |
+| `Home` `End` | Top / bottom |
+| `←` `→` | Horizontal scroll in no-wrap mode |
 | `w` | Toggle wrap |
 | `:` | Go to source line |
 | `/` `n` `N` `Esc` | Search, next, previous, clear |
+| `Space` | Options menu: pick any action below with `↓` `↑` `Enter`, or press its key |
+| `h` | Highlight the block under the cursor |
 | `Tab` `t` | Outline |
 | `o` | File tree |
 | `e` | Open `$EDITOR` at the current line |

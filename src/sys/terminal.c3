@@ -11,15 +11,12 @@ const int DOWN = 1000;
 const int UP = 1001;
 const int PAGEDOWN = 1002;
 const int PAGEUP = 1003;
-const int HALFDOWN = 1004;
-const int HALFUP = 1005;
 const int LEFT = 1006;
 const int RIGHT = 1007;
 const int HOME = 1008;
 const int END = 1009;
 const int WHEELUP = 1012;
 const int WHEELDOWN = 1013;
-const int SHIFTSPACE = 1014;
 
 struct WinSize
 {
@@ -238,8 +235,8 @@ fn Stamp stamp(ZString path)
 
 const char[] ARROWS = { 'A', 'B', 'C', 'D', 'H', 'F' };
 const int[] ARROWKEYS = { UP, DOWN, RIGHT, LEFT, HOME, END };
-const char[] CONTROL = { 0x04, 0x15, 0x06, 0x02, 0x09, '\r', '\n', 0x7f, 0x08, 0x03 };
-const int[] CONTROLKEYS = { HALFDOWN, HALFUP, PAGEDOWN, PAGEUP, TAB, ENTER, ENTER, BACKSPACE, BACKSPACE, 'q' };
+const char[] CONTROL = { 0x09, '\r', '\n', 0x7f, 0x08, 0x03 };
+const int[] CONTROLKEYS = { TAB, ENTER, ENTER, BACKSPACE, BACKSPACE, 'q' };
 
 fn int arrow(char a, char b, bool lower)
 {
@@ -293,8 +290,6 @@ fn int decode(char[] buf)
         return wheel(button);
     }
     if (n >= 6 && buf[1] == '[' && buf[2] == 'M') return wheel(buf[3] - 32);
-    if (n >= 5 && buf[1] == '[' && buf[2] == '3' && buf[3] == '2') return SHIFTSPACE;
-    if (n == 2 && buf[1] == ' ') return SHIFTSPACE;
     char last = buf[n - 1];
     if (n >= 3 && buf[1] == 'O') return arrow(buf[2], last, false);
     if (n < 3 || buf[1] != '[') return ESC;

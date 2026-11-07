@@ -10,7 +10,8 @@ enum Mode
     SEARCH,
     JUMP,
     OUTLINE,
-    FILES
+    FILES,
+    MENU
 }
 
 enum Act
@@ -41,7 +42,9 @@ enum Act
     CLOSE,
     OPEN,
     ALL,
-    TOGGLE
+    TOGGLE,
+    MENU,
+    MARK
 }
 
 struct Bind
@@ -51,20 +54,18 @@ struct Bind
 }
 
 const Bind[] MOTION = {
-    { 'j', DOWN }, { terminal::DOWN, DOWN },
-    { 'k', UP }, { terminal::UP, UP },
+    { terminal::DOWN, DOWN }, { terminal::UP, UP },
     { terminal::WHEELDOWN, WHEELDOWN }, { terminal::WHEELUP, WHEELUP },
-    { terminal::PAGEDOWN, HALFDOWN }, { ' ', HALFDOWN }, { terminal::HALFDOWN, HALFDOWN }, { 'd', HALFDOWN }, { 'D', HALFDOWN },
-    { terminal::PAGEUP, HALFUP }, { terminal::SHIFTSPACE, HALFUP }, { terminal::HALFUP, HALFUP }, { 'b', HALFUP }, { 'B', HALFUP }, { 'u', HALFUP }, { 'U', HALFUP },
-    { 'g', TOP }, { terminal::HOME, TOP },
-    { 'G', BOTTOM }, { terminal::END, BOTTOM },
+    { terminal::PAGEDOWN, HALFDOWN }, { terminal::PAGEUP, HALFUP },
+    { terminal::HOME, TOP }, { terminal::END, BOTTOM },
 };
 
 const Bind[] DOCUMENT = {
     { 'q', QUIT }, { 'Q', QUIT },
     { terminal::ESC, CLEAR },
-    { terminal::LEFT, LEFT }, { 'h', LEFT }, { 'H', LEFT },
-    { terminal::RIGHT, RIGHT }, { 'l', RIGHT }, { 'L', RIGHT },
+    { terminal::LEFT, LEFT }, { terminal::RIGHT, RIGHT },
+    { ' ', MENU },
+    { 'h', MARK }, { 'H', MARK },
     { 'w', WRAP }, { 'W', WRAP },
     { '?', HELP }, { 31, HELP },
     { terminal::TAB, OUTLINE }, { 't', OUTLINE }, { 'T', OUTLINE },
@@ -80,26 +81,49 @@ const Bind[] DOCUMENT = {
 const Bind[] CONTENTS = {
     { 'q', QUIT }, { 'Q', QUIT },
     { terminal::ESC, CLOSE }, { terminal::TAB, CLOSE }, { 't', CLOSE }, { 'T', CLOSE },
-    { terminal::LEFT, CLOSE }, { 'h', CLOSE }, { 'H', CLOSE },
-    { terminal::ENTER, OPEN }, { terminal::RIGHT, OPEN }, { 'l', OPEN }, { 'L', OPEN },
+    { terminal::LEFT, CLOSE },
+    { terminal::ENTER, OPEN }, { terminal::RIGHT, OPEN },
+};
+
+const Bind[] CHOICES = {
+    { 'q', QUIT }, { 'Q', QUIT },
+    { terminal::ESC, CLOSE }, { ' ', CLOSE }, { terminal::LEFT, CLOSE },
+    { terminal::ENTER, OPEN }, { terminal::RIGHT, OPEN },
+};
+
+struct Item
+{
+    String key;
+    String label;
+    Act act;
+}
+
+const Item[] ITEMS = {
+    { "Tab", "Outline", OUTLINE },
+    { "o", "Files", FILES },
+    { "/", "Search", SEARCH },
+    { ":", "Go to line", JUMP },
+    { "h", "Highlight block", MARK },
+    { "w", "Toggle wrap", WRAP },
+    { "e", "Edit in $EDITOR", EDIT },
+    { "y", "Copy document", COPY },
+    { "?", "Help", HELP },
+    { "q", "Quit", QUIT },
 };
 
 const Bind[] BROWSER = {
     { terminal::ESC, CLOSE }, { 'o', CLOSE }, { 'O', CLOSE }, { 'q', CLOSE },
-    { 'j', DOWN }, { terminal::DOWN, DOWN },
-    { 'k', UP }, { terminal::UP, UP },
-    { 'g', TOP }, { terminal::HOME, TOP },
-    { 'G', BOTTOM }, { terminal::END, BOTTOM },
+    { terminal::DOWN, DOWN }, { terminal::UP, UP },
+    { terminal::HOME, TOP }, { terminal::END, BOTTOM },
     { 'a', ALL }, { 'A', ALL },
-    { terminal::LEFT, LEFT }, { 'h', LEFT }, { 'H', LEFT },
-    { terminal::RIGHT, RIGHT }, { 'l', RIGHT }, { 'L', RIGHT },
+    { terminal::LEFT, LEFT }, { terminal::RIGHT, RIGHT },
     { ' ', TOGGLE },
     { terminal::ENTER, OPEN },
 };
 
 const Bind[] MODAL = {
     { terminal::ESC, CLOSE }, { 'q', CLOSE }, { 'Q', CLOSE }, { '?', CLOSE }, { 31, CLOSE },
-    { terminal::ENTER, CLOSE }, { terminal::TAB, CLOSE }, { terminal::LEFT, CLOSE }, { 'h', CLOSE }, { 'H', CLOSE },
+    { terminal::ENTER, CLOSE }, { terminal::TAB, CLOSE }, { terminal::LEFT, CLOSE },
 };
 
 const ulong HELD = 60;
@@ -142,6 +166,24 @@ fn void View.input(&self, DString* buffer, int limit, int key, bool digits)
     }
     bool ok = digits ? key >= '0' && key <= '9' : key >= 32 && key < 127;
     if (ok && buffer.len() < limit) buffer.append_char((char)key);
+}
+
+fn int View.move(&self, int at, int count, Act act)
+{
+    int last = max(count - 1, 0);
+    int half = max(self.rows / 2, 1);
+    switch (act)
+    {
+        case DOWN: return min(at + self.velocity.next(1, 8, HELD), last);
+        case UP: return max(at - self.velocity.next(-1, 8, HELD), 0);
+        case WHEELDOWN: return min(at + 3 * self.velocity.next(3, 6, 120), last);
+        case WHEELUP: return max(at - 3 * self.velocity.next(-3, 6, 120), 0);
+        case HALFDOWN: return min(at + half, last);
+        case HALFUP: return max(at - half, 0);
+        case TOP: return 0;
+        case BOTTOM: return last;
+        default: return at;
+    }
 }
 
 fn void View.normal(&self, Act act)
@@ -187,6 +229,11 @@ fn void View.normal(&self, Act act)
             self.top = self.last();
         case HELP:
             self.mode = HELP;
+        case MENU:
+            self.mode = MENU;
+            self.choice = 0;
+        case MARK:
+            self.focus = !self.focus;
         case OUTLINE:
             self.mode = OUTLINE;
             if (self.outline.len() == 0) break;
@@ -217,34 +264,17 @@ fn void View.normal(&self, Act act)
             self.match = 0;
             self.query.clear();
             self.status.clear();
+            self.focus = false;
         default:
     }
 }
 
 fn void View.headings(&self, Act act)
 {
-    int last = max((int)self.outline.len() - 1, 0);
-    int half = max(self.rows / 2, 1);
     switch (act)
     {
         case CLOSE:
             self.mode = NORMAL;
-        case DOWN:
-            self.heading = min(self.heading + self.velocity.next(1, 8, HELD), last);
-        case UP:
-            self.heading = max(self.heading - self.velocity.next(-1, 8, HELD), 0);
-        case WHEELDOWN:
-            self.heading = min(self.heading + 3 * self.velocity.next(3, 6, 120), last);
-        case WHEELUP:
-            self.heading = max(self.heading - 3 * self.velocity.next(-3, 6, 120), 0);
-        case HALFDOWN:
-            self.heading = min(self.heading + half, last);
-        case HALFUP:
-            self.heading = max(self.heading - half, 0);
-        case TOP:
-            self.heading = 0;
-        case BOTTOM:
-            self.heading = last;
         case OPEN:
             if (self.heading < self.outline.len())
             {
@@ -253,7 +283,36 @@ fn void View.headings(&self, Act act)
             }
             self.mode = NORMAL;
         default:
+            self.heading = self.move(self.heading, (int)self.outline.len(), act);
     }
+}
+
+fn bool View.choose(&self, int key)
+{
+    Act act = lookup(CHOICES, key);
+    switch (act)
+    {
+        case QUIT: return true;
+        case CLOSE: self.mode = NORMAL;
+        case OPEN:
+            self.mode = NORMAL;
+            Act chosen = ITEMS[self.choice].act;
+            if (chosen == QUIT) return true;
+            self.normal(chosen);
+        default:
+            Act motion = lookup(MOTION, key);
+            if (motion != NONE)
+            {
+                self.choice = self.move(self.choice, ITEMS.len, motion);
+                return false;
+            }
+            Act direct = lookup(DOCUMENT, key);
+            if (direct == NONE) return false;
+            self.mode = NORMAL;
+            if (direct == QUIT) return true;
+            self.normal(direct);
+    }
+    return false;
 }
 
 fn void View.browse(&self, Act act)
@@ -306,6 +365,8 @@ fn bool View.key(&self, int key)
             }
         case HELP:
             if (lookup(MODAL, key) == CLOSE) self.mode = NORMAL;
+        case MENU:
+            return self.choose(key);
         case FILES:
             self.browse(lookup(BROWSER, key));
         case OUTLINE:

@@ -29,34 +29,40 @@ if command -v tmux > /dev/null; then
     tmux capture-pane -e -p -t mdvgolden > "$out/tui.$name"
   }
   screen open sample.md
-  screen down sample.md j j j j
-  screen up sample.md G k k k
-  screen half sample.md d
-  screen bottom sample.md G
-  screen top sample.md G g
+  screen down sample.md Down Down Down Down
+  screen up sample.md End Up Up Up
+  screen half sample.md PageDown
+  screen bottom sample.md End
+  screen top sample.md End Home
   screen line sample.md:60
   screen goto sample.md : 4 0 Enter
   screen jumptype sample.md : 1 2
   screen search sample.md / L a T e X Enter n n
   screen searchesc sample.md / L a T e X Enter Escape
   screen searchtype sample.md / m a t
-  screen nowrap sample.md w l l h
+  screen nowrap sample.md w Right Right Left
   screen toc sample.md Tab
-  screen tocjump sample.md Tab j j Enter
-  screen tocbottom sample.md Tab G
-  screen tocesc sample.md Tab j Escape
+  screen tocjump sample.md Tab Down Down Enter
+  screen tocbottom sample.md Tab End
+  screen tocesc sample.md Tab Down Escape
   screen files ""
-  screen filesopen "" j Enter
+  screen filesopen "" Down Enter
   screen filetree sample.md o
   screen filesall sample.md o a
-  screen filesleft sample.md o j h
+  screen filesleft sample.md o Down Left
   screen help sample.md "?"
-  screen edit sample.md j j j e
+  screen menu sample.md Space
+  screen menuopen sample.md Space Down Enter
+  screen menudirect sample.md Space "?"
+  screen menuquit sample.md Space q "!echo"
+  screen mark sample.md Down Down Down Down Down Down h
+  screen markmove sample.md Down Down Down Down Down Down h Down Down Down
+  screen edit sample.md Down Down Down e
   screen copy sample.md y
-  screen math math.md G
-  screen text text.md d
+  screen math math.md End
+  screen text text.md PageDown
   cp sample.md live.md
-  screen reload live.md G "!sed -i '40a NEWLINE' live.md"
+  screen reload live.md End "!sed -i '40a NEWLINE' live.md"
   rm live.md
   screen resize sample.md "!tmux resize-window -t mdvgolden -x 70 -y 20"
   popd > /dev/null

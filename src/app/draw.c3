@@ -1,25 +1,26 @@
 module app;
 
 import std::math;
+import ast;
 import ansi;
 import terminal;
 import text;
 
 const String[] GUIDE = {
     "\e[38;2;102;217;239m\e[1mVertical Navigation:\e[0m",
-    "  \e[38;2;230;219;116mj / ↓\e[0m                 Scroll down (accelerated)",
-    "  \e[38;2;230;219;116mk / ↑\e[0m                 Scroll up (accelerated)",
-    "  \e[38;2;230;219;116md / Ctrl+D / Space\e[0m    Half-page scroll down",
-    "  \e[38;2;230;219;116mu / Ctrl+U / Shift+Sp\e[0m Half-page scroll up",
-    "  \e[38;2;230;219;116mg / G\e[0m                 Jump to Top / Bottom",
+    "  \e[38;2;230;219;116m↓ / ↑\e[0m                 Scroll down / up (accelerated)",
+    "  \e[38;2;230;219;116mPgDn / PgUp\e[0m           Half-page scroll down / up",
+    "  \e[38;2;230;219;116mHome / End\e[0m            Jump to Top / Bottom",
     "  \e[38;2;230;219;116m: <line>\e[0m              Goto line number (e.g. :42)",
     "",
     "\e[38;2;102;217;239m\e[1mHorizontal & Layout:\e[0m",
     "  \e[38;2;230;219;116mw\e[0m                     Toggle Wrap / No-Wrap mode",
-    "  \e[38;2;230;219;116mh / l / ← / →\e[0m         Horizontal scroll (accelerated)",
+    "  \e[38;2;230;219;116m← / →\e[0m                 Horizontal scroll (accelerated)",
     "",
     "\e[38;2;102;217;239m\e[1mFeatures & Actions:\e[0m",
+    "  \e[38;2;166;226;46mSpace\e[0m                 Options menu",
     "  \e[38;2;166;226;46mTab / t\e[0m               Toggle Document Outline (Table of Contents)",
+    "  \e[38;2;166;226;46mh\e[0m                     Highlight the current block",
     "  \e[38;2;166;226;46mo\e[0m                     Switch Document (Markdown File Tree)",
     "  \e[38;2;166;226;46m/\e[0m                     In-document search (n next, N prev)",
     "  \e[38;2;166;226;46me\e[0m                     Open $EDITOR at current line",
@@ -130,6 +131,52 @@ fn void View.drawOutline(&self, DString* fb)
     }
 }
 
+fn void View.drawMenu(&self, DString* fb)
+{
+    self.title(fb, "Options");
+    rule(fb, self.width);
+    self.choiceTop = follow(self.choiceTop, self.choice, ITEMS.len, self.rows);
+    for (int r = 0; r < self.rows; r++)
+    {
+        int i = self.choiceTop + r;
+        if (i >= ITEMS.len)
+        {
+            tilde(fb, r, self.rows);
+            continue;
+        }
+        bool active = i == self.choice;
+        fb.append(active ? "  " : "    ");
+        if (active)
+        {
+            fb.append(ansi::ACTIVE);
+            fb.append("▶ ");
+        }
+        fb.append(active ? ansi::BOLD : ansi::TEXT);
+        fb.append(ITEMS[i].label);
+        fb.append(ansi::RESET);
+        fb.spaces(max(20 - (int)ITEMS[i].label.len, 1));
+        fb.append(ansi::MUTED);
+        fb.append(ITEMS[i].key);
+        fb.append(ansi::RESET);
+        fb.append("\e[K");
+        if (r < self.rows - 1) fb.append_char('\n');
+    }
+}
+
+fn void tint(DString* fb, String line)
+{
+    fb.append(ansi::FOCUS);
+    while (line.len > 0)
+    {
+        sz at = line.index_of(ansi::RESET) ?? line.len;
+        fb.append(line[:at]);
+        if (at == line.len) break;
+        fb.append(ansi::RESET);
+        fb.append(ansi::FOCUS);
+        line = line[at + ansi::RESET.len..];
+    }
+}
+
 fn void View.drawFiles(&self, DString* fb)
 {
     char[256] buf;
@@ -177,7 +224,7 @@ fn void View.drawDocument(&self, DString* fb)
     head.appendf("(%d/%d · %d%%)", self.cursor + 1, total, pct);
     head.append(ansi::RESET);
     fb.append(head.str_view());
-    String hint = "[? Help │ Tab TOC │ q Quit]";
+    String hint = "[Space Options]";
     int pad = self.width - text::width(head.str_view()) - text::width(hint) - 1;
     if (pad > 0)
     {
@@ -190,10 +237,17 @@ fn void View.drawDocument(&self, DString* fb)
     rule(fb, self.width);
     String query = self.query.str_view();
     int current = self.matches.len() > 0 && self.match < self.matches.len() ? self.matches[self.match] : -1;
+    int block = self.focus && total > 0 ? self.lines.lines[self.cursor].block : -1;
+    DString line;
+    line.init(mem, 1024);
+    defer line.free();
     for (int i = self.top; i < self.top + self.rows; i++)
     {
         if (i < total)
         {
+            bool lit = self.lines.lines[i].block == block;
+            line.clear();
+            if (lit) fb.append(ansi::FOCUS);
             if (i == self.cursor)
             {
                 fb.append(ansi::CURSOR);
@@ -206,13 +260,23 @@ fn void View.drawDocument(&self, DString* fb)
             }
             if (query.len > 0 && (self.mode == SEARCH || self.matches.len() > 0))
             {
-                text::mark(fb, self.lines.lines[i].text, query, i == current);
+                text::mark(&line, self.lines.lines[i].text, query, i == current);
             }
             else
             {
-                text::cut(fb, self.lines.lines[i].text, self.left, self.width - 1);
+                text::cut(&line, self.lines.lines[i].text, self.left, self.width - 1);
             }
-            fb.append("\e[K");
+            if (lit)
+            {
+                tint(fb, line.str_view());
+                fb.append("\e[K");
+                fb.append(ansi::RESET);
+            }
+            else
+            {
+                fb.append(line.str_view());
+                fb.append("\e[K");
+            }
         }
         else
         {
@@ -259,6 +323,16 @@ fn void View.drawStatus(&self, DString* fb)
             fb.append(ansi::RESET);
             fb.append("\e[K");
             return;
+        case self.focus && self.total() > 0:
+            Block* b = &self.doc.blocks[self.lines.lines[self.cursor].block];
+            fb.append(ansi::STATUS);
+            fb.appendf(" Block L%d–%d ", b.start + 1, b.end + 1);
+            fb.append(ansi::RESET);
+            fb.append(ansi::MUTED);
+            fb.append(" (h: Unhighlight, Esc: Clear)");
+            fb.append(ansi::RESET);
+            fb.append("\e[K");
+            return;
         default:
             return;
     }
@@ -286,6 +360,7 @@ fn void View.draw(&self)
         case HELP: self.drawHelp(fb);
         case OUTLINE: self.drawOutline(fb);
         case FILES: self.drawFiles(fb);
+        case MENU: self.drawMenu(fb);
         default: self.drawDocument(fb);
     }
     terminal::out(fb.str_view());
