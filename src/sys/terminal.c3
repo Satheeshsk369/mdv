@@ -7,8 +7,10 @@ const int ESC = 27;
 const int TAB = 9;
 const int ENTER = 10;
 const int BACKSPACE = 127;
+const int CTRLA = 1;
 const int CTRLC = 3;
 const int CTRLD = 4;
+const int CTRLE = 5;
 const int CTRLF = 6;
 const int CTRLG = 7;
 const int CTRLH = 8;
@@ -33,6 +35,14 @@ const int END = 1009;
 const int DELETE = 1010;
 const int PASTE = 1011;
 const int PASTED = 1014;
+const int BACKTAB = 1015;
+const int CLICK = 1016;
+const int DRAG = 1017;
+const int RELEASE = 1018;
+const int SHIFT = 1 << 16;
+const int ALT = 1 << 17;
+const int CTRL = 1 << 18;
+const int KEY = 0xFFFF;
 const int WHEELUP = 1012;
 const int WHEELDOWN = 1013;
 
@@ -123,6 +133,8 @@ extern fn void exit(int status);
 extern fn SignalHandler signal(int signum, SignalHandler handler);
 
 Termios saved;
+int pointerColumn;
+int pointerRow;
 bool raw;
 bool alternate;
 
@@ -180,8 +192,13 @@ fn void enter()
 fn void leave()
 {
     if (!alternate) return;
-    out("\e[<u\e[?2004l\e[?7h\e[?1049l\e[?25h\e[0m");
+    out("\e[<u\e[?2004l\e[?1002l\e[?1006l\e[?7h\e[?1049l\e[?25h\e[0m");
     alternate = false;
+}
+
+fn void mouse(bool on)
+{
+    out(on ? "\e[?1002h\e[?1006h" : "\e[?1002l\e[?1006l");
 }
 
 fn void rawMode()
@@ -311,34 +328,62 @@ fn int decode(char[] buf)
     if (n == 1) return ESC;
     if (n >= 6 && buf[1] == '[' && buf[2] == '<')
     {
-        int button = 0;
-        for (int p = 3; p < n && buf[p] >= '0' && buf[p] <= '9'; p++) button = button * 10 + buf[p] - '0';
-        return wheel(button);
+        int[3] value;
+        int field;
+        for (int p = 3; p < n - 1; p++)
+        {
+            if (buf[p] == ';')
+            {
+                if (++field > 2) break;
+                continue;
+            }
+            if (buf[p].is_digit()) value[field] = value[field] * 10 + buf[p] - '0';
+        }
+        int button = value[0];
+        pointerColumn = value[1];
+        pointerRow = value[2];
+        if ((button & 64) != 0) return wheel(button);
+        if (buf[n - 1] == 'm') return RELEASE;
+        if ((button & 3) != 0) return 0;
+        if ((button & 32) != 0) return DRAG;
+        return (button & 4) != 0 ? CLICK | SHIFT : CLICK;
     }
     if (n >= 6 && buf[1] == '[' && buf[2] == 'M') return wheel(buf[3] - 32);
     char last = buf[n - 1];
     if (n >= 3 && buf[1] == 'O') return arrow(buf[2], last, false);
     if (n < 3 || buf[1] != '[') return ESC;
-    if (last == 'u')
-    {
-        int code;
-        int mods;
-        int p = 2;
-        for (; p < n && buf[p].is_digit(); p++) code = code * 10 + buf[p] - '0';
-        if (p < n && buf[p] == ';') for (p++; p < n && buf[p].is_digit(); p++) mods = mods * 10 + buf[p] - '0';
-        bool ctrl = mods > 0 && ((mods - 1) & 4) != 0;
-        return control(ctrl && code >= 'a' && code <= 'z' ? code & 0x1f : code);
-    }
-    if (buf[2] == '3' && n >= 4 && buf[3] == '~') return DELETE;
     if (n == 6 && buf[2] == '2' && buf[3] == '0' && buf[4] == '0' && buf[5] == '~') return PASTE;
     if (n == 6 && buf[2] == '2' && buf[3] == '0' && buf[4] == '1' && buf[5] == '~') return PASTED;
+    if (last == 'Z') return BACKTAB;
+    int code;
+    int p = 2;
+    for (; p < n && buf[p].is_digit(); p++) code = code * 10 + buf[p] - '0';
+    int mods;
+    if (p < n && buf[p] == ';') for (p++; p < n && buf[p].is_digit(); p++) mods = mods * 10 + buf[p] - '0';
+    int m = max(mods - 1, 0);
+    int flags = ((m & 1) != 0 ? SHIFT : 0) | ((m & 2) != 0 ? ALT : 0) | ((m & 4) != 0 ? CTRL : 0);
+    if (last == 'u')
+    {
+        if ((flags & CTRL) != 0 && code >= 'a' && code <= 'z') return code & 0x1f;
+        return control(code) | (flags & (CTRL | ALT));
+    }
     int k = arrow(buf[2], last, true);
-    if (k) return k;
-    if (buf[2] == '5' && n >= 4 && buf[3] == '~') return PAGEUP;
-    if (buf[2] == '6' && n >= 4 && buf[3] == '~') return PAGEDOWN;
-    if (buf[2] == 'H' || last == 'H' || (last == '~' && (buf[2] == '1' || buf[2] == '7'))) return HOME;
-    if (buf[2] == 'F' || last == 'F' || (last == '~' && (buf[2] == '4' || buf[2] == '8'))) return END;
-    return ESC;
+    if (k == 0 && last == '~')
+    {
+        switch (code)
+        {
+            case 1:
+            case 7: k = HOME;
+            case 3: k = DELETE;
+            case 4:
+            case 8: k = END;
+            case 5: k = PAGEUP;
+            case 6: k = PAGEDOWN;
+        }
+    }
+    if (k == 0 && (last == 'H' || buf[2] == 'H')) k = HOME;
+    if (k == 0 && (last == 'F' || buf[2] == 'F')) k = END;
+    return k == 0 ? ESC : k | flags;
 }
 
 fn int key()

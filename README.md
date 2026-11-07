@@ -53,7 +53,7 @@ cat notes.md | mdv      # render stdin
 
 ## Editor
 
-`e` opens the file in mdv's editor with a live preview: side by side on wide screens, stacked on narrow ones. Editing is modeless: type to insert, arrows move by screen row, `PgUp` `PgDn` page, `Home` `End` line. `Ctrl+O` opens the editor options menu, which lists every command:
+`e` opens the file in mdv's editor with a live preview: side by side on wide screens, stacked on narrow ones. Editing is modeless: type to insert, arrows move by screen row, `PgUp` `PgDn` page, `Home` goes to the first non-blank then column 1, `End` to line end. `Enter` keeps indentation and continues list items (`-`, `*`, `+`, `1.`, `- [ ]`, `>`); `Enter` on an empty item ends the list. `Ctrl+O` opens the editor options menu, which lists every command:
 
 | Key | Action |
 | :--- | :--- |
@@ -61,8 +61,14 @@ cat notes.md | mdv      # render stdin
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
 | `Ctrl+F` / `Ctrl+N` | Find / find next |
 | `Ctrl+G` | Go to line |
-| `Ctrl+C` `Ctrl+X` `Ctrl+V` | Copy, cut, paste the line |
-| `Ctrl+K` / `Ctrl+D` | Delete / duplicate the line |
+| `Shift+arrows` `Shift+Home/End` | Select |
+| `Ctrl+A` | Select all |
+| `Ctrl+←` `Ctrl+→` | Move by word; `Ctrl+Backspace` `Ctrl+Delete` delete a word |
+| `Ctrl+Home` `Ctrl+End` | Start / end of file |
+| `Ctrl+C` `Ctrl+X` `Ctrl+V` | Copy, cut, paste the selection, or the line when nothing is selected |
+| `Ctrl+K` / `Ctrl+D` | Delete / duplicate the lines |
+| `Alt+↑` `Alt+↓` | Move the lines up / down |
+| `Tab` / `Shift+Tab` | Indent / outdent the selected lines |
 | `Ctrl+H` | Highlight the block in source and preview |
 | `Ctrl+W` | Toggle wrap |
 | `Ctrl+R` | Toggle the preview |

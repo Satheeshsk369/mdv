@@ -179,28 +179,49 @@ fn void tint(DString* fb, String line)
     }
 }
 
-fn void source(DString* fb, String line, int number, bool current, bool first, bool heading, int left, int width)
+struct Row
 {
-    if (current) fb.append(ansi::FOCUS);
-    fb.append(current ? ansi::CURSOR : ansi::MUTED);
-    if (first)
+    String text;
+    usz base;
+    int number;
+    bool current;
+    bool first;
+    bool heading;
+}
+
+fn void source(DString* fb, Row row, usz low, usz high, int left, int width)
+{
+    if (row.current) fb.append(ansi::FOCUS);
+    fb.append(row.current ? ansi::CURSOR : ansi::MUTED);
+    if (row.first)
     {
-        fb.appendf("%4d ", number);
+        fb.appendf("%4d ", row.number);
     }
     else
     {
         fb.append("   ↪ ");
     }
     fb.append(ansi::RESET);
-    if (current) fb.append(ansi::FOCUS);
-    String t = line.trim();
+    if (row.current) fb.append(ansi::FOCUS);
+    String t = row.text.trim();
     bool fence = t.starts_with("```") || t.starts_with("~~~") || t.starts_with("$$");
-    fb.append(heading ? ansi::H2 : fence ? ansi::MUTED : ansi::TEXT);
+    String color = row.heading ? ansi::H2 : fence ? ansi::MUTED : ansi::TEXT;
+    fb.append(color);
     DString expanded;
-    expanded.init(mem, line.len + 16);
+    expanded.init(mem, row.text.len + 64);
     defer expanded.free();
-    foreach (c : line)
+    bool inside;
+    foreach (i, c : row.text)
     {
+        usz at = row.base + (usz)i;
+        bool want = at >= low && at < high;
+        if (want != inside)
+        {
+            expanded.append(want ? ansi::SELECTION : ansi::RESET);
+            if (!want && row.current) expanded.append(ansi::FOCUS);
+            if (!want) expanded.append(color);
+            inside = want;
+        }
         if (c == '\t')
         {
             expanded.spaces(4);
@@ -210,6 +231,7 @@ fn void source(DString* fb, String line, int number, bool current, bool first, b
             expanded.append_char(c);
         }
     }
+    if (!inside && row.base + row.text.len >= low && row.base + row.text.len < high) expanded.append(ansi::SELECTION);
     fb.spaces(width - text::clip(fb, expanded.str_view(), left, width));
     fb.append(ansi::RESET);
 }
@@ -245,7 +267,7 @@ fn void View.drawEditor(&self, DString* fb)
     head.append(ansi::TITLE);
     head.append("Editing");
     head.append(ansi::RESET);
-    if (e.dirty)
+    if (e.dirty())
     {
         head.append(ansi::ORANGE);
         head.append(" ●");
@@ -260,7 +282,7 @@ fn void View.drawEditor(&self, DString* fb)
     defer hint.free();
     if (e.prompt != NONE)
     {
-        hint.append(e.prompt == FIND ? "Find: " : "Line: ");
+        hint.append(LABELS[e.prompt]);
         hint.append(e.input.str_view());
         hint.append("▏ (Enter │ Esc)");
     }
@@ -312,7 +334,10 @@ fn void View.drawEditor(&self, DString* fb)
     int row = e.skip;
     int count = e.count();
     String current = number < count ? e.slice(number) : "";
+    usz origin = e.offset(number);
     int rows = number < count ? e.height(number) : 1;
+    usz low = e.selected() ? e.low() : 0;
+    usz high = e.selected() ? e.high() : 0;
     for (int r = 0; r < body; r++)
     {
         if (split || r < editRows)
@@ -324,13 +349,15 @@ fn void View.drawEditor(&self, DString* fb)
                 usz to = row + 1 < rows ? e.starts[(usz)row + 1] : current.len;
                 bool lit = number == line || (number >= first && number <= last);
                 int left = number == line && !e.wrap ? e.left : 0;
-                source(fb, current[from : to - from], number + 1, lit, row == 0, current.starts_with("#"), left, textWidth);
+                Row segment = { current[from : to - from], origin + from, number + 1, lit, row == 0, current.starts_with("#") };
+                source(fb, segment, low, high, left, textWidth);
                 row++;
                 if (row >= rows)
                 {
                     number++;
                     row = 0;
                     current = number < count ? e.slice(number) : "";
+                    origin = e.offset(number);
                     rows = number < count ? e.height(number) : 1;
                 }
             }

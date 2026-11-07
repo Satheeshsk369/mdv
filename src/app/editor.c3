@@ -10,10 +10,14 @@ import render;
 import terminal;
 import text;
 
-struct Snapshot
+struct Change
 {
-    String text;
     usz at;
+    String removed;
+    String inserted;
+    usz before;
+    usz after;
+    bool join;
 }
 
 struct Spot
@@ -27,8 +31,14 @@ enum Prompt
 {
     NONE,
     FIND,
-    LINE
+    LINE,
+    SWAP,
+    WITH
 }
+
+const String[] LABELS = { "", "Find: ", "Line: ", "Replace: ", "With: " };
+
+$assert(LABELS.len == Prompt::len);
 
 struct Editor
 {
@@ -40,19 +50,22 @@ struct Editor
     int left;
     int goal;
     int view;
-    bool dirty;
     bool warned;
     bool fresh;
     bool wrap;
     bool preview;
     bool pasting;
+    bool marked;
+    usz mark;
     Prompt prompt;
     ulong edited;
     DString input;
     DString needle;
     DString clip;
-    List{Snapshot} history;
-    List{Snapshot} future;
+    int clean;
+    List{Change} history;
+    List{Change} future;
+    List{usz} hits;
     List{usz} starts;
     Document doc;
     render::Page page;
@@ -248,68 +261,91 @@ fn void Editor.scroll(&self, int rows)
     }
 }
 
-fn void forget(List{Snapshot}* list)
+fn void forget(List{Change}* list)
 {
-    foreach (snapshot : *list) free(snapshot.text);
+    foreach (change : *list)
+    {
+        free(change.removed);
+        free(change.inserted);
+    }
     list.clear();
 }
 
-fn void Editor.keep(&self, List{Snapshot}* list)
-{
-    if (list.len() >= 100)
-    {
-        free((*list)[0].text);
-        list.remove_at(0);
-    }
-    list.push({ self.str().copy(mem), self.at });
-}
+fn bool Editor.dirty(&self) => (int)self.history.len() != self.clean;
 
-fn void Editor.restore(&self, List{Snapshot}* from, List{Snapshot}* to)
+fn void Editor.apply(&self, usz at, usz remove, String add)
 {
-    if (try snapshot = from.pop())
+    if (remove > 0) self.text.delete((sz)at, (sz)remove);
+    if (add.len == 0) return;
+    if (at >= (usz)self.text.len())
     {
-        self.keep(to);
-        self.text.clear();
-        self.text.append(snapshot.text);
-        self.at = min(snapshot.at, (usz)self.text.len());
-        free(snapshot.text);
-        self.edited = 0;
-        self.dirty = true;
-        self.fresh = true;
+        self.text.append(add);
+    }
+    else
+    {
+        self.text.insert_chars_at((sz)at, add);
     }
 }
 
-fn void Editor.remember(&self)
+fn void Editor.record(&self, usz at, String removed, String inserted, usz after)
 {
     ulong now = terminal::now();
-    if (now - self.edited > 1000) self.keep(&self.history);
+    int count = (int)self.history.len();
+    bool join = count > 0 && count != self.clean && now - self.edited <= 1000;
+    if (self.clean > count) self.clean = -1;
     forget(&self.future);
+    self.history.push({ at, removed.copy(mem), inserted.copy(mem), self.at, after, join });
     self.edited = now;
-    self.dirty = true;
     self.warned = false;
     self.fresh = true;
 }
 
 fn void Editor.insert(&self, String s)
 {
-    self.remember();
-    if (self.at >= (usz)self.text.len())
-    {
-        self.text.append(s);
-    }
-    else
-    {
-        self.text.insert_chars_at((sz)self.at, s);
-    }
+    self.record(self.at, "", s, self.at + s.len);
+    self.apply(self.at, 0, s);
     self.at += s.len;
 }
 
 fn void Editor.erase(&self, usz from, usz to)
 {
     if (to <= from) return;
-    self.remember();
-    self.text.delete((sz)from, (sz)(to - from));
+    self.record(from, self.str()[from : to - from], "", from);
+    self.apply(from, to - from, "");
     self.at = from;
+}
+
+fn void Editor.undo(&self)
+{
+    while (try change = self.history.pop())
+    {
+        self.apply(change.at, change.inserted.len, change.removed);
+        self.at = change.before;
+        self.future.push(change);
+        if (!change.join) break;
+    }
+    self.settle();
+}
+
+fn void Editor.redo(&self)
+{
+    for (bool first = true; self.future.len() > 0; first = false)
+    {
+        Change change = self.future[self.future.len() - 1];
+        if (!first && !change.join) break;
+        self.future.pop()!!;
+        self.apply(change.at, change.removed.len, change.inserted);
+        self.at = change.after;
+        self.history.push(change);
+    }
+    self.settle();
+}
+
+fn void Editor.settle(&self)
+{
+    self.marked = false;
+    self.edited = 0;
+    self.fresh = true;
 }
 
 fn void Editor.newline(&self)
@@ -323,25 +359,138 @@ fn void Editor.newline(&self)
     String s = self.str();
     usz indent = from;
     while (indent < self.at && (s[indent] == ' ' || s[indent] == '\t')) indent++;
+    String line = s[indent : self.end(from) - indent];
+    usz marker;
+    int number = -1;
+    foreach (bullet : BULLETS)
+    {
+        if (!line.starts_with(bullet)) continue;
+        marker = bullet.len;
+        break;
+    }
+    if (marker == 0)
+    {
+        usz d;
+        while (d < line.len && line[d].is_digit()) d++;
+        if (d > 0 && d + 1 < line.len && (line[d] == '.' || line[d] == ')') && line[d + 1] == ' ')
+        {
+            marker = d + 2;
+            number = line[:d].to_int() ?? 0;
+        }
+    }
+    if (marker > 0 && self.at >= indent + marker)
+    {
+        if (line.len == marker)
+        {
+            self.erase(indent, indent + marker);
+            return;
+        }
+        @pool()
+        {
+            String next = number >= 0 ? string::tformat("%d%c ", number + 1, line[marker - 2]) : line.starts_with("- [") || line.starts_with("* [") ? string::tformat("%c [ ] ", line[0]) : line[:marker];
+            self.insert(string::tformat("\n%s%s", s[from : indent - from], next));
+        };
+        return;
+    }
     @pool()
     {
         self.insert(string::tformat("\n%s", s[from : indent - from]));
     };
 }
 
+fn bool word(char c) => c.is_alnum() || c == '_' || c >= 0x80;
+
+fn usz Editor.wordLeft(&self, usz at)
+{
+    String s = self.str();
+    while (at > 0 && !word(s[at - 1])) at--;
+    while (at > 0 && word(s[at - 1])) at--;
+    return at;
+}
+
+fn usz Editor.wordRight(&self, usz at)
+{
+    String s = self.str();
+    while (at < s.len && !word(s[at])) at++;
+    while (at < s.len && word(s[at])) at++;
+    return at;
+}
+
+fn usz Editor.home(&self, usz at)
+{
+    String s = self.str();
+    usz from = self.start(at);
+    usz first = from;
+    while (first < s.len && (s[first] == ' ' || s[first] == '\t')) first++;
+    return at == first ? from : first;
+}
+
+fn bool Editor.selected(&self) => self.marked && self.mark != self.at;
+
+fn usz Editor.low(&self) => self.selected() ? min(self.mark, self.at) : self.at;
+
+fn usz Editor.high(&self) => self.selected() ? max(self.mark, self.at) : self.at;
+
+fn usz Editor.first(&self) => self.start(self.low());
+
+fn usz Editor.last(&self)
+{
+    usz high = self.high();
+    if (self.selected() && high > self.low() && self.str()[high - 1] == '\n') high--;
+    return self.end(high);
+}
+
+fn bool Editor.remove(&self)
+{
+    if (!self.selected())
+    {
+        self.marked = false;
+        return false;
+    }
+    usz low = self.low();
+    usz high = self.high();
+    self.marked = false;
+    self.erase(low, high);
+    return true;
+}
+
+fn void Editor.select(&self, usz from, usz to)
+{
+    self.mark = from;
+    self.at = to;
+    self.marked = true;
+}
+
+fn void Editor.splice(&self, usz from, usz to, String with)
+{
+    self.erase(from, to);
+    self.at = from;
+    self.insert(with);
+}
+
+const String[] BULLETS = { "- [ ] ", "- [x] ", "* [ ] ", "* [x] ", "- ", "* ", "+ ", "> " };
+
 fn void Editor.copy(&self)
 {
-    usz from = self.start(self.at);
     self.clip.clear();
-    self.clip.append(self.str()[from : self.end(from) - from]);
-    self.clip.append_char('\n');
+    if (self.selected())
+    {
+        self.clip.append(self.str()[self.low() : self.high() - self.low()]);
+    }
+    else
+    {
+        usz from = self.start(self.at);
+        self.clip.append(self.str()[from : self.end(from) - from]);
+        self.clip.append_char('\n');
+    }
     terminal::copy(self.clip.str_view());
 }
 
 fn void Editor.kill(&self)
 {
-    usz from = self.start(self.at);
-    usz to = self.end(from);
+    usz from = self.first();
+    usz to = self.last();
+    self.marked = false;
     if (to < (usz)self.text.len())
     {
         to++;
@@ -358,23 +507,102 @@ fn void Editor.paste(&self)
 {
     String clip = self.clip.str_view();
     if (clip.len == 0) return;
-    if (clip.ends_with("\n")) self.at = self.start(self.at);
-    self.insert(clip);
+    if (!self.remove() && clip.ends_with("\n")) self.at = self.start(self.at);
+    @pool()
+    {
+        self.insert(clip.tcopy());
+    };
 }
 
 fn void Editor.duplicate(&self)
 {
-    usz from = self.start(self.at);
-    usz to = self.end(from);
-    usz column = self.at - from;
+    usz from = self.first();
+    usz to = self.last();
+    usz shift = to - from + 1;
     @pool()
     {
-        String line = self.str()[from : to - from].tcopy();
+        String block = self.str()[from : to - from].tcopy();
+        usz at = self.at;
+        usz mark = self.mark;
         self.at = to;
         self.insert("\n");
-        self.insert(line);
+        self.insert(block);
+        self.at = at + shift;
+        self.mark = mark + shift;
     };
-    self.at = to + 1 + column;
+}
+
+fn void Editor.shift(&self, int direction)
+{
+    usz from = self.first();
+    usz to = self.last();
+    String s = self.str();
+    if (direction < 0 && from == 0) return;
+    if (direction > 0 && to >= s.len) return;
+    @pool()
+    {
+        String block = s[from : to - from].tcopy();
+        if (direction < 0)
+        {
+            usz above = self.start(from - 1);
+            String prior = s[above : from - 1 - above].tcopy();
+            usz move = from - above;
+            usz at = self.at - move;
+            usz mark = self.mark - move;
+            self.splice(above, to, string::tformat("%s\n%s", block, prior));
+            self.at = at;
+            self.mark = mark;
+        }
+        else
+        {
+            usz below = self.end(to + 1);
+            String next = s[to + 1 : below - to - 1].tcopy();
+            usz move = next.len + 1;
+            usz at = self.at + move;
+            usz mark = self.mark + move;
+            self.splice(from, below, string::tformat("%s\n%s", next, block));
+            self.at = at;
+            self.mark = mark;
+        }
+    };
+}
+
+fn void Editor.indent(&self, bool outward)
+{
+    usz from = self.first();
+    usz to = self.last();
+    bool selected = self.selected();
+    usz column = self.at - self.start(self.at);
+    DString block;
+    block.init(mem, (sz)(to - from) + 64);
+    defer block.free();
+    int removed;
+    @pool()
+    {
+        foreach (line : self.str()[from : to - from].tsplit("\n"))
+        {
+            if (block.len() > 0) block.append_char('\n');
+            if (!outward)
+            {
+                block.append("    ");
+                block.append(line);
+                continue;
+            }
+            usz cut;
+            while (cut < 4 && cut < line.len && line[cut] == ' ') cut++;
+            if (cut == 0 && line.len > 0 && line[0] == '\t') cut = 1;
+            if (removed == 0) removed = (int)cut;
+            block.append(line[cut..]);
+        }
+    };
+    self.splice(from, to, block.str_view());
+    if (selected)
+    {
+        self.select(from, from + (usz)block.len());
+        return;
+    }
+    self.at = from + (outward ? column - min(column, (usz)removed) : column + 4);
+    self.marked = false;
 }
 
 fn bool Editor.find(&self)
@@ -385,12 +613,40 @@ fn bool Editor.find(&self)
     usz total = s.len - n.len + 1;
     for (usz k = 1; k <= total; k++)
     {
-        usz p = (self.at + k) % total;
+        usz p = (self.low() + k) % total;
         if (!text::same(s[p : n.len], n)) continue;
-        self.at = p;
+        self.select(p, p + n.len);
         return true;
     }
     return false;
+}
+
+fn int Editor.replace(&self, String with)
+{
+    String s = self.str();
+    String n = self.needle.str_view();
+    if (n.len == 0) return 0;
+    DString out;
+    out.init(mem, (sz)s.len + 64);
+    defer out.free();
+    int count;
+    for (usz p = 0; p < s.len;)
+    {
+        if (p + n.len <= s.len && text::same(s[p : n.len], n))
+        {
+            out.append(with);
+            p += n.len;
+            count++;
+            continue;
+        }
+        out.append_char(s[p++]);
+    }
+    if (count == 0) return 0;
+    usz at = min(self.at, (usz)out.len());
+    self.marked = false;
+    self.splice(0, s.len, out.str_view());
+    self.at = at;
+    return count;
 }
 
 fn void Editor.open(&self, String content, int line)
@@ -404,9 +660,10 @@ fn void Editor.open(&self, String content, int line)
     self.skip = 0;
     self.left = 0;
     self.goal = -1;
-    self.dirty = false;
+    self.clean = 0;
     self.warned = false;
     self.pasting = false;
+    self.marked = false;
     self.prompt = NONE;
     self.edited = 0;
     self.fresh = true;
@@ -429,6 +686,7 @@ fn void Editor.init(&self)
     self.clip.init(mem, 256);
     self.history.init(mem, 16);
     self.future.init(mem, 16);
+    self.hits.init(mem, 16);
     self.starts.init(mem, 16);
     self.wrap = true;
     self.preview = true;
@@ -440,6 +698,7 @@ fn void Editor.free(&self)
     forget(&self.future);
     self.history.free();
     self.future.free();
+    self.hits.free();
     self.starts.free();
     self.text.free();
     self.input.free();
@@ -478,7 +737,7 @@ fn void View.write(&self)
     }
     self.replace(e.str().copy(mem));
     self.stamp = terminal::stamp(self.path.zstr_view());
-    e.dirty = false;
+    e.clean = (int)e.history.len();
     e.warned = false;
     self.say("✔ Saved");
 }
@@ -504,7 +763,12 @@ fn void View.command(&self, Act act)
     switch (act)
     {
         case CLOSE:
-            if (e.dirty && !e.warned)
+            if (e.selected())
+            {
+                e.marked = false;
+                return;
+            }
+            if (e.dirty() && !e.warned)
             {
                 e.warned = true;
                 self.say("Unsaved changes: Ctrl+S to save, Esc again to discard");
@@ -513,8 +777,8 @@ fn void View.command(&self, Act act)
             self.close();
         case MENU: self.menu(EDITS, EDITOR);
         case SAVE: self.write();
-        case UNDO: e.restore(&e.history, &e.future);
-        case REDO: e.restore(&e.future, &e.history);
+        case UNDO: e.undo();
+        case REDO: e.redo();
         case MARK: self.focus = !self.focus;
         case WRAP:
             e.wrap = !e.wrap;
@@ -525,18 +789,24 @@ fn void View.command(&self, Act act)
             e.width = max(self.editWidth() - 5, 1);
             self.say(e.preview ? "Preview on" : "Preview off");
         case COPY:
+            self.say(e.selected() ? "✔ Copied selection" : "✔ Copied line");
             e.copy();
-            self.say("✔ Copied line");
         case CUT:
+            self.say(e.selected() ? "✔ Cut selection" : "✔ Cut line");
             e.copy();
-            e.kill();
-            self.say("✔ Cut line");
+            if (!e.remove()) e.kill();
+        case ALL: e.select(0, (usz)e.text.len());
+        case RAISE: e.shift(-1);
+        case LOWER: e.shift(1);
+        case INDENT: e.indent(false);
+        case OUTDENT: e.indent(true);
         case PASTE: e.paste();
         case KILL: e.kill();
         case DUPLICATE: e.duplicate();
         case SEARCH: self.ask(FIND, e.needle.str_view());
         case NEXT: if (!e.find()) self.say("Not found");
         case JUMP: self.ask(LINE, "");
+        case REPLACE: self.ask(SWAP, e.needle.str_view());
         default:
     }
 }
@@ -557,8 +827,21 @@ fn void View.answer(&self, int key)
                 e.at = e.offset(math::clamp(line, 1, e.count()) - 1);
                 return;
             }
+            if (prompt == WITH)
+            {
+                @pool()
+                {
+                    self.say(string::tformat("✔ Replaced %d", e.replace(e.input.str_view())));
+                };
+                return;
+            }
             e.needle.clear();
             e.needle.append(e.input.str_view());
+            if (prompt == SWAP)
+            {
+                self.ask(WITH, "");
+                return;
+            }
             if (!e.find()) self.say("Not found");
         default:
             self.input(&e.input, 120, key, e.prompt == LINE);
@@ -580,28 +863,66 @@ fn void View.type(&self, int key)
         return;
     }
     int page = max(self.paneRows() - 2, 1);
-    bool vertical = key == terminal::UP || key == terminal::DOWN || key == terminal::PAGEUP || key == terminal::PAGEDOWN || key == terminal::WHEELUP || key == terminal::WHEELDOWN;
-    if (!vertical) e.goal = -1;
-    switch (key)
+    int base = key & terminal::KEY;
+    bool shift = (key & terminal::SHIFT) != 0;
+    bool ctrl = (key & terminal::CTRL) != 0;
+    bool vertical = base == terminal::UP || base == terminal::DOWN || base == terminal::PAGEUP || base == terminal::PAGEDOWN || base == terminal::WHEELUP || base == terminal::WHEELDOWN;
+    bool motion = vertical || base == terminal::LEFT || base == terminal::RIGHT || base == terminal::HOME || base == terminal::END;
+    if (!vertical || ctrl) e.goal = -1;
+    if (motion && base != terminal::WHEELUP && base != terminal::WHEELDOWN)
     {
-        case terminal::PASTE: e.pasting = true;
+        if (shift && !e.marked) e.select(e.at, e.at);
+        if (!shift)
+        {
+            bool collapse = e.selected() && !ctrl && (base == terminal::LEFT || base == terminal::RIGHT);
+            usz edge = base == terminal::LEFT ? e.low() : e.high();
+            e.marked = false;
+            if (collapse)
+            {
+                e.at = edge;
+                return;
+            }
+        }
+    }
+    switch (base)
+    {
+        case terminal::PASTE:
+            e.remove();
+            e.pasting = true;
         case terminal::PASTED: e.pasting = false;
-        case terminal::LEFT: e.at = e.backward(e.at);
-        case terminal::RIGHT: e.at = e.forward(e.at);
+        case terminal::LEFT: e.at = ctrl ? e.wordLeft(e.at) : e.backward(e.at);
+        case terminal::RIGHT: e.at = ctrl ? e.wordRight(e.at) : e.forward(e.at);
         case terminal::UP: e.vertical(-1);
         case terminal::DOWN: e.vertical(1);
         case terminal::PAGEUP: e.vertical(-page);
         case terminal::PAGEDOWN: e.vertical(page);
         case terminal::WHEELUP: e.vertical(-3);
         case terminal::WHEELDOWN: e.vertical(3);
-        case terminal::HOME: e.at = e.start(e.at);
-        case terminal::END: e.at = e.end(e.at);
-        case terminal::ENTER: e.newline();
-        case terminal::TAB: e.insert(e.pasting ? "\t" : "    ");
-        case terminal::BACKSPACE: e.erase(e.backward(e.at), e.at);
-        case terminal::DELETE: e.erase(e.at, e.forward(e.at));
+        case terminal::HOME: e.at = ctrl ? 0 : e.home(e.at);
+        case terminal::END: e.at = ctrl ? (usz)e.text.len() : e.end(e.at);
+        case terminal::ENTER:
+            e.remove();
+            e.newline();
+        case terminal::TAB:
+            if (e.pasting)
+            {
+                e.insert("\t");
+            }
+            else if (e.selected())
+            {
+                e.indent(false);
+            }
+            else
+            {
+                e.insert("    ");
+            }
+        case terminal::BACKSPACE:
+            if (!e.remove()) e.erase(ctrl ? e.wordLeft(e.at) : e.backward(e.at), e.at);
+        case terminal::DELETE:
+            if (!e.remove()) e.erase(e.at, ctrl ? e.wordRight(e.at) : e.forward(e.at));
         default:
             if (key < 32 || key > 255 || key == 127) return;
+            e.remove();
             char c = (char)key;
             e.insert((String)(&c)[:1]);
     }

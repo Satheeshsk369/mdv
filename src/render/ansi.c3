@@ -35,6 +35,8 @@ const String SELECTED = "\e[48;2;49;50;68m\e[38;2;248;248;242m\e[1m";
 const String STATUS = "\e[48;2;39;40;34m\e[38;2;166;226;46m\e[1m";
 const String CURSOR = "\e[38;2;102;217;239m\e[1m";
 const String FOCUS = "\e[48;2;62;61;50m";
+const String SELECTION = "\e[48;2;68;71;90m";
+const String MATCH = "\e[48;2;94;72;28m";
 const String TILDE = "\e[38;2;60;60;50m";
 
 const String[] HEADINGS = { H1, H2, H3, H4, H5, H6 };

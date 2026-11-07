@@ -54,7 +54,12 @@ enum Act
     CUT,
     PASTE,
     KILL,
-    DUPLICATE
+    DUPLICATE,
+    RAISE,
+    LOWER,
+    INDENT,
+    OUTDENT,
+    REPLACE
 }
 
 struct Bind
@@ -114,7 +119,9 @@ const Bind[] EDITING = {
     { terminal::CTRLH, MARK }, { terminal::CTRLW, WRAP }, { terminal::CTRLR, PREVIEW },
     { terminal::CTRLC, COPY }, { terminal::CTRLX, CUT }, { terminal::CTRLV, PASTE },
     { terminal::CTRLK, KILL }, { terminal::CTRLD, DUPLICATE },
-    { terminal::CTRLF, SEARCH }, { terminal::CTRLN, NEXT }, { terminal::CTRLG, JUMP },
+    { terminal::CTRLF, SEARCH }, { terminal::CTRLN, NEXT }, { terminal::CTRLE, REPLACE }, { terminal::CTRLG, JUMP },
+    { terminal::CTRLA, ALL }, { terminal::UP | terminal::ALT, RAISE }, { terminal::DOWN | terminal::ALT, LOWER },
+    { terminal::BACKTAB, OUTDENT },
 };
 
 const Item[] EDITS = {
@@ -123,12 +130,19 @@ const Item[] EDITS = {
     { "Ctrl+Y", "Redo", REDO },
     { "Ctrl+F", "Find", SEARCH },
     { "Ctrl+N", "Find next", NEXT },
+    { "Ctrl+E", "Replace all", REPLACE },
     { "Ctrl+G", "Go to line", JUMP },
     { "Ctrl+C", "Copy line", COPY },
     { "Ctrl+X", "Cut line", CUT },
     { "Ctrl+V", "Paste", PASTE },
+    { "Ctrl+A", "Select all", ALL },
+    { "Shift+arrows", "Select", NONE },
     { "Ctrl+K", "Delete line", KILL },
     { "Ctrl+D", "Duplicate line", DUPLICATE },
+    { "Alt+↑", "Move line up", RAISE },
+    { "Alt+↓", "Move line down", LOWER },
+    { "Tab", "Indent", INDENT },
+    { "Shift+Tab", "Outdent", OUTDENT },
     { "Ctrl+H", "Highlight block", MARK },
     { "Ctrl+W", "Toggle wrap", WRAP },
     { "Ctrl+R", "Toggle preview", PREVIEW },
@@ -402,6 +416,7 @@ fn void View.browse(&self, Act act)
 
 fn bool View.key(&self, int key)
 {
+    if (self.mode != EDITOR && (self.mode != MENU || self.back != EDITOR)) key &= terminal::KEY;
     switch (self.mode)
     {
         case SEARCH:

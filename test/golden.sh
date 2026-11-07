@@ -76,6 +76,16 @@ if command -v tmux > /dev/null; then
   screen editorredo sample.md e x C-z C-y
   screen editorhighlight sample.md e Down Down C-h
   screen ctrlc sample.md C-c "!echo"
+  screen editorselect sample.md e Down Down S-Right S-Right S-Right S-Right S-Right S-Right S-Right
+  screen editorselectlines sample.md e Down Down S-Down S-Down S-End
+  screen editorselectcut sample.md e S-End C-x
+  screen editorselectall sample.md e C-a
+  screen editorword sample.md e Down Down C-Right C-Right C-S-Right
+  screen editorlist sample.md e C-g 2 2 Enter End Enter n e w
+  screen editormove sample.md e M-Down M-Down
+  screen editorindent sample.md e S-Down S-Down Tab
+  screen editoroutdent sample.md e Tab Tab BTab
+  screen editorreplace sample.md e C-e L a T e X Enter T e X Enter
   cp sample.md saved.md
   screen editorsave saved.md e "#" " " C-s Escape
   rm saved.md
