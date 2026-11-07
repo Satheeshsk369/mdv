@@ -6,27 +6,35 @@ import ansi;
 import terminal;
 import text;
 
-const String[] GUIDE = {
-    "\e[38;2;102;217;239m\e[1mVertical Navigation:\e[0m",
-    "  \e[38;2;230;219;116m↓ / ↑\e[0m                 Scroll down / up (accelerated)",
-    "  \e[38;2;230;219;116mPgDn / PgUp\e[0m           Half-page scroll down / up",
-    "  \e[38;2;230;219;116mHome / End\e[0m            Jump to Top / Bottom",
-    "  \e[38;2;230;219;116m: <line>\e[0m              Goto line number (e.g. :42)",
-    "",
-    "\e[38;2;102;217;239m\e[1mHorizontal & Layout:\e[0m",
-    "  \e[38;2;230;219;116mw\e[0m                     Toggle Wrap / No-Wrap mode",
-    "  \e[38;2;230;219;116m← / →\e[0m                 Horizontal scroll (accelerated)",
-    "",
-    "\e[38;2;102;217;239m\e[1mFeatures & Actions:\e[0m",
-    "  \e[38;2;166;226;46mSpace\e[0m                 Options menu",
-    "  \e[38;2;166;226;46mTab / t\e[0m               Toggle Document Outline (Table of Contents)",
-    "  \e[38;2;166;226;46mh\e[0m                     Highlight the current block",
-    "  \e[38;2;166;226;46mo\e[0m                     Switch Document (Markdown File Tree)",
-    "  \e[38;2;166;226;46m/\e[0m                     In-document search (n next, N prev)",
-    "  \e[38;2;166;226;46me\e[0m                     Edit with live preview (Ctrl+O lists editor commands)",
-    "  \e[38;2;166;226;46mE\e[0m                     Open $EDITOR at current line",
-    "  \e[38;2;166;226;46my\e[0m                     Copy document to clipboard (OSC 52)",
-    "  \e[38;2;166;226;46m?\e[0m                     Show / hide this help screen",
+struct Guide
+{
+    Role role;
+    String key;
+    String text;
+}
+
+const Guide[] GUIDE = {
+    { CURSOR, "Vertical Navigation:", "" },
+    { YELLOW, "  ↓ / ↑", "                 Scroll down / up (accelerated)" },
+    { YELLOW, "  PgDn / PgUp", "           Half-page scroll down / up" },
+    { YELLOW, "  Home / End", "            Jump to Top / Bottom" },
+    { YELLOW, "  : <line>", "              Goto line number (e.g. :42)" },
+    { NONE, "", "" },
+    { CURSOR, "Horizontal & Layout:", "" },
+    { YELLOW, "  w", "                     Toggle Wrap / No-Wrap mode" },
+    { YELLOW, "  ← / →", "                 Horizontal scroll (accelerated)" },
+    { NONE, "", "" },
+    { CURSOR, "Features & Actions:", "" },
+    { GREEN, "  Space", "                 Options menu" },
+    { GREEN, "  Tab / t", "               Toggle Document Outline (Table of Contents)" },
+    { GREEN, "  h", "                     Highlight the current block" },
+    { GREEN, "  c", "                     Colour theme with live preview" },
+    { GREEN, "  o", "                     Switch Document (Markdown File Tree)" },
+    { GREEN, "  /", "                     In-document search (n next, N prev)" },
+    { GREEN, "  e", "                     Edit with live preview (Ctrl+O lists editor commands)" },
+    { GREEN, "  E", "                     Open $EDITOR at current line" },
+    { GREEN, "  y", "                     Copy document to clipboard (OSC 52)" },
+    { GREEN, "  ?", "                     Show / hide this help screen" },
 };
 
 fn int follow(int top, int cursor, int count, int rows)
@@ -39,15 +47,15 @@ fn int follow(int top, int cursor, int count, int rows)
 
 fn void View.badge(&self, DString* fb)
 {
-    fb.append(ansi::BADGE);
+    fb.append(ansi::style(BADGE));
     fb.append(" mdv ");
     fb.append(ansi::RESET);
-    fb.append(ansi::PATH);
+    fb.append(ansi::style(PATH));
     fb.append(" ");
     fb.append(self.name());
     fb.append(" ");
     fb.append(ansi::RESET);
-    fb.append(ansi::DIVIDER);
+    fb.append(ansi::style(BORDER));
     fb.append("│");
     fb.append(ansi::RESET);
     fb.append(" ");
@@ -56,7 +64,7 @@ fn void View.badge(&self, DString* fb)
 fn void View.title(&self, DString* fb, String title)
 {
     self.badge(fb);
-    fb.append(ansi::TITLE);
+    fb.append(ansi::style(TITLE));
     fb.append(title);
     fb.append(ansi::RESET);
     fb.append("\e[K\n");
@@ -64,7 +72,7 @@ fn void View.title(&self, DString* fb, String title)
 
 fn void rule(DString* fb, int width)
 {
-    fb.append(ansi::BORDER);
+    fb.append(ansi::style(BORDER));
     fb.repeat("─", max(width - 2, 10));
     fb.append(ansi::RESET);
     fb.append("\e[K\n");
@@ -72,7 +80,7 @@ fn void rule(DString* fb, int width)
 
 fn void tilde(DString* fb, int r, int rows)
 {
-    fb.append(ansi::TILDE);
+    fb.append(ansi::style(FAINT));
     fb.append("~");
     fb.append(ansi::RESET);
     fb.append("\e[K");
@@ -90,8 +98,18 @@ fn void View.drawHelp(&self, DString* fb)
             tilde(fb, r, self.rows);
             continue;
         }
+        Guide g = GUIDE[r];
         fb.append("  ");
-        fb.append(GUIDE[r]);
+        if (g.key.len > 0)
+        {
+            int indent;
+            while (indent < g.key.len && g.key[indent] == ' ') indent++;
+            fb.append(g.key[:indent]);
+            fb.append(ansi::style(g.role));
+            fb.append(g.key[indent..]);
+            fb.append(ansi::RESET);
+        }
+        fb.append(g.text);
         fb.append("\e[K");
         if (r < self.rows - 1) fb.append_char('\n');
     }
@@ -116,15 +134,15 @@ fn void View.drawOutline(&self, DString* fb)
         fb.append(active ? "  " : "    ");
         if (active)
         {
-            fb.append(ansi::ACTIVE);
+            fb.append(ansi::style(ACTIVE));
             fb.append("▶ ");
         }
         for (int lv = 1; lv < h.level && lv < 5; lv++) fb.append("   ");
-        fb.append(active ? ansi::BOLD : ansi::HEADINGS[min(h.level, 5) - 1]);
+        fb.append(active ? ansi::BOLD : ansi::heading(min(h.level, 5)));
         fb.append(h.title);
         fb.append(ansi::RESET);
         fb.append(" ");
-        fb.append(ansi::MUTED);
+        fb.append(ansi::style(MUTED));
         fb.appendf("(Line %d)", h.src + 1);
         fb.append(ansi::RESET);
         fb.append("\e[K");
@@ -150,14 +168,14 @@ fn void View.drawMenu(&self, DString* fb)
         fb.append(active ? "  " : "    ");
         if (active)
         {
-            fb.append(ansi::ACTIVE);
+            fb.append(ansi::style(ACTIVE));
             fb.append("▶ ");
         }
-        fb.append(active ? ansi::BOLD : ansi::TEXT);
+        fb.append(active ? ansi::BOLD : ansi::style(TEXT));
         fb.append(items[i].label);
         fb.append(ansi::RESET);
         fb.spaces(max(20 - (int)items[i].label.len, 1));
-        fb.append(ansi::MUTED);
+        fb.append(ansi::style(MUTED));
         fb.append(items[i].key);
         fb.append(ansi::RESET);
         fb.append("\e[K");
@@ -167,14 +185,14 @@ fn void View.drawMenu(&self, DString* fb)
 
 fn void tint(DString* fb, String line)
 {
-    fb.append(ansi::FOCUS);
+    fb.append(ansi::style(FOCUS));
     while (line.len > 0)
     {
         sz at = line.index_of(ansi::RESET) ?? line.len;
         fb.append(line[:at]);
         if (at == line.len) break;
         fb.append(ansi::RESET);
-        fb.append(ansi::FOCUS);
+        fb.append(ansi::style(FOCUS));
         line = line[at + ansi::RESET.len..];
     }
 }
@@ -200,8 +218,8 @@ struct Marks
 
 fn void source(DString* fb, Row row, Marks marks, int left, int width)
 {
-    if (row.lit) fb.append(ansi::FOCUS);
-    fb.append(row.current ? ansi::CURSOR : ansi::MUTED);
+    if (row.lit) fb.append(ansi::style(FOCUS));
+    fb.append(row.current ? ansi::style(CURSOR) : ansi::style(MUTED));
     if (row.first)
     {
         fb.appendf("%4d ", row.number);
@@ -211,10 +229,10 @@ fn void source(DString* fb, Row row, Marks marks, int left, int width)
         fb.append("   ↪ ");
     }
     fb.append(ansi::RESET);
-    if (row.lit) fb.append(ansi::FOCUS);
+    if (row.lit) fb.append(ansi::style(FOCUS));
     String t = row.text.trim();
     bool fence = t.starts_with("```") || t.starts_with("~~~") || t.starts_with("$$");
-    String color = row.heading ? ansi::H2 : fence ? ansi::MUTED : ansi::TEXT;
+    String color = row.heading ? ansi::style(H2) : fence ? ansi::style(MUTED) : ansi::style(TEXT);
     fb.append(color);
     DString expanded;
     expanded.init(mem, row.text.len + 64);
@@ -226,11 +244,11 @@ fn void source(DString* fb, Row row, Marks marks, int left, int width)
         usz at = row.base + (usz)i;
         while (k < marks.hits.len && marks.hits[k] + marks.size <= at) k++;
         bool hit = k < marks.hits.len && marks.hits[k] <= at;
-        String want = at >= marks.low && at < marks.high ? ansi::SELECTION : hit ? ansi::MATCH : "";
+        String want = at >= marks.low && at < marks.high ? ansi::style(SELECTION) : hit ? ansi::style(MATCH) : "";
         if (want != state)
         {
             expanded.append(want.len > 0 ? want : ansi::RESET);
-            if (want.len == 0 && row.lit) expanded.append(ansi::FOCUS);
+            if (want.len == 0 && row.lit) expanded.append(ansi::style(FOCUS));
             if (want.len == 0) expanded.append(color);
             state = want;
         }
@@ -245,11 +263,11 @@ fn void source(DString* fb, Row row, Marks marks, int left, int width)
     }
     usz end = row.base + row.text.len;
     bool continues = end >= marks.low && end < marks.high;
-    if (continues && state != ansi::SELECTION) expanded.append(ansi::SELECTION);
+    if (continues && state != ansi::style(SELECTION)) expanded.append(ansi::style(SELECTION));
     if (!continues && state.len > 0)
     {
         expanded.append(ansi::RESET);
-        if (row.lit) expanded.append(ansi::FOCUS);
+        if (row.lit) expanded.append(ansi::style(FOCUS));
     }
     fb.spaces(width - text::clip(fb, expanded.str_view(), left, width));
     fb.append(ansi::RESET);
@@ -268,7 +286,7 @@ fn void preview(DString* fb, String line, bool lit, int width)
     {
         tinted.append(line);
     }
-    fb.append(lit ? ansi::FOCUS : "");
+    fb.append(lit ? ansi::style(FOCUS) : "");
     fb.append_char(' ');
     fb.spaces(width - 1 - text::clip(fb, tinted.str_view(), 0, width - 1));
     fb.append(ansi::RESET);
@@ -283,16 +301,16 @@ fn void View.drawEditor(&self, DString* fb)
     head.init(mem, 256);
     defer head.free();
     self.badge(&head);
-    head.append(ansi::TITLE);
+    head.append(ansi::style(TITLE));
     head.append("Editing");
     head.append(ansi::RESET);
     if (e.dirty())
     {
-        head.append(ansi::ORANGE);
+        head.append(ansi::style(ORANGE));
         head.append(" ●");
         head.append(ansi::RESET);
     }
-    head.append(ansi::MUTED);
+    head.append(ansi::style(MUTED));
     head.appendf("  Ln %d, Col %d", line + 1, e.column() + 1);
     head.append(ansi::RESET);
     fb.append(head.str_view());
@@ -322,7 +340,7 @@ fn void View.drawEditor(&self, DString* fb)
     if (pad > 0)
     {
         fb.spaces(pad);
-        fb.append(e.prompt != NONE || self.status.len() > 0 || self.focus ? ansi::STATUS : ansi::MUTED);
+        fb.append(e.prompt != NONE || self.status.len() > 0 || self.focus ? ansi::style(STATUS) : ansi::style(MUTED));
         fb.append(hint.str_view());
         fb.append(ansi::RESET);
     }
@@ -395,7 +413,7 @@ fn void View.drawEditor(&self, DString* fb)
             }
             else
             {
-                fb.append(ansi::TILDE);
+                fb.append(ansi::style(FAINT));
                 fb.append("   ~");
                 fb.append(ansi::RESET);
                 fb.spaces(editWidth - 4);
@@ -403,13 +421,13 @@ fn void View.drawEditor(&self, DString* fb)
         }
         if (split)
         {
-            fb.append(ansi::BORDER);
+            fb.append(ansi::style(BORDER));
             fb.append("│");
             fb.append(ansi::RESET);
         }
         if (stacked && r == editRows)
         {
-            fb.append(ansi::BORDER);
+            fb.append(ansi::style(BORDER));
             fb.repeat("─", self.width);
             fb.append(ansi::RESET);
         }
@@ -428,11 +446,11 @@ fn void View.drawFiles(&self, DString* fb)
     char[256] buf;
     ZString cwd = (ZString)terminal::getcwd(&buf[0], 256);
     self.badge(fb);
-    fb.append(ansi::GREEN);
+    fb.append(ansi::style(GREEN));
     fb.append(ansi::BOLD);
     fb.append("Tree: ");
     fb.append(ansi::RESET);
-    fb.append(ansi::TEXT);
+    fb.append(ansi::style(TEXT));
     fb.append(cwd ? cwd.str_view() : ".");
     fb.append(ansi::RESET);
     fb.append("\e[K\n");
@@ -451,22 +469,22 @@ fn void View.drawDocument(&self, DString* fb)
     self.badge(&head);
     if (self.changed >= 0)
     {
-        head.append(ansi::GREEN);
+        head.append(ansi::style(GREEN));
         head.append(ansi::BOLD);
         head.appendf("⚡ Sync L%d", self.changed + 1);
         head.append(ansi::RESET);
         head.append(" ");
-        head.append(ansi::DIVIDER);
+        head.append(ansi::style(BORDER));
         head.append("│");
         head.append(ansi::RESET);
         head.append(" ");
     }
-    head.append(ansi::GREEN);
+    head.append(ansi::style(GREEN));
     head.append(ansi::BOLD);
     head.appendf("Ln %d", src >= 0 ? src + 1 : 1);
     head.append(ansi::RESET);
     head.append(" ");
-    head.append(ansi::MUTED);
+    head.append(ansi::style(MUTED));
     head.appendf("(%d/%d · %d%%)", self.cursor + 1, total, pct);
     head.append(ansi::RESET);
     fb.append(head.str_view());
@@ -475,7 +493,7 @@ fn void View.drawDocument(&self, DString* fb)
     if (pad > 0)
     {
         fb.spaces(pad);
-        fb.append(ansi::MUTED);
+        fb.append(ansi::style(MUTED));
         fb.append(hint);
         fb.append(ansi::RESET);
     }
@@ -493,10 +511,10 @@ fn void View.drawDocument(&self, DString* fb)
         {
             bool lit = self.lines.lines[i].block == block;
             line.clear();
-            if (lit) fb.append(ansi::FOCUS);
+            if (lit) fb.append(ansi::style(FOCUS));
             if (i == self.cursor)
             {
-                fb.append(ansi::CURSOR);
+                fb.append(ansi::style(CURSOR));
                 fb.append("▌");
                 fb.append(ansi::RESET);
             }
@@ -506,7 +524,7 @@ fn void View.drawDocument(&self, DString* fb)
             }
             if (query.len > 0 && (self.mode == SEARCH || self.matches.len() > 0))
             {
-                text::mark(&line, self.lines.lines[i].text, query, i == current);
+                text::mark(&line, self.lines.lines[i].text, query, ansi::style(i == current ? CURRENT : FOUND));
             }
             else
             {
@@ -527,7 +545,7 @@ fn void View.drawDocument(&self, DString* fb)
         else
         {
             fb.append(" ");
-            fb.append(ansi::TILDE);
+            fb.append(ansi::style(FAINT));
             fb.append("~");
             fb.append(ansi::RESET);
             fb.append("\e[K");
@@ -553,16 +571,16 @@ fn void View.drawStatus(&self, DString* fb)
             text = self.query.str_view();
             help = " (Enter: Search, Esc: Cancel)";
         case self.matches.len() > 0:
-            fb.append(ansi::STATUS);
+            fb.append(ansi::style(STATUS));
             fb.appendf(" Match %d of %d ", self.match + 1, self.matches.len());
             fb.append(ansi::RESET);
-            fb.append(ansi::MUTED);
+            fb.append(ansi::style(MUTED));
             fb.append(" (n: Next, N: Prev, Esc: Clear)");
             fb.append(ansi::RESET);
             fb.append("\e[K");
             return;
         case self.status.len() > 0:
-            fb.append(ansi::STATUS);
+            fb.append(ansi::style(STATUS));
             fb.append(" ");
             fb.append(self.status.str_view());
             fb.append(" ");
@@ -571,10 +589,10 @@ fn void View.drawStatus(&self, DString* fb)
             return;
         case self.focus && self.total() > 0:
             Block* b = &self.doc.blocks[self.lines.lines[self.cursor].block];
-            fb.append(ansi::STATUS);
+            fb.append(ansi::style(STATUS));
             fb.appendf(" Block L%d–%d ", b.start + 1, b.end + 1);
             fb.append(ansi::RESET);
-            fb.append(ansi::MUTED);
+            fb.append(ansi::style(MUTED));
             fb.append(" (h: Unhighlight, Esc: Clear)");
             fb.append(ansi::RESET);
             fb.append("\e[K");
@@ -582,15 +600,15 @@ fn void View.drawStatus(&self, DString* fb)
         default:
             return;
     }
-    fb.append(ansi::STATUS);
+    fb.append(ansi::style(STATUS));
     fb.append(label);
     fb.append(ansi::RESET);
-    fb.append(ansi::PATH);
+    fb.append(ansi::style(PATH));
     fb.append(" ");
     fb.append(text);
     fb.append(" ");
     fb.append(ansi::RESET);
-    fb.append(ansi::MUTED);
+    fb.append(ansi::style(MUTED));
     fb.append(help);
     fb.append(ansi::RESET);
     fb.append("\e[K");
@@ -607,6 +625,7 @@ fn void View.draw(&self)
         case OUTLINE: self.drawOutline(fb);
         case FILES: self.drawFiles(fb);
         case MENU: self.drawMenu(fb);
+        case THEME: self.drawThemes(fb);
         case EDITOR: self.drawEditor(fb);
         default: self.drawDocument(fb);
     }
@@ -631,26 +650,26 @@ fn void Tree.draw(&self, DString* fb, int rows)
         fb.append(active ? "  " : "    ");
         if (active)
         {
-            fb.append(ansi::ACTIVE);
+            fb.append(ansi::style(ACTIVE));
             fb.append("▶ ");
         }
         if (name == "..")
         {
             if (active)
             {
-                fb.append(ansi::ACTIVE);
-                fb.append(ansi::ORANGE);
+                fb.append(ansi::style(ACTIVE));
+                fb.append(ansi::style(ORANGE));
                 fb.append(ansi::BOLD);
                 fb.append("📁 ../ (Parent Directory)");
                 fb.append(ansi::RESET);
             }
             else
             {
-                fb.append(ansi::ORANGE);
+                fb.append(ansi::style(ORANGE));
                 fb.append(ansi::BOLD);
                 fb.append("📁 ../ ");
                 fb.append(ansi::RESET);
-                fb.append(ansi::MUTED);
+                fb.append(ansi::style(MUTED));
                 fb.append("(Parent Directory)");
                 fb.append(ansi::RESET);
             }
@@ -659,18 +678,18 @@ fn void Tree.draw(&self, DString* fb, int rows)
         {
             for (int d = 0; d < node.depth && d < 6; d++)
             {
-                fb.append(ansi::MUTED);
+                fb.append(ansi::style(MUTED));
                 fb.append("│   ");
                 fb.append(ansi::RESET);
             }
             if (node.dir)
             {
-                fb.append(ansi::ORANGE);
+                fb.append(ansi::style(ORANGE));
                 fb.append(ansi::BOLD);
                 fb.append(node.open ? "▾ " : "▸ ");
                 fb.append(ansi::RESET);
-                if (active) fb.append(ansi::SELECTED);
-                fb.append(ansi::CYAN);
+                if (active) fb.append(ansi::style(SELECTED));
+                fb.append(ansi::style(CYAN));
                 fb.append(ansi::BOLD);
                 fb.append(name);
                 fb.append("/");
@@ -678,24 +697,24 @@ fn void Tree.draw(&self, DString* fb, int rows)
             }
             else
             {
-                fb.append(ansi::MUTED);
+                fb.append(ansi::style(MUTED));
                 fb.append(node.last ? "└── " : "├── ");
                 fb.append(ansi::RESET);
                 if (active)
                 {
-                    fb.append(ansi::SELECTED);
+                    fb.append(ansi::style(SELECTED));
                     fb.append(ansi::BOLD);
                 }
                 else
                 {
-                    fb.append(ansi::TEXT);
+                    fb.append(ansi::style(TEXT));
                 }
                 fb.append(name);
                 fb.append(ansi::RESET);
                 if (node.current)
                 {
                     fb.append(" ");
-                    fb.append(ansi::GREEN);
+                    fb.append(ansi::style(GREEN));
                     fb.append("[Active]");
                     fb.append(ansi::RESET);
                 }

@@ -12,7 +12,8 @@ enum Mode
     OUTLINE,
     FILES,
     MENU,
-    EDITOR
+    EDITOR,
+    THEME
 }
 
 enum Act
@@ -59,7 +60,8 @@ enum Act
     LOWER,
     INDENT,
     OUTDENT,
-    REPLACE
+    REPLACE,
+    THEME
 }
 
 struct Bind
@@ -82,6 +84,7 @@ const Bind[] DOCUMENT = {
     { ' ', MENU },
     { 'h', MARK }, { 'H', MARK },
     { 'w', WRAP }, { 'W', WRAP },
+    { 'c', THEME }, { 'C', THEME },
     { '?', HELP }, { 31, HELP },
     { terminal::TAB, OUTLINE }, { 't', OUTLINE }, { 'T', OUTLINE },
     { 'o', FILES }, { 'O', FILES },
@@ -156,6 +159,7 @@ const Item[] ITEMS = {
     { ":", "Go to line", JUMP },
     { "h", "Highlight block", MARK },
     { "w", "Toggle wrap", WRAP },
+    { "c", "Theme", THEME },
     { "e", "Edit", EDIT },
     { "E", "Edit in $EDITOR", EXTERNAL },
     { "y", "Copy document", COPY },
@@ -283,6 +287,8 @@ fn void View.normal(&self, Act act)
             self.mode = HELP;
         case MENU:
             self.menu(ITEMS, NORMAL);
+        case THEME:
+            self.palette();
         case MARK:
             self.focus = !self.focus;
         case OUTLINE:
@@ -441,6 +447,9 @@ fn bool View.key(&self, int key)
             return self.choose(key);
         case EDITOR:
             self.type(key);
+        case THEME:
+            Act act = lookup(CHOICES, key);
+            self.preview(act == QUIT ? CLOSE : act != NONE ? act : lookup(MOTION, key));
         case FILES:
             self.browse(lookup(BROWSER, key));
         case OUTLINE:

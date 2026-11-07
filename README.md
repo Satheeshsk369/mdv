@@ -43,6 +43,7 @@ cat notes.md | mdv      # render stdin
 | `/` `n` `N` `Esc` | Search, next, previous, clear |
 | `Space` | Options menu: pick any action below with `↓` `↑` `Enter`, or press its key |
 | `h` | Highlight the block under the cursor |
+| `c` | Colour theme: move through the list to preview live, `Enter` keeps it (saved to `~/.config/mdv/theme`), `Esc` reverts |
 | `Tab` `t` | Outline |
 | `o` | File tree |
 | `e` | Edit in mdv: source and live preview side by side (wide) or stacked (narrow); opens at the highlighted block |

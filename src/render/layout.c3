@@ -9,22 +9,22 @@ import ansi;
 import tex;
 import text;
 
-struct Theme
+struct Banner
 {
     String icon;
     String label;
-    String color;
+    Role color;
 }
 
-const Theme[] THEMES = {
-    { "ℹ", "NOTE", ansi::CYAN },
-    { "💡", "TIP", ansi::GREEN },
-    { "⚠", "WARNING", ansi::ORANGE },
-    { "🔔", "IMPORTANT", ansi::PURPLE },
-    { "⛔", "CAUTION", ansi::PINK },
+const Banner[] BANNERS = {
+    { "ℹ", "NOTE", CYAN },
+    { "💡", "TIP", GREEN },
+    { "⚠", "WARNING", ORANGE },
+    { "🔔", "IMPORTANT", PURPLE },
+    { "⛔", "CAUTION", PINK },
 };
 
-$assert(THEMES.len == CalloutKind::len);
+$assert(BANNERS.len == CalloutKind::len);
 
 const String[] BULLETS = { "• ", "◦ ", "▪ " };
 
@@ -52,7 +52,7 @@ fn void Renderer.flush(&self, int src)
 
 fn void Renderer.rule(&self, int src)
 {
-    if (!self.config.plain) self.buf.append(ansi::MUTED);
+    if (!self.config.plain) self.buf.append(ansi::style(MUTED));
     self.buf.repeat("─", self.width > 20 ? self.width - 4 : 76);
     if (!self.config.plain) self.buf.append(ansi::RESET);
     self.flush(src);
@@ -88,12 +88,12 @@ fn void Renderer.frontmatter(&self, Block* b)
     bool plain = self.config.plain;
     foreach (i, e : b.entries)
     {
-        if (!plain) self.buf.append(ansi::CYAN +++ ansi::BOLD);
+        if (!plain) self.buf.append(ansi::style(NOTE));
         self.buf.append(e.key);
         if (!plain) self.buf.append(ansi::RESET);
         self.buf.append(":");
         self.buf.spaces(max(keys - (int)e.key.len, 0) + 1);
-        if (!plain) self.buf.append(ansi::TEXT);
+        if (!plain) self.buf.append(ansi::style(TEXT));
         self.buf.append(e.value);
         if (!plain) self.buf.append(ansi::RESET);
         self.flush(b.start + 1 + (int)i);
@@ -111,7 +111,7 @@ fn void Renderer.heading(&self, Block* b)
     }
     else
     {
-        self.buf.append(ansi::HEADINGS[math::clamp(b.level, 1, 6) - 1]);
+        self.buf.append(ansi::heading(math::clamp(b.level, 1, 6)));
     }
     spans(&self.buf, b.spans, self.config.plain);
     if (!self.config.plain) self.buf.append(ansi::RESET);
@@ -129,17 +129,17 @@ fn void Renderer.callout(&self, Block* b)
     }
     else
     {
-        Theme theme = THEMES[b.callout.kind];
-        self.buf.append(theme.color);
+        Banner banner = BANNERS[b.callout.kind];
+        self.buf.append(ansi::style(banner.color));
         self.buf.append(ansi::BOLD);
         self.buf.append("│ ");
-        self.buf.append(theme.icon);
+        self.buf.append(banner.icon);
         self.buf.append(" ");
-        self.buf.append(theme.label);
+        self.buf.append(banner.label);
         self.buf.append(ansi::RESET);
     }
     self.flush(b.start);
-    self.nested(b.children, self.config.plain ? "" : THEMES[b.callout.kind].color);
+    self.nested(b.children, self.config.plain ? "" : ansi::style(BANNERS[b.callout.kind].color));
 }
 
 fn void Renderer.nested(&self, Block[] children, String color)

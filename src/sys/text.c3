@@ -88,7 +88,7 @@ fn void escape(DString* fb, String line, usz* p)
     if (*p < line.len) fb.append_char(line[(*p)++]);
 }
 
-fn void mark(DString* fb, String line, String query, bool current)
+fn void mark(DString* fb, String line, String query, String color)
 {
     usz p = 0;
     while (p < line.len)
@@ -100,7 +100,7 @@ fn void mark(DString* fb, String line, String query, bool current)
         }
         if (p + query.len <= line.len && same(line[p:query.len], query))
         {
-            fb.append(current ? "\e[48;2;166;226;46m\e[38;2;0;0;0m\e[1m" : "\e[48;2;253;151;31m\e[38;2;0;0;0m\e[1m");
+            fb.append(color);
             fb.append(line[p:query.len]);
             fb.append("\e[0m");
             p += query.len;

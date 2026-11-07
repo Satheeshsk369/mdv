@@ -4,6 +4,7 @@ bin=${MDV:-../../build/mdv}
 mode=${1:-check}
 out=${TMPDIR:-/tmp}/mdv-golden
 rm -rf "$out" && mkdir -p "$out"
+export XDG_CONFIG_HOME="$out/config"
 trap 'rm -rf "$out"; tmux kill-session -t mdvgolden 2>/dev/null' EXIT
 
 for f in *.md; do
@@ -52,6 +53,11 @@ if command -v tmux > /dev/null; then
   screen filesleft sample.md o Down Left
   screen help sample.md "?"
   screen menu sample.md Space
+  screen theme sample.md c
+  screen thememove sample.md c Down Down
+  screen themerevert sample.md c Down Down Escape
+  screen themelast sample.md c End
+  screen themekeep sample.md c Down Enter "!rm -rf $XDG_CONFIG_HOME"
   screen menuopen sample.md Space Down Enter
   screen menudirect sample.md Space "?"
   screen menuquit sample.md Space q "!echo"

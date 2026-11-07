@@ -55,7 +55,7 @@ fn void highlight(DString* b, String line, String lang, bool plain)
     bool isHashCommentLang = lang == "python" || lang == "py" || lang == "bash" || lang == "sh" || lang == "yaml" || lang == "yml" || lang == "toml" || lang == "r";
     if ((isHashCommentLang && trimmed.starts_with("#")) || trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("* ") || trimmed.starts_with("<!--"))
     {
-        b.append(ansi::MUTED);
+        b.append(ansi::style(MUTED));
         b.append(ansi::ITALIC);
         b.append_string(line);
         b.append(ansi::RESET);
@@ -71,7 +71,7 @@ fn void highlight(DString* b, String line, String lang, bool plain)
 
         if ((c == '/' && i + 1 < len && line[i + 1] == '/') || (isHashCommentLang && c == '#'))
         {
-            b.append(ansi::MUTED);
+            b.append(ansi::style(MUTED));
             b.append(ansi::ITALIC);
             b.append_string(line[i..]);
             b.append(ansi::RESET);
@@ -97,7 +97,7 @@ fn void highlight(DString* b, String line, String lang, bool plain)
                 }
                 i++;
             }
-            b.append(ansi::YELLOW);
+            b.append(ansi::style(YELLOW));
             b.append_string(line[sStart : i - sStart]);
             b.append(ansi::RESET);
             continue;
@@ -110,7 +110,7 @@ fn void highlight(DString* b, String line, String lang, bool plain)
             {
                 i++;
             }
-            b.append(ansi::PURPLE);
+            b.append(ansi::style(PURPLE));
             b.append_string(line[nStart : i - nStart]);
             b.append(ansi::RESET);
             continue;
@@ -127,32 +127,32 @@ fn void highlight(DString* b, String line, String lang, bool plain)
 
             if (keyword(id))
             {
-                b.append(ansi::PINK);
+                b.append(ansi::style(PINK));
                 b.append(ansi::BOLD);
                 b.append_string(id);
                 b.append(ansi::RESET);
             }
             else if (literal(id))
             {
-                b.append(ansi::CYAN);
+                b.append(ansi::style(CYAN));
                 b.append_string(id);
                 b.append(ansi::RESET);
             }
             else if (i < len && line[i] == '(')
             {
-                b.append(ansi::GREEN);
+                b.append(ansi::style(GREEN));
                 b.append_string(id);
                 b.append(ansi::RESET);
             }
             else if (id.len > 0 && (id[0] == '@' || id[0] == '$'))
             {
-                b.append(ansi::ORANGE);
+                b.append(ansi::style(ORANGE));
                 b.append_string(id);
                 b.append(ansi::RESET);
             }
             else
             {
-                b.append(ansi::TEXT);
+                b.append(ansi::style(TEXT));
                 b.append_string(id);
                 b.append(ansi::RESET);
             }
@@ -161,7 +161,7 @@ fn void highlight(DString* b, String line, String lang, bool plain)
 
         if (c == '=' || c == '+' || c == '-' || c == '*' || c == '/' || c == '<' || c == '>' || c == '!' || c == '&' || c == '|' || c == '^' || c == '~')
         {
-            b.append(ansi::PINK);
+            b.append(ansi::style(PINK));
             b.append_char(c);
             b.append(ansi::RESET);
             i++;

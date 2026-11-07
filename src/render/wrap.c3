@@ -6,14 +6,14 @@ import ast;
 import ansi;
 import text;
 
-const String[] STYLES = { "", ansi::BOLD, ansi::ITALIC, ansi::STRIKE, ansi::INLINE, "", "", ansi::CYAN, ansi::CYAN, "" };
+const Role[] STYLES = { NONE, STRONG, EMPHASIS, STRIKEOUT, INLINE, NONE, NONE, CYAN, CYAN, NONE };
 
 $assert(STYLES.len == SpanKind::len);
 
 struct Look
 {
     String prefix;
-    String open;
+    Role open;
     String left;
     String right;
     String close;
@@ -22,16 +22,16 @@ struct Look
 }
 
 const Look[] LOOKS = {
-    { "", "", "", "", "", false, false },
-    { "", ansi::BOLD, "", "", ansi::RESET, true, false },
-    { "", ansi::ITALIC, "", "", ansi::RESET, true, false },
-    { "", ansi::STRIKE +++ ansi::MUTED, "", "", ansi::RESET, true, false },
-    { "", ansi::INLINE +++ " ", "", "", " " +++ ansi::RESET, false, false },
-    { "", "", "", "", "", false, false },
-    { "", "", "", "", "", false, false },
-    { "", ansi::CYAN +++ ansi::UNDERLINE, "", "", ansi::RESET, true, true },
-    { "", ansi::CYAN +++ ansi::BOLD, "[", "]", ansi::RESET, false, false },
-    { "🖼  ", ansi::CYAN +++ ansi::BOLD, "[", "]", ansi::RESET, false, true },
+    { "", NONE, "", "", "", false, false },
+    { "", STRONG, "", "", ansi::RESET, true, false },
+    { "", EMPHASIS, "", "", ansi::RESET, true, false },
+    { "", STRUCK, "", "", ansi::RESET, true, false },
+    { "", CODE, "", "", " " +++ ansi::RESET, false, false },
+    { "", NONE, "", "", "", false, false },
+    { "", NONE, "", "", "", false, false },
+    { "", LINK, "", "", ansi::RESET, true, true },
+    { "", NOTE, "[", "]", ansi::RESET, false, false },
+    { "🖼  ", NOTE, "[", "]", ansi::RESET, false, true },
 };
 
 $assert(LOOKS.len == SpanKind::len);
@@ -47,7 +47,7 @@ fn void span(DString* b, Span s, bool plain)
         b.append(s.url);
         b.append("\e\\");
     }
-    if (!plain) b.append(look.open);
+    if (!plain) b.append(ansi::style(look.open));
     b.append(look.left);
     if (look.nested && s.children.len > 0)
     {
@@ -62,7 +62,7 @@ fn void span(DString* b, Span s, bool plain)
     if (link) b.append("\e]8;;\e\\");
     if (!look.url || s.url.len == 0 || s.url == s.text) return;
     b.append_char(' ');
-    if (!plain) b.append(ansi::MUTED);
+    if (!plain) b.append(ansi::style(MUTED));
     b.append_char('(');
     b.append(s.url);
     b.append_char(')');
@@ -133,7 +133,7 @@ fn void Wrap.url(&self, String url)
         self.line.append_char(' ');
         self.width++;
     }
-    if (!self.plain) self.line.append(ansi::MUTED);
+    if (!self.plain) self.line.append(ansi::style(MUTED));
     self.line.append_char('(');
     self.line.append(url);
     self.line.append_char(')');
@@ -151,7 +151,7 @@ fn void wrap(List{Piece}* out, ast::Arena* arena, Span[] list, int max, String f
     w.line.append(first);
     foreach (s : list)
     {
-        String style = plain ? "" : STYLES[s.kind];
+        String style = plain ? "" : ansi::style(STYLES[s.kind]);
         String t = s.text;
         sz p;
         while (p < t.len)

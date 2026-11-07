@@ -151,7 +151,7 @@ fn void Renderer.row(&self, Cell[] cells, Alignment[] aligns, int[] widths, bool
                 int pad = max(w - piece.width, 0);
                 Alignment align = c < aligns.len ? aligns[c] : LEFT;
                 int before = align == CENTER ? pad / 2 : align == RIGHT ? pad : 0;
-                if (bold) self.buf.append(ansi::CYAN +++ ansi::BOLD);
+                if (bold) self.buf.append(ansi::style(NOTE));
                 self.buf.spaces(before);
                 self.buf.append(piece.text);
                 self.buf.spaces(pad - before);
@@ -203,7 +203,7 @@ fn void Renderer.table(&self, ast::Table* t, int src)
         }
     }
     self.row(cells[:cols], t.aligns, widths[:cols], true, src);
-    if (!plain) self.buf.append(ansi::MUTED);
+    if (!plain) self.buf.append(ansi::style(MUTED));
     for (int c = 0; c < cols; c++)
     {
         self.buf.repeat("─", widths[c]);

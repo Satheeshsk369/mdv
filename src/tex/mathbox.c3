@@ -444,7 +444,7 @@ fn MathBox colorize(ast::Arena* arena, MathBox inner, String color)
         mb.clear();
         mb.append(color);
         mb.append_string(inner.rows[r]);
-        mb.append("\x1b[0m\x1b[38;2;255;216;102m\x1b[1m");
+        mb.append("\x1b[0m");
         rBuf[r] = mb.keep(arena);
     }
 

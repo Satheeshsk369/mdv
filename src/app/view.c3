@@ -31,6 +31,9 @@ struct View
     int headingTop;
     int choice;
     int choiceTop;
+    int theme;
+    int themeTop;
+    int original;
     bool focus;
     Item[] items;
     Mode back;
@@ -236,9 +239,11 @@ fn bool run(String file, int line, bool noWrap, bool picker)
     terminal::enter();
     defer
     {
+        if (view.theme != 0) terminal::out("\e]111\e\\\e]110\e\\");
         terminal::leave();
         terminal::cooked();
     }
+    view.restore();
     if (picker) view.files();
     view.draw();
     view.stamp = terminal::stamp(view.path.zstr_view());
