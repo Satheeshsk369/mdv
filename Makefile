@@ -1,4 +1,4 @@
-.PHONY: build test check golden install web
+.PHONY: build test check golden install
 
 build:
 	c3c build mdv
@@ -14,7 +14,3 @@ golden: build
 
 install: build
 	install -D -m 755 build/mdv $(HOME)/.local/bin/mdv
-
-web:
-	c3c build web
-	web/build.sh

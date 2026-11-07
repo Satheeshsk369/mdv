@@ -17,16 +17,6 @@
       "sources": [
         "src/**"
       ]
-    },
-    "web": {
-      "type": "executable",
-      "target": "wasm32",
-      "no-entry": true,
-      "cpu": "generic",
-      "opt": "O3",
-      "sources": [
-        "src/**"
-      ]
     }
   },
   "test-sources": [
