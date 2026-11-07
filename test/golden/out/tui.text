@@ -9,11 +9,11 @@
 
  [1m[38;2;102;217;239mHeading six[0m
 
- A paragraph with [1mbold[0m , [3mitalic[0m , [1m*both[0m *, [9mstruck[0m , [38;2;102;217;239m[48;2;39;40;34mcode[39m[49m , a [38;2;102;217;239mlink[39m [38;2;117;113;94m(https://example.com)[39m , an image
- , a footnote [38;2;102;217;239m1[39m , © — ∞ entities, snake_case_words and a very long sentence that keeps going so
- that wrapping at forty columns has to break it into several lines.
+ A paragraph with [1mbold[0m, [3mitalic[0m, [1m*both[0m*, [9mstruck[0m, [38;2;102;217;239m[48;2;39;40;34mcode[39m[49m, a [38;2;102;217;239mlink[39m [38;2;117;113;94m(https://example.com)[39m, an image, a
+ footnote[38;2;102;217;239m1[39m, © — ∞ entities, snake_case_words and a very long sentence that keeps going so that
+ wrapping at forty columns has to break it into several lines.
 
-   [1] The footnote body with [3memphasis[0m .
+   [1] The footnote body with [3memphasis[0m.
 
  1. First
  2. Second with a longer line that needs to wrap around the edge of a narrow terminal

@@ -27,9 +27,16 @@ fn int Page.count(&self) => (int)self.lines.len;
 
 fn int Page.find(&self, int src)
 {
-    if (src < 0) return 0;
-    foreach (i, line : self.lines) if (line.src >= src) return (int)i;
-    return max(self.count() - 1, 0);
+    int lo;
+    int hi = self.count();
+    while (lo < hi)
+    {
+        int mid = (lo + hi) / 2;
+        bool before = self.lines[mid].src < src;
+        lo = before ? mid + 1 : lo;
+        hi = before ? hi : mid;
+    }
+    return min(lo, max(self.count() - 1, 0));
 }
 
 fn void Page.free(&self)

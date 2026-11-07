@@ -97,7 +97,7 @@ fn int level(String t)
 {
     int h;
     while (h < t.len && t[h] == '#') h++;
-    return h >= 1 && h <= 6 && h < t.len && t[h] == ' ' ? h : 0;
+    return h >= 1 && h <= 6 && h < t.len && (t[h] == ' ' || t[h] == '\t') ? h : 0;
 }
 
 fn bool headingPrefix(String s)

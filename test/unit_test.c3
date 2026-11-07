@@ -319,11 +319,50 @@ fn void testLogicArenaBlocks() @test
 
 fn void test_block_start_lines_become_paragraphs() @test
 {
-    foreach (String input : { ">foo", "#\tx", "\\begin{cases} a \\end{cases}" })
+    foreach (String input : { ">foo", "\\begin{cases} a \\end{cases}" })
     {
         Document doc = parser::parse(input);
         defer doc.free();
         test::eq(doc.blocks.len, 1);
         test::eq(doc.blocks[0].kind, BlockKind.PARAGRAPH);
     }
+}
+
+fn void test_compact_scripts_and_spacing() @test
+{
+    ast::Arena arena;
+    arena.init(16384);
+    defer arena.free();
+    MathBox frac = tex::latex(&arena, "\\frac{\\hbar^2 k^2}{2m L^2}");
+    test::eq(frac.height, 3);
+    test::eq(frac.rows[0].trim(), "ℏ² k²");
+    test::eq(frac.rows[2].trim(), "2m L²");
+}
+
+fn void test_no_space_before_punctuation() @test
+{
+    Document doc = parser::parse("Welcome to **mdv**! See $x^2$.");
+    defer doc.free();
+    render::Page page = render::layout(&doc, { .width = 80, .plain = true });
+    defer page.free();
+    test::eq(page.lines[0].text, "Welcome to mdv! See x².");
+}
+
+fn void test_heading_after_tab() @test
+{
+    Document doc = parser::parse("#\tTitle");
+    defer doc.free();
+    test::eq(doc.blocks[0].kind, BlockKind.HEADING);
+    test::eq(doc.blocks[0].level, 1);
+}
+
+fn void test_scripts_raise_together() @test
+{
+    ast::Arena arena;
+    arena.init(16384);
+    defer arena.free();
+    MathBox mixed = tex::latex(&arena, "e^x x^{n - 1}");
+    test::eq(mixed.height, 2);
+    MathBox simple = tex::latex(&arena, "e^x x^2");
+    test::eq(simple.height, 1);
 }

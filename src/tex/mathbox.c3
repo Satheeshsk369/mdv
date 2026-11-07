@@ -344,23 +344,24 @@ fn MathBox limits(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup)
     return column(arena, { present(sup), op, present(sub) }, max(op.width, sub.width, sup.width), supH + op.baseline);
 }
 
-fn MathBox scripts(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
+fn bool flat(MathBox base, MathBox sup, MathBox sub)
+{
+    if (base.height != 1 || sup.height > 1 || sub.height > 1) return false;
+    return (sup.width == 0 || SUPER.fits(sup.rows[0])) && (sub.width == 0 || SUB.fits(sub.rows[0]));
+}
+
+fn MathBox scripts(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub, bool raise = false)
 {
     if (sup.width == 0 && sub.width == 0) return base;
-
-    if (sup.width == 0 && base.height == 1 && sub.height <= 1)
+    if (!raise && flat(base, sup, sub))
     {
-        String subTxt = (sub.width > 0) ? sub.rows[0] : "";
-        String uSub = (sub.width > 0) ? SUB.apply(arena, subTxt) : "";
-        if (uSub.len > 0)
-        {
-            DString mb;
-            mb.init(mem, 128);
-            defer mb.free();
-            mb.append_string(base.rows[0]);
-            mb.append_string(uSub);
-            return atom(arena, mb.keep(arena));
-        }
+        DString mb;
+        mb.init(mem, 128);
+        defer mb.free();
+        mb.append(base.rows[0]);
+        if (sub.width > 0) mb.append(SUB.apply(arena, sub.rows[0]));
+        if (sup.width > 0) mb.append(SUPER.apply(arena, sup.rows[0]));
+        return atom(arena, mb.str_view());
     }
 
     int scriptW = sup.width > sub.width ? sup.width : sub.width;

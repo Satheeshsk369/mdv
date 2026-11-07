@@ -28,6 +28,12 @@ fn String Script.map(&self, char c)
     return "";
 }
 
+fn bool Script.fits(&self, String s)
+{
+    foreach (c : s) if (!self.from.contains_char(c)) return false;
+    return s.len > 0;
+}
+
 fn String Script.apply(&self, ast::Arena* arena, String s)
 {
     if (s.len == 0) return "";

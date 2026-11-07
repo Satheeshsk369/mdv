@@ -1,8 +1,8 @@
 # Math coverage
 
-Inline: a   b   c   d   e    f g , ½ (a+1)/b ³√(x+1) , pmod 7 , xᵅ→ yᵦ∞ z^q w_y , x² , aᵢⱼ , xⁿ⁺¹ₖ , f′(x) , f″ , a/b , √x , ³√x
-, αβΓ , ℝℤℕ , ℒ , 𝔤 , v , v⃗ , x̂ , z̄ , ẋ , ẍ , ñ , AB̄ , ū , a (mod n) , a mod n , if x , rank A , x ≤ y ≠ z ∈ S ⊆ T , not∈ , → ⇒ ⟺
-↦ , ∑ᵢ₌₁ⁿ i , ∫₀¹ f , limₙ → ∞ , costs $5 and $10.
+Inline: a   b   c   d   e    f g, ½ (a+1)/b ³√(x+1), pmod 7, xᵅ→ yᵦ∞ z^q w_y, x², aᵢⱼ, xⁿ⁺¹ₖ, f′(x), f″, a/b, √x, ³√x, αβΓ, ℝℤℕ,
+ℒ, 𝔤, v, v⃗, x̂, z̄, ẋ, ẍ, ñ, AB̄, ū, a (mod n), a mod n, if x, rank A, x ≤ y ≠ z ∈ S ⊆ T, not∈, → ⇒ ⟺ ↦, ∑ᵢ₌₁ⁿ i, ∫₀¹ f, limₙ → ∞,
+costs $5 and $10.
 
 
 ## Fractions and roots
@@ -16,10 +16,10 @@ Inline: a   b   c   d   e    f g , ½ (a+1)/b ³√(x+1) , pmod 7 , 
 
 
 
-      ╭───────   n  ╭───
-     ╱  2    2      ╱  a 
-    √  x  + y  +   ╱  ───
-                  √    b 
+                n  ╭───
+     ╭───────      ╱  a 
+    √ x² + y² +   ╱  ───
+                 √    b 
 
 
 
@@ -31,50 +31,49 @@ Inline: a   b   c   d   e    f g , ½ (a+1)/b ³√(x+1) , pmod 7 , 
 ## Big operators
 
 
-      n    m                                                
-     ───  ───  ───                                          
-     \    ┬ ┬  ┬ ┬  ╷ ╷  ╭─╮  ╷ ╷  ╷ ╷  ╷ ╷  ╷ ╷  ╷ ╷  ╭─╮  
-      >   │ │  │ │  │ │  │ │  │ │  │ │  │ │  │ │  │ │  │ │ x
-     /    │ │  │ │  ╰─╯  ╵ ╵  ╰─╯  ╰─╯  ╰─╯  ╰─╯  ╰─╯  ╵ ╵  
-     ───  ┴ ┴  ┴ ┴ a ∈ A  b    i    i    i    i    i    i   
-    k = 0i = 1  j                                           
+      n     m                                                          
+     ───   ───   ───                                                   
+     \     ┬ ┬   ┬ ┬   ╷ ╷   ╭─╮   ╷ ╷   ╷ ╷   ╷ ╷   ╷ ╷   ╷ ╷   ╭─╮   
+      >    │ │   │ │   │ │   │ │   │ │   │ │   │ │   │ │   │ │   │ │  x
+     /     │ │   │ │   ╰─╯   ╵ ╵   ╰─╯   ╰─╯   ╰─╯   ╰─╯   ╰─╯   ╵ ╵   
+     ───   ┴ ┴   ┴ ┴  a ∈ A   b     i     i     i     i     i     i    
+    k = 0 i = 1   j                                                    
 
 
 
-       b                              
-     ⌠   ⌠⌠   ⌠⌠⌠   ⌠   ⌠⌠   ⌠⌠⌠      
-     │   ││   │││   │   ││   │││  f dx
-     ⌡   ⌡⌡   ⌡⌡⌡   ⌡   ⌡⌡   ⌡⌡⌡      
-       a    D     V   C    S     V    
+       b                                      
+     ⌠    ⌠⌠    ⌠⌠⌠    ⌠    ⌠⌠    ⌠⌠⌠         
+     │    ││    │││    │    ││    │││   f   dx
+     ⌡    ⌡⌡    ⌡⌡⌡    ⌡    ⌡⌡    ⌡⌡⌡         
+       a     D      V    C     S      V       
 
 
 
-     lim lim inflim supmaxminsupinf * argmax arg maxarg minf
-    x → 0   n      n    i  j  x  y          θ   x      y    
+     lim  lim inf lim sup max min sup inf  * argmax  arg max arg min f
+    x → 0    n       n     i   j   x   y           θ    x       y     
 
 
 
 ## Decorations
 
 
-      n                
-    ⏞⏞⏞⏞⏞     def ?    
-    a + bc + d =  = arg
-         ⏟⏟⏟⏟⏟       x 
-           m           
+      n                    
+    ⏞⏞⏞⏞⏞       def  ?     
+    a + b c + d  =   =  arg
+          ⏟⏟⏟⏟⏟          x 
+            m              
 
 
 
-      f     h     iso  ─→←─
-    ─────→←─────←─────→ABCD
-            g              
+      f     h     iso  ─→ ←─
+    ─────→←─────←─────→AB CD
+            g               
 
 
 
-       ┌─────────┐    
-       │       2 │    
-    x̸y̸z̸│ E = mc  │a(1)
-       └─────────┘─   
+          ┌─────────┐      
+    x̸ y̸ z̸ │ E = mc² │ a (1)
+          └─────────┘ ─    
 
 
 
@@ -82,55 +81,53 @@ Inline: a   b   c   d   e    f g , ½ (a+1)/b ³√(x+1) , pmod 7 , 
 
 
 
-              ─
-    a⃗b̂c̄ḋëf⃛g⃜h̃íj̀k
+                        ─
+    a⃗ b̂ c̄ ḋ ë f⃛ g⃜ h̃ í j̀ k
 
 
 
-    a    b        c d  e fg
+    a      b          c   d    e   f g
 
 
 
-       ───          
-       \            
-        >    P(i, j)
-       /            
-       ───          
-    0 < i < m       
-    0 < j < n       
+       ───           
+       \             
+        >     P(i, j)
+       /             
+       ───           
+    0 < i < m        
+    0 < j < n        
 
 
 
-    𝔸ℂ𝟘𝒜ℬℋ𝔄𝔷dxyzβγ
+    𝔸 ℂ 𝟘 𝒜 ℬ ℋ 𝔄 𝔷 d x y z β γ
 
 
 
 ## Delimiters
 
 
-    ⎛  a  ⎞⎡  c  ⎤\  e  \
-    ⎜ ─── ⎟⎢ ─── ⎥\ ─── \
-    ⎝  b  ⎠⎣  d  ⎦\  f  \
+    ⎛  a  ⎞ ⎡  c  ⎤ \  e  \
+    ⎜ ─── ⎟ ⎢ ─── ⎥ \ ─── \
+    ⎝  b  ⎠ ⎣  d  ⎦ \  f  \
 
 
 
 ## Environments
 
 
-    1  2⎛ a ⎞        │ 1  0 │              
-    3  4⎝ b ⎠[ x  y ]│ 0  1 │V p V{ q }s  t
+    1  2 ⎛ a ⎞          │ 1  0 │                 
+    3  4 ⎝ b ⎠ [ x  y ] │ 0  1 │ V p V { q } s  t
 
 
 
-          ⎧ x    x ≥ 0    a ⎫
-    |x| = ⎩ -x   x < 0    b ⎭
+          ⎧ x    x ≥ 0      a ⎫
+    |x| = ⎩ -x   x < 0      b ⎭
 
 
 
-                  2   
-    f(x) = (x + 1)    
-            2         
-         = x  + 2x + 1
+    f(x) = (x + 1)²   
+         = x² + 2x + 1
 
 
 
@@ -153,18 +150,17 @@ Inline: a   b   c   d   e    f g , ½ (a+1)/b ³√(x+1) , pmod 7 , 
 
 
 
-    12u
-    34v
+    12 u
+    34 v
 
 
 
 ## Scripts
 
 
-                    2                                 
-                   x                                  
-      3          -────                                
-     2             2            n    (n)       T    2 
-    x   + y   + e      + (a + b)  + f   (x) + A  + ∇ ϕ
-           iⱼ                                         
+                   x²                                  
+                 -────                                 
+     2³            2            n    (n)       T    2  
+    x   + y   + e      + (a + b)  + f   (x) + A  + ∇  ϕ
+           iⱼ                                          
 

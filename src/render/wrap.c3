@@ -91,6 +91,7 @@ struct Wrap
     int max;
     bool plain;
     bool cell;
+    bool gap;
 }
 
 fn void Wrap.flush(&self)
@@ -103,15 +104,17 @@ fn void Wrap.flush(&self)
 
 fn void Wrap.word(&self, String word, int w, String style)
 {
-    if (self.width + 1 + w > self.max && self.width > self.indent)
+    int space = self.gap ? 1 : 0;
+    if (self.width + space + w > self.max && self.width > self.indent)
     {
         self.flush();
     }
-    else if (self.width > self.indent)
+    else if (self.width > self.indent && self.gap)
     {
         self.line.append_char(' ');
         self.width++;
     }
+    self.gap = false;
     self.line.append(style);
     self.line.append(word);
     if (style.len) self.line.append(ansi::RESET);
@@ -153,14 +156,20 @@ fn void wrap(List{Piece}* out, ast::Arena* arena, Span[] list, int max, String f
         sz p;
         while (p < t.len)
         {
+            sz from = p;
             while (p < t.len && blank(t[p])) p++;
+            if (p > from) w.gap = true;
             if (p >= t.len) break;
             sz start = p;
             while (p < t.len && !blank(t[p]) && t[p] != '\n') p++;
             String word = t[start : p - start];
             w.word(word, text::width(word), style);
         }
-        if (s.kind == SpanKind.LINK && s.url.len > 0) w.url(s.url);
+        if (s.kind == SpanKind.LINK && s.url.len > 0)
+        {
+            w.url(s.url);
+            w.gap = false;
+        }
     }
     if (w.line.len() > 0 || (cell && out.len() == 0)) out.push({ arena.copy(w.line.str_view()), w.width });
 }

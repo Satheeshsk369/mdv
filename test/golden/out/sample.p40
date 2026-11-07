@@ -1,6 +1,6 @@
 # C3 Markdown & LaTeX Engine Showcase
 
-Welcome to mdv ! This document tests
+Welcome to mdv! This document tests
 and demonstrates the full suite of
 in-editor Markdown and LaTeX rendering
 capabilities.
@@ -8,11 +8,11 @@ capabilities.
 ────────────────────────────────────
 
 
-              ∞          
-            ⌠   x n - 1  
-    Γ(x) =  │  e x     dt
-            ⌡            
-              0          
+              ∞             
+            ⌠    x  n - 1   
+    Γ(x) =  │   e  x      dt
+            ⌡               
+              0             
 
 
 
@@ -44,53 +44,52 @@ capabilities.
   sin(x)/x = 1 and d/dx(eˣ) = eˣ
 
 
-           ∞      
-          ───   n 
-     x    \    x  
-    e  =   >  ────
-          /    n! 
-          ───     
-         n = 0    
+           ∞       
+          ───      
+          \     xⁿ 
+    eˣ =   >   ────
+          /     n! 
+          ───      
+         n = 0     
 
 
 
-       ∞    2        
-     ⌠    -x       ╭─
-     │   e   dx = √ π
-     ⌡               
-       -∞            
+       ∞               
+     ⌠     -x²       ╭─
+     │    e    dx = √ π
+     ⌡                 
+       -∞              
 
 
 
-                ╭──────── 
-               ╱  2       
-         -b ± √  b  - 4ac 
-    x = ──────────────────
-                2a        
+               ╭──────── 
+         -b ± √ b² - 4ac 
+    x = ─────────────────
+               2a        
 
 
 
-          sin(x)     
-     lim ──────── = 1
-    x → 0   x        
+           sin(x)     
+     lim  ──────── = 1
+    x → 0    x        
 
 
 
-                 n               
-                ───              
-           n    \   ⎛ n ⎞ n - k k
-    (x + y)  =   >  ⎝ k ⎠x     y 
-                /                
-                ───              
-               k = 0             
+                 n                  
+                ───                 
+           n    \    ⎛ n ⎞  n - k  k
+    (x + y)  =   >   ⎝ k ⎠ x      y 
+                /                   
+                ───                 
+               k = 0                
 
 
 
-                 ∞            
-               ⌠        -iωt  
-    ℱ{f(t)} =  │   f(t)e    dt
-               ⌡              
-                 -∞           
+                 ∞                 
+               ⌠          -i ω t   
+    ℱ{f(t)} =  │    f(t) e       dt
+               ⌡                   
+                 -∞                
 
 
 
@@ -109,9 +108,9 @@ capabilities.
 
 
 
-             ⎧ 1    if x > 0
-    sgn(x) = ⎨ 0    if x = 0
-             ⎩ -1   if x < 0
+             ⎧ 1    if  x > 0
+    sgn(x) = ⎨ 0    if  x = 0
+             ⎩ -1   if  x < 0
 
 
 
@@ -121,21 +120,20 @@ capabilities.
 
 
 
-           ⎧   2                
-           ⎪  x  - 1            
-    f(x) = ⎨ ────────   if x ≠ 1
-           ⎪  x - 1             
-           ⎩ 2          if x = 1
+           ⎧  x² - 1             
+           ⎪ ────────   if  x ≠ 1
+    f(x) = ⎨  x - 1              
+           ⎩ 2          if  x = 1
 
 
 
-              ∂B⃗          
-    ∇ × E⃗ = -────         
-              ∂t          
-    ∇ ⋅ B⃗ = 0             
-                       ∂E⃗ 
-    ∇ × B⃗ = μ₀J⃗ + μ₀ϵ₀────
-                       ∂t 
+              ∂ B⃗             
+    ∇ × E⃗ = -─────            
+              ∂ t             
+    ∇ ⋅ B⃗ = 0                 
+                          ∂ E⃗ 
+    ∇ × B⃗ = μ₀ J⃗ + μ₀ ϵ₀ ─────
+                          ∂ t 
 
 
 
@@ -146,15 +144,15 @@ capabilities.
 
 
 
-                       k    
-      total mass      ───   
-    ⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞    \     
-    a₁ + a₂ + ⋯+aₖ =   >  aᵢ
-                      /     
-                      ───   
-                     i = 1  
-                     ⏟⏟⏟⏟⏟⏟⏟
-                        M   
+                        k     
+      total mass       ───    
+    ⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞    \      
+    a₁ + a₂ + ⋯+ aₖ =   >   aᵢ
+                       /      
+                       ───    
+                      i = 1   
+                      ⏟⏟⏟⏟⏟⏟⏟⏟
+                         M    
 
 
 

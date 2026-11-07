@@ -769,72 +769,67 @@ fn MathBox group(Reader* p)
     return term(p, &atom);
 }
 
+fn bool joins(MathAtomKind kind) => kind == MathAtomKind.ORD || kind == MathAtomKind.CLOSE || kind == MathAtomKind.INNER || kind == MathAtomKind.OP;
+
+struct Piece
+{
+    MathBox base;
+    MathBox sup;
+    MathBox sub;
+    bool gap;
+}
+
 fn MathBox expression(Reader* p, bool stopAtAmp = false, bool stopAtBslash = false, bool stopAtRbracket = false)
 {
-    MathBox res = blank(p.arena);
+    List{Piece} pieces;
+    pieces.init(mem, 16);
+    defer pieces.free();
     MathAtomKind prevAtom = MathAtomKind.OPEN;
-
+    bool raise;
     while (!p.eof())
     {
         p.skipSpaces();
         if (p.eof()) break;
-
+        bool spaced = p.pos > 0 && p.src[p.pos - 1].is_space() && joins(prevAtom);
         char c = p.peek();
         if (c == '}') break;
         if (stopAtRbracket && c == ']') break;
         if (stopAtAmp && c == '&') break;
         if (stopAtBslash && c == '\\' && p.pos + 1 < (usz)p.src.len && p.src[p.pos + 1] == '\\') break;
-
         if (c == '\\')
         {
-            usz savePos = p.pos;
+            usz save = p.pos;
             p.get();
-            usz checkStart = p.pos;
-            while (!p.eof() && ((p.src[p.pos] >= 'a' && p.src[p.pos] <= 'z') || (p.src[p.pos] >= 'A' && p.src[p.pos] <= 'Z'))) p.pos++;
-            String checkCmd = p.src[checkStart : p.pos - checkStart];
-            p.pos = savePos;
-
-            if (checkCmd == "right" || checkCmd == "end")
-            {
-                break;
-            }
+            String name = p.name();
+            p.pos = save;
+            if (name == "right" || name == "end") break;
         }
-
-        MathBox next = term(p, &prevAtom);
-
-        MathBox sup = blank(p.arena);
-        MathBox sub = blank(p.arena);
-        bool hasScript = false;
-
+        Piece piece = { .base = term(p, &prevAtom), .sup = blank(p.arena), .sub = blank(p.arena) };
         while (true)
         {
+            usz mark = p.pos;
             p.skipSpaces();
-            if (p.peek() == '^')
+            char s = p.peek();
+            if (s != '^' && s != '_')
             {
-                p.get();
-                sup = group(p);
-                hasScript = true;
-            }
-            else if (p.peek() == '_')
-            {
-                p.get();
-                sub = group(p);
-                hasScript = true;
-            }
-            else
-            {
+                p.pos = mark;
                 break;
             }
+            p.get();
+            MathBox* slot = s == '^' ? &piece.sup : &piece.sub;
+            *slot = group(p);
         }
-
-        if (hasScript)
-        {
-            next = scripts(p.arena, next, sup, sub);
-        }
-
-        res = beside(p.arena, res, next, 0);
+        bool scripted = piece.sup.width > 0 || piece.sub.width > 0;
+        raise = raise || (scripted && !flat(piece.base, piece.sup, piece.sub));
+        piece.gap = spaced && joins(prevAtom);
+        pieces.push(piece);
     }
-
+    MathBox res = blank(p.arena);
+    foreach (piece : pieces)
+    {
+        MathBox next = scripts(p.arena, piece.base, piece.sup, piece.sub, raise);
+        res = beside(p.arena, res, next, piece.gap && res.width > 0 ? 1 : 0);
+    }
     return res;
 }
 

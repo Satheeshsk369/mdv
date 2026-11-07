@@ -21,17 +21,17 @@ date:   2026-11-07
 
 ###### Heading six
 
-A paragraph with bold , italic , *both
-*, struck , code , a link
-(https://example.com) , an image , a
-footnote 1 , © — ∞ entities,
+A paragraph with bold, italic, *both*,
+struck, code, a link
+(https://example.com), an image, a
+footnote1, © — ∞ entities,
 snake_case_words and a very long
 sentence that keeps going so that
 wrapping at forty columns has to break
 it into several lines.
 
   [1] The footnote body with
-      emphasis .
+      emphasis.
 
 1. First
 2. Second with a longer line that
@@ -51,7 +51,7 @@ it into several lines.
 │ lines.
 
 | [!TIP]
-│ Callout body with bold .
+│ Callout body with bold.
 
 Left            Center            Right
 ────  ──────────────────────────  ────

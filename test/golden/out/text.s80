@@ -21,12 +21,12 @@
 
 [38;2;102;217;239m[1mHeading six[0m
 
-A paragraph with [1mbold[0m , [3mitalic[0m , [1m*both[0m *, [9mstruck[0m , [48;2;39;40;34m[38;2;102;217;239mcode[0m , a [38;2;102;217;239mlink[0m
-[38;2;117;113;94m(https://example.com)[0m , an image , a footnote [38;2;102;217;239m1[0m , © — ∞ entities,
+A paragraph with [1mbold[0m, [3mitalic[0m, [1m*both[0m*, [9mstruck[0m, [48;2;39;40;34m[38;2;102;217;239mcode[0m, a [38;2;102;217;239mlink[0m
+[38;2;117;113;94m(https://example.com)[0m, an image, a footnote[38;2;102;217;239m1[0m, © — ∞ entities,
 snake_case_words and a very long sentence that keeps going so that wrapping at
 forty columns has to break it into several lines.
 
-  [1] The footnote body with [3memphasis[0m .
+  [1] The footnote body with [3memphasis[0m.
 
 1. First
 2. Second with a longer line that needs to wrap around the edge of a narrow
@@ -44,7 +44,7 @@ forty columns has to break it into several lines.
 │ A quote that spans two source lines.
 
 [38;2;166;226;46m[1m│ 💡 TIP[0m
-│ Callout body with [1mbold[0m .
+│ Callout body with [1mbold[0m.
 
 [38;2;102;217;239m[1mLeft                      [0m  [38;2;102;217;239m[1m                  Center                   [0m  [38;2;102;217;239m[1mRight[0m
 [38;2;117;113;94m──────────────────────────  ───────────────────────────────────────────  ─────[0m
