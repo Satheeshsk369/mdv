@@ -4,6 +4,22 @@ A terminal Markdown viewer written in C3. It renders Markdown with colour, Unico
 
 This page is the whole manual. Read it in mdv's own web viewer at <https://satheeshsk369.github.io/mdv/>.
 
+## Install
+
+Linux (x64) and macOS (Apple silicon and Intel), into `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Satheeshsk369/mdv/main/scripts/install.sh | sh
+```
+
+Windows (x64), into `%LOCALAPPDATA%\mdv`, added to the user `PATH`:
+
+```powershell
+irm https://raw.githubusercontent.com/Satheeshsk369/mdv/main/scripts/install.ps1 | iex
+```
+
+Binaries for every release are on the [releases page](https://github.com/Satheeshsk369/mdv/releases).
+
 ## Build
 
 Needs [C3 0.8.5](https://github.com/c3lang/c3c/releases/tag/v0.8.5) on the `PATH`.
@@ -112,3 +128,4 @@ cat notes.md | mdv      # render stdin
 | `src/render` | `render`, `ansi` | `Renderer` turns blocks into a `Page` of lines; one `wrap` for paragraphs and table cells |
 | `src/tex` | `tex` | LaTeX to 2D boxes (`column`/`beside` combinators) and to inline Unicode (`Flat`) |
 | `src/sys` | `terminal`, `text` | Raw terminal, keys, display width |
+| `scripts` | | `install.sh` (Linux, macOS) and `install.ps1` (Windows) fetch the latest release |
