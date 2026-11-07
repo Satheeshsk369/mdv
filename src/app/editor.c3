@@ -67,6 +67,8 @@ struct Editor
     List{Change} future;
     List{usz} hits;
     List{usz} starts;
+    List{usz} begins;
+    bool indexed;
     Document doc;
     render::Page page;
 }
@@ -163,21 +165,45 @@ fn usz Editor.backward(&self, usz at)
     return at;
 }
 
-fn int Editor.line(&self, usz at)
+fn void Editor.index(&self)
 {
-    int n;
-    foreach (c : self.str()[:at]) if (c == '\n') n++;
-    return n;
+    if (self.indexed) return;
+    self.begins.clear();
+    self.begins.push(0);
+    foreach (usz i, c : self.str()) if (c == '\n') self.begins.push(i + 1);
+    self.indexed = true;
 }
 
-fn int Editor.count(&self) => self.line((usz)self.text.len()) + 1;
+fn int Editor.line(&self, usz at)
+{
+    self.index();
+    int low;
+    int high = (int)self.begins.len() - 1;
+    while (low < high)
+    {
+        int mid = (low + high + 1) / 2;
+        if (self.begins[mid] <= at)
+        {
+            low = mid;
+        }
+        else
+        {
+            high = mid - 1;
+        }
+    }
+    return low;
+}
+
+fn int Editor.count(&self)
+{
+    self.index();
+    return (int)self.begins.len();
+}
 
 fn usz Editor.offset(&self, int line)
 {
-    String s = self.str();
-    usz at;
-    for (int n = 0; n < line && at < s.len; at++) if (s[at] == '\n') n++;
-    return at;
+    self.index();
+    return line < self.begins.len() ? self.begins[line] : (usz)self.text.len();
 }
 
 fn int Editor.column(&self)
@@ -275,6 +301,7 @@ fn bool Editor.dirty(&self) => (int)self.history.len() != self.clean;
 
 fn void Editor.apply(&self, usz at, usz remove, String add)
 {
+    self.indexed = false;
     if (remove > 0) self.text.delete((sz)at, (sz)remove);
     if (add.len == 0) return;
     if (at >= (usz)self.text.len())
@@ -701,6 +728,7 @@ fn void Editor.open(&self, String content, int line)
 {
     self.text.clear();
     self.text.append(content);
+    self.indexed = false;
     forget(&self.history);
     forget(&self.future);
     self.at = self.offset(max(line, 0));
@@ -736,6 +764,7 @@ fn void Editor.init(&self)
     self.future.init(mem, 16);
     self.hits.init(mem, 16);
     self.starts.init(mem, 16);
+    self.begins.init(mem, 1024);
     self.wrap = true;
     self.preview = true;
 }
@@ -748,6 +777,7 @@ fn void Editor.free(&self)
     self.future.free();
     self.hits.free();
     self.starts.free();
+    self.begins.free();
     self.text.free();
     self.input.free();
     self.needle.free();
@@ -779,7 +809,7 @@ fn void View.edit(&self)
 fn void View.write(&self)
 {
     Editor* e = &self.editor;
-    if (catch io::file::save(self.name(), e.str()))
+    if (!terminal::store(self.name(), e.str()))
     {
         self.say("✘ Save failed");
         return;

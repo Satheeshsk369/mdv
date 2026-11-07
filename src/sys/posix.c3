@@ -1,4 +1,4 @@
-module terminal @feat(!WIN32);
+module terminal @feat(LINUX, DARWIN, BSD);
 
 import libc;
 

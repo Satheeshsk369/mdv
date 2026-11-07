@@ -2,12 +2,8 @@ module terminal;
 
 import std::io;
 import std::io::path;
-import std::io::file;
 import std::os::env;
-import std::time::clock;
 import std::encoding::base64;
-import std::core::string::conv;
-import libc;
 
 const int ESC = 27;
 const int TAB = 9;
@@ -72,13 +68,6 @@ bool alternate;
 int pointerColumn;
 int pointerRow;
 
-fn void out(String s)
-{
-    if (scripted) return;
-    io::stdout().write(s)!!;
-    io::stdout().flush()!!;
-}
-
 fn int env(String name, int fallback)
 {
     @pool()
@@ -94,10 +83,6 @@ fn String? variable(String name) => env::tget_var(name);
 fn int width() => scripted ? fixed[0] : max(size()[0], 0) ?: env("COLUMNS", 80);
 
 fn int height() => scripted ? fixed[1] : max(size()[1], 0) ?: env("LINES", 24);
-
-fn bool tty() => scripted || io::stdout().isatty();
-
-fn bool piped() => !scripted && !io::stdin().isatty();
 
 fn void enter()
 {
@@ -117,27 +102,6 @@ fn void mouse(bool on)
     out(on ? "\e[?1002h\e[?1006h" : "\e[?1002l\e[?1006l");
 }
 
-fn void onSignal(CInt sig)
-{
-    cooked();
-    leave();
-    libc::exit(128 + sig);
-}
-
-fn void edit(String path, int line)
-{
-    cooked();
-    leave();
-    @pool()
-    {
-        String editor = variable("EDITOR") ?? variable("VISUAL") ?? "nano";
-        if (editor.len == 0) editor = "nano";
-        libc::system(string::tformat("%s +%d \"%s\"", editor, line, path).zstr_tcopy());
-    };
-    rawMode();
-    enter();
-}
-
 fn void copy(String content)
 {
     @pool()
@@ -145,8 +109,6 @@ fn void copy(String content)
         out(string::tformat("\e]52;c;%s\e\\", base64::tencode(content)));
     };
 }
-
-fn ulong now() => scripted ? fake : (ulong)clock::now() / 1_000_000;
 
 bool scripted;
 String[] script;
@@ -228,10 +190,7 @@ fn void feed()
     due = fake + 300;
     if (token.starts_with("!"))
     {
-        @pool()
-        {
-            libc::system(token[1..].zstr_tcopy());
-        };
+        shell(token[1..]);
         due = fake + 500;
         return;
     }
@@ -257,34 +216,6 @@ fn String here()
 }
 
 fn void move(String dir) => (void)path::chdir(dir);
-
-fn Stamp stamp(String file)
-{
-    $if env::WIN32:
-        long? size = file::get_size(file);
-        Time? time = file::last_modified(file);
-        if (catch size) return {};
-        if (catch time) return {};
-        return { 1, size, (long)time, 0 };
-    $else
-        Stat st;
-        @pool()
-        {
-            if (libc::stat(file.zstr_tcopy(), &st) != 0) return {};
-        };
-        $switch:
-            $case env::DARWIN:
-                return { st.st_ino, st.st_size, st.st_mtimespec.s, (ulong)st.st_mtimespec.ns };
-            $case $defined(st.st_mtime_nsec):
-                return { st.st_ino, st.st_size, st.st_mtime, (ulong)st.st_mtime_nsec };
-            $case $defined(st.st_mtimensec):
-                return { st.st_ino, st.st_size, st.st_mtime, (ulong)st.st_mtimensec };
-            $default:
-                return { st.st_ino, st.st_size, st.st_mtime.s, (ulong)st.st_mtime.ns };
-        $endswitch
-    $endif
-}
-
 
 const char[] ARROWS = { 'A', 'B', 'C', 'D', 'H', 'F' };
 const int[] ARROWKEYS = { UP, DOWN, RIGHT, LEFT, HOME, END };

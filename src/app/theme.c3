@@ -51,7 +51,7 @@ fn void View.remember(&self)
     {
         String file = settings();
         (void)path::mkdir(file[:file.rindex_of_char('/') ?? 0], true);
-        if (catch io::file::save(file, ansi::title(self.theme))) self.say("✘ Could not save theme");
+        if (!terminal::store(file, ansi::title(self.theme))) self.say("✘ Could not save theme");
     };
 }
 

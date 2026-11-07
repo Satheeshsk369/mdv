@@ -53,7 +53,7 @@ fn void highlight(DString* b, String line, String lang, bool plain)
     String trimmed = line.trim();
 
     bool isHashCommentLang = lang == "python" || lang == "py" || lang == "bash" || lang == "sh" || lang == "yaml" || lang == "yml" || lang == "toml" || lang == "r";
-    if ((isHashCommentLang && trimmed.starts_with("#")) || trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("* ") || trimmed.starts_with("<!--"))
+    if ((isHashCommentLang && trimmed.starts_with("#")) || (!isHashCommentLang && trimmed.starts_with("//")) || trimmed.starts_with("/*") || trimmed.starts_with("* ") || trimmed.starts_with("<!--"))
     {
         b.append(ansi::style(MUTED));
         b.append(ansi::ITALIC);
@@ -69,7 +69,7 @@ fn void highlight(DString* b, String line, String lang, bool plain)
     {
         char c = line[i];
 
-        if ((c == '/' && i + 1 < len && line[i + 1] == '/') || (isHashCommentLang && c == '#'))
+        if ((!isHashCommentLang && c == '/' && i + 1 < len && line[i + 1] == '/') || (isHashCommentLang && c == '#'))
         {
             b.append(ansi::style(MUTED));
             b.append(ansi::ITALIC);

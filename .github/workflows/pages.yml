@@ -1,0 +1,35 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: c3c
+        run: |
+          curl -sL https://github.com/c3lang/c3c/releases/download/v0.8.5/c3-linux-static.tar.gz | tar xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/c3" >> "$GITHUB_PATH"
+      - run: make test
+      - run: make web
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+      - id: deployment
+        uses: actions/deploy-pages@v4

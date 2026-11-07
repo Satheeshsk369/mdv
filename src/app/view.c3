@@ -209,32 +209,61 @@ fn void View.free(&self)
     self.editor.free();
 }
 
-fn bool run(String file, int line, bool noWrap, bool picker)
+fn void View.start(&self, String name, String content, int line, bool noWrap)
 {
-    View view;
-    view.path.init(mem, 256);
-    view.path.append(file);
-    view.query.init(mem, 128);
-    view.jump.init(mem, 32);
-    view.status.init(mem, 128);
-    view.editor.init();
-    String? content = load(file);
-    if (catch content) return false;
-    view.width = terminal::width();
-    view.height = terminal::height();
-    view.rows = max(view.height - 2, 2);
-    view.config = { .width = view.width, .noWrap = noWrap };
-    view.changed = line > 0 ? line - 1 : -1;
-    view.frame.init(mem, 262144);
-    view.outline.init(mem, 32);
-    view.matches.init(mem, 32);
-    view.replace(content);
-    defer view.free();
+    self.path.init(mem, 256);
+    self.path.append(name);
+    self.query.init(mem, 128);
+    self.jump.init(mem, 32);
+    self.status.init(mem, 128);
+    self.editor.init();
+    self.width = terminal::width();
+    self.height = terminal::height();
+    self.rows = max(self.height - 2, 2);
+    self.config = { .width = self.width, .noWrap = noWrap };
+    self.changed = line > 0 ? line - 1 : -1;
+    self.frame.init(mem, 262144);
+    self.outline.init(mem, 32);
+    self.matches.init(mem, 32);
+    self.replace(content);
     if (line > 0)
     {
-        view.cursor = view.lines.find(line - 1);
-        view.center(view.cursor, max(view.rows / 3, 5));
+        self.cursor = self.lines.find(line - 1);
+        self.center(self.cursor, max(self.rows / 3, 5));
     }
+}
+
+fn bool View.tick(&self)
+{
+    bool dirty;
+    if (self.ticks > 0 && --self.ticks == 0)
+    {
+        self.status.clear();
+        dirty = true;
+    }
+    for (int key = terminal::key(); key != 0; key = terminal::key())
+    {
+        if (key == terminal::DONE)
+        {
+            io::print(self.frame.str_view());
+            return true;
+        }
+        if (self.key(key)) return true;
+        dirty = true;
+    }
+    if (dirty) self.draw();
+    self.resize();
+    self.watch();
+    return false;
+}
+
+fn bool run(String file, int line, bool noWrap, bool picker)
+{
+    String? content = load(file);
+    if (catch content) return false;
+    View view;
+    view.start(file, content, line, noWrap);
+    defer view.free();
     terminal::rawMode();
     terminal::enter();
     defer
@@ -247,27 +276,6 @@ fn bool run(String file, int line, bool noWrap, bool picker)
     if (picker) view.files();
     view.draw();
     view.stamp = terminal::stamp(view.name());
-    while (true)
-    {
-        bool dirty;
-        if (view.ticks > 0 && --view.ticks == 0)
-        {
-            view.status.clear();
-            dirty = true;
-        }
-        for (int key = terminal::key(); key != 0; key = terminal::key())
-        {
-            if (key == terminal::DONE)
-            {
-                io::print(view.frame.str_view());
-                return true;
-            }
-            if (view.key(key)) return true;
-            dirty = true;
-        }
-        if (dirty) view.draw();
-        view.resize();
-        view.watch();
-        terminal::wait(30);
-    }
+    while (!view.tick()) terminal::wait(30);
+    return true;
 }
