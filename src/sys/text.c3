@@ -110,6 +110,33 @@ fn void mark(DString* fb, String line, String query, bool current)
     }
 }
 
+fn int clip(DString* fb, String line, int left, int span)
+{
+    usz p = 0;
+    int column;
+    int emitted;
+    while (p < line.len)
+    {
+        if (line[p] == '\e')
+        {
+            escape(fb, line, &p);
+            continue;
+        }
+        char c = line[p];
+        usz bytes = (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : (c & 0xF8) == 0xF0 ? 4 : 1;
+        bytes = min(bytes, line.len - p);
+        int w = width(line[p:bytes]);
+        if (column >= left && column + w <= left + span)
+        {
+            fb.append(line[p:bytes]);
+            emitted += w;
+        }
+        p += bytes;
+        column += w;
+    }
+    return emitted;
+}
+
 fn void cut(DString* fb, String line, int left, int width)
 {
     if (left <= 0)

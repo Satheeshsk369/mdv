@@ -45,10 +45,28 @@ cat notes.md | mdv      # render stdin
 | `h` | Highlight the block under the cursor |
 | `Tab` `t` | Outline |
 | `o` | File tree |
-| `e` | Open `$EDITOR` at the current line |
+| `e` | Edit in mdv: source and live preview side by side (wide) or stacked (narrow); opens at the highlighted block |
+| `E` | Open `$EDITOR` at the current line |
 | `y` | Copy the document (OSC 52) |
 | `?` | Help |
-| `q` | Quit |
+| `q` `Ctrl+C` | Quit |
+
+## Editor
+
+`e` opens the file in mdv's editor with a live preview: side by side on wide screens, stacked on narrow ones. Editing is modeless: type to insert, arrows move by screen row, `PgUp` `PgDn` page, `Home` `End` line. `Ctrl+O` opens the editor options menu, which lists every command:
+
+| Key | Action |
+| :--- | :--- |
+| `Ctrl+S` | Save |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
+| `Ctrl+F` / `Ctrl+N` | Find / find next |
+| `Ctrl+G` | Go to line |
+| `Ctrl+C` `Ctrl+X` `Ctrl+V` | Copy, cut, paste the line |
+| `Ctrl+K` / `Ctrl+D` | Delete / duplicate the line |
+| `Ctrl+H` | Highlight the block in source and preview |
+| `Ctrl+W` | Toggle wrap |
+| `Ctrl+R` | Toggle the preview |
+| `Esc` | Close; twice to discard unsaved changes |
 
 ## Rendering
 

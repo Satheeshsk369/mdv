@@ -32,6 +32,9 @@ struct View
     int choice;
     int choiceTop;
     bool focus;
+    Item[] items;
+    Mode back;
+    Editor editor;
     Tree tree;
     DString query;
     DString jump;
@@ -108,7 +111,7 @@ fn void View.copy(&self)
     self.say("✔ Copied document to clipboard (OSC 52)");
 }
 
-fn void View.edit(&self)
+fn void View.external(&self)
 {
     int src = self.source();
     int line = src >= 0 ? src + 1 : 1;
@@ -167,6 +170,8 @@ fn void View.resize(&self)
     self.config.width = width;
     self.layout();
     self.top = min(self.top, self.last());
+    self.editor.width = max(self.editWidth() - 5, 1);
+    self.editor.fresh = true;
     self.draw();
 }
 
@@ -198,6 +203,7 @@ fn void View.free(&self)
     self.query.free();
     self.jump.free();
     self.status.free();
+    self.editor.free();
 }
 
 fn bool run(String file, int line, bool noWrap, bool picker)
@@ -208,6 +214,7 @@ fn bool run(String file, int line, bool noWrap, bool picker)
     view.query.init(mem, 128);
     view.jump.init(mem, 32);
     view.status.init(mem, 128);
+    view.editor.init();
     String? content = load(file);
     if (catch content) return false;
     view.width = terminal::width();

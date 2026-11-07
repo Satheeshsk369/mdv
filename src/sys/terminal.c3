@@ -7,6 +7,21 @@ const int ESC = 27;
 const int TAB = 9;
 const int ENTER = 10;
 const int BACKSPACE = 127;
+const int CTRLC = 3;
+const int CTRLD = 4;
+const int CTRLF = 6;
+const int CTRLG = 7;
+const int CTRLH = 8;
+const int CTRLK = 11;
+const int CTRLN = 14;
+const int CTRLO = 15;
+const int CTRLR = 18;
+const int CTRLS = 19;
+const int CTRLV = 22;
+const int CTRLW = 23;
+const int CTRLX = 24;
+const int CTRLY = 25;
+const int CTRLZ = 26;
 const int DOWN = 1000;
 const int UP = 1001;
 const int PAGEDOWN = 1002;
@@ -15,6 +30,9 @@ const int LEFT = 1006;
 const int RIGHT = 1007;
 const int HOME = 1008;
 const int END = 1009;
+const int DELETE = 1010;
+const int PASTE = 1011;
+const int PASTED = 1014;
 const int WHEELUP = 1012;
 const int WHEELDOWN = 1013;
 
@@ -155,14 +173,14 @@ fn void onSignal(int sig)
 
 fn void enter()
 {
-    out("\e[?1049h\e[?7l\e[>1u\e[2J\e[3J\e[H\e[?25l");
+    out("\e[?1049h\e[?7l\e[>1u\e[?2004h\e[2J\e[3J\e[H\e[?25l");
     alternate = true;
 }
 
 fn void leave()
 {
     if (!alternate) return;
-    out("\e[<u\e[?7h\e[?1049l\e[?25h\e[0m");
+    out("\e[<u\e[?2004l\e[?7h\e[?1049l\e[?25h\e[0m");
     alternate = false;
 }
 
@@ -174,7 +192,10 @@ fn void rawMode()
     signal(1, &onSignal);
     if (tcgetattr(0, &saved) != 0) return;
     Termios t = saved;
-    t.c_lflag &= ~0x000Au;
+    t.c_lflag &= ~0x800Au;
+    t.c_iflag &= ~0x0400u;
+    t.c_cc[0] = 0;
+    t.c_cc[10] = 0;
     t.c_cc[6] = 0;
     t.c_cc[5] = 0;
     tcsetattr(0, 0, &t);
@@ -235,8 +256,14 @@ fn Stamp stamp(ZString path)
 
 const char[] ARROWS = { 'A', 'B', 'C', 'D', 'H', 'F' };
 const int[] ARROWKEYS = { UP, DOWN, RIGHT, LEFT, HOME, END };
-const char[] CONTROL = { 0x09, '\r', '\n', 0x7f, 0x08, 0x03 };
-const int[] CONTROLKEYS = { TAB, ENTER, ENTER, BACKSPACE, BACKSPACE, 'q' };
+const char[] CONTROL = { 0x09, '\r', '\n', 0x7f };
+const int[] CONTROLKEYS = { TAB, ENTER, ENTER, BACKSPACE };
+
+fn int control(int c)
+{
+    foreach (i, k : CONTROL) if (c == k) return CONTROLKEYS[i];
+    return c;
+}
 
 fn int arrow(char a, char b, bool lower)
 {
@@ -279,8 +306,7 @@ fn int decode(char[] buf)
     int n = (int)buf.len;
     if (buf[0] != ESC)
     {
-        foreach (i, c : CONTROL) if (buf[0] == c) return CONTROLKEYS[i];
-        return buf[0];
+        return control(buf[0]);
     }
     if (n == 1) return ESC;
     if (n >= 6 && buf[1] == '[' && buf[2] == '<')
@@ -293,6 +319,19 @@ fn int decode(char[] buf)
     char last = buf[n - 1];
     if (n >= 3 && buf[1] == 'O') return arrow(buf[2], last, false);
     if (n < 3 || buf[1] != '[') return ESC;
+    if (last == 'u')
+    {
+        int code;
+        int mods;
+        int p = 2;
+        for (; p < n && buf[p].is_digit(); p++) code = code * 10 + buf[p] - '0';
+        if (p < n && buf[p] == ';') for (p++; p < n && buf[p].is_digit(); p++) mods = mods * 10 + buf[p] - '0';
+        bool ctrl = mods > 0 && ((mods - 1) & 4) != 0;
+        return control(ctrl && code >= 'a' && code <= 'z' ? code & 0x1f : code);
+    }
+    if (buf[2] == '3' && n >= 4 && buf[3] == '~') return DELETE;
+    if (n == 6 && buf[2] == '2' && buf[3] == '0' && buf[4] == '0' && buf[5] == '~') return PASTE;
+    if (n == 6 && buf[2] == '2' && buf[3] == '0' && buf[4] == '1' && buf[5] == '~') return PASTED;
     int k = arrow(buf[2], last, true);
     if (k) return k;
     if (buf[2] == '5' && n >= 4 && buf[3] == '~') return PAGEUP;

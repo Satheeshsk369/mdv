@@ -57,7 +57,28 @@ if command -v tmux > /dev/null; then
   screen menuquit sample.md Space q "!echo"
   screen mark sample.md Down Down Down Down Down Down h
   screen markmove sample.md Down Down Down Down Down Down h Down Down Down
-  screen edit sample.md Down Down Down e
+  screen edit sample.md Down Down Down E
+  screen editor sample.md Down Down e
+  screen editortype sample.md Down Down e End " " t y p e d
+  screen editormark sample.md Down Down Down Down Down Down Down Down h e
+  screen editornarrow sample.md e "!tmux resize-window -t mdvgolden -x 70 -y 30"
+  screen editorwarn sample.md e x Escape
+  screen editordiscard sample.md e x Escape Escape
+  screen editorundo sample.md e x y Enter z C-z
+  screen editormenu sample.md e C-o
+  screen editormenuopen sample.md e C-o Down Down Down Enter L a T e X Enter
+  screen editorpreview sample.md e C-r
+  screen editornowrap sample.md Down Down e C-w End
+  screen editorfind sample.md e C-f m a t h Enter C-n
+  screen editorline sample.md e C-g 4 0 Enter
+  screen editorlines sample.md e Down Down C-d C-k C-c Down Down C-v
+  screen editorcut sample.md e Down Down C-x
+  screen editorredo sample.md e x C-z C-y
+  screen editorhighlight sample.md e Down Down C-h
+  screen ctrlc sample.md C-c "!echo"
+  cp sample.md saved.md
+  screen editorsave saved.md e "#" " " C-s Escape
+  rm saved.md
   screen copy sample.md y
   screen math math.md End
   screen text text.md PageDown

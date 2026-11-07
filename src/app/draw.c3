@@ -23,7 +23,8 @@ const String[] GUIDE = {
     "  \e[38;2;166;226;46mh\e[0m                     Highlight the current block",
     "  \e[38;2;166;226;46mo\e[0m                     Switch Document (Markdown File Tree)",
     "  \e[38;2;166;226;46m/\e[0m                     In-document search (n next, N prev)",
-    "  \e[38;2;166;226;46me\e[0m                     Open $EDITOR at current line",
+    "  \e[38;2;166;226;46me\e[0m                     Edit with live preview (Ctrl+O lists editor commands)",
+    "  \e[38;2;166;226;46mE\e[0m                     Open $EDITOR at current line",
     "  \e[38;2;166;226;46my\e[0m                     Copy document to clipboard (OSC 52)",
     "  \e[38;2;166;226;46m?\e[0m                     Show / hide this help screen",
 };
@@ -133,13 +134,14 @@ fn void View.drawOutline(&self, DString* fb)
 
 fn void View.drawMenu(&self, DString* fb)
 {
-    self.title(fb, "Options");
+    self.title(fb, self.back == EDITOR ? "Editor Options" : "Options");
     rule(fb, self.width);
-    self.choiceTop = follow(self.choiceTop, self.choice, ITEMS.len, self.rows);
+    Item[] items = self.items;
+    self.choiceTop = follow(self.choiceTop, self.choice, (int)items.len, self.rows);
     for (int r = 0; r < self.rows; r++)
     {
         int i = self.choiceTop + r;
-        if (i >= ITEMS.len)
+        if (i >= items.len)
         {
             tilde(fb, r, self.rows);
             continue;
@@ -152,11 +154,11 @@ fn void View.drawMenu(&self, DString* fb)
             fb.append("▶ ");
         }
         fb.append(active ? ansi::BOLD : ansi::TEXT);
-        fb.append(ITEMS[i].label);
+        fb.append(items[i].label);
         fb.append(ansi::RESET);
-        fb.spaces(max(20 - (int)ITEMS[i].label.len, 1));
+        fb.spaces(max(20 - (int)items[i].label.len, 1));
         fb.append(ansi::MUTED);
-        fb.append(ITEMS[i].key);
+        fb.append(items[i].key);
         fb.append(ansi::RESET);
         fb.append("\e[K");
         if (r < self.rows - 1) fb.append_char('\n');
@@ -175,6 +177,191 @@ fn void tint(DString* fb, String line)
         fb.append(ansi::FOCUS);
         line = line[at + ansi::RESET.len..];
     }
+}
+
+fn void source(DString* fb, String line, int number, bool current, bool first, bool heading, int left, int width)
+{
+    if (current) fb.append(ansi::FOCUS);
+    fb.append(current ? ansi::CURSOR : ansi::MUTED);
+    if (first)
+    {
+        fb.appendf("%4d ", number);
+    }
+    else
+    {
+        fb.append("   ↪ ");
+    }
+    fb.append(ansi::RESET);
+    if (current) fb.append(ansi::FOCUS);
+    String t = line.trim();
+    bool fence = t.starts_with("```") || t.starts_with("~~~") || t.starts_with("$$");
+    fb.append(heading ? ansi::H2 : fence ? ansi::MUTED : ansi::TEXT);
+    DString expanded;
+    expanded.init(mem, line.len + 16);
+    defer expanded.free();
+    foreach (c : line)
+    {
+        if (c == '\t')
+        {
+            expanded.spaces(4);
+        }
+        else
+        {
+            expanded.append_char(c);
+        }
+    }
+    fb.spaces(width - text::clip(fb, expanded.str_view(), left, width));
+    fb.append(ansi::RESET);
+}
+
+fn void preview(DString* fb, String line, bool lit, int width)
+{
+    DString tinted;
+    tinted.init(mem, line.len + 64);
+    defer tinted.free();
+    if (lit)
+    {
+        tint(&tinted, line);
+    }
+    else
+    {
+        tinted.append(line);
+    }
+    fb.append(lit ? ansi::FOCUS : "");
+    fb.append_char(' ');
+    fb.spaces(width - 1 - text::clip(fb, tinted.str_view(), 0, width - 1));
+    fb.append(ansi::RESET);
+}
+
+fn void View.drawEditor(&self, DString* fb)
+{
+    Editor* e = &self.editor;
+    if (e.fresh) e.refresh(self.previewWidth());
+    int line = e.line(e.at);
+    DString head;
+    head.init(mem, 256);
+    defer head.free();
+    self.badge(&head);
+    head.append(ansi::TITLE);
+    head.append("Editing");
+    head.append(ansi::RESET);
+    if (e.dirty)
+    {
+        head.append(ansi::ORANGE);
+        head.append(" ●");
+        head.append(ansi::RESET);
+    }
+    head.append(ansi::MUTED);
+    head.appendf("  Ln %d, Col %d", line + 1, e.column() + 1);
+    head.append(ansi::RESET);
+    fb.append(head.str_view());
+    DString hint;
+    hint.init(mem, 128);
+    defer hint.free();
+    if (e.prompt != NONE)
+    {
+        hint.append(e.prompt == FIND ? "Find: " : "Line: ");
+        hint.append(e.input.str_view());
+        hint.append("▏ (Enter │ Esc)");
+    }
+    else if (self.status.len() > 0)
+    {
+        hint.append(self.status.str_view());
+    }
+    else
+    {
+        hint.append("[Ctrl+O Options]");
+    }
+    int pad = self.width - text::width(head.str_view()) - text::width(hint.str_view()) - 1;
+    if (pad > 0)
+    {
+        fb.spaces(pad);
+        fb.append(e.prompt != NONE || self.status.len() > 0 ? ansi::STATUS : ansi::MUTED);
+        fb.append(hint.str_view());
+        fb.append(ansi::RESET);
+    }
+    fb.append("\e[K\n");
+    rule(fb, self.width);
+    bool split = self.split();
+    bool stacked = e.preview && !split;
+    int body = self.rows;
+    int editRows = self.paneRows();
+    int editWidth = self.editWidth();
+    int textWidth = max(editWidth - 5, 1);
+    int previewWidth = split ? self.width - editWidth - 1 : self.width;
+    int previewRows = split ? body : body - editRows - 1;
+    e.width = textWidth;
+    e.scroll(editRows);
+    Spot spot = e.spot();
+    if (!e.wrap)
+    {
+        if (spot.column < e.left) e.left = spot.column;
+        if (spot.column >= e.left + textWidth) e.left = spot.column - textWidth + 1;
+    }
+    int anchor = e.page.find(line);
+    int block = e.page.count() > 0 ? e.page.lines[anchor].block : -1;
+    int first = -1;
+    int last = -1;
+    if (self.focus && block >= 0 && block < e.doc.blocks.len)
+    {
+        first = e.doc.blocks[block].start;
+        last = e.doc.blocks[block].end;
+    }
+    e.view = math::clamp(anchor - previewRows / 3, 0, max(e.page.count() - previewRows, 0));
+    int number = e.top;
+    int row = e.skip;
+    int count = e.count();
+    String current = number < count ? e.slice(number) : "";
+    int rows = number < count ? e.height(number) : 1;
+    for (int r = 0; r < body; r++)
+    {
+        if (split || r < editRows)
+        {
+            if (number < count)
+            {
+                fold(current, e.span(), &e.starts);
+                usz from = e.starts[row];
+                usz to = row + 1 < rows ? e.starts[(usz)row + 1] : current.len;
+                bool lit = number == line || (number >= first && number <= last);
+                int left = number == line && !e.wrap ? e.left : 0;
+                source(fb, current[from : to - from], number + 1, lit, row == 0, current.starts_with("#"), left, textWidth);
+                row++;
+                if (row >= rows)
+                {
+                    number++;
+                    row = 0;
+                    current = number < count ? e.slice(number) : "";
+                    rows = number < count ? e.height(number) : 1;
+                }
+            }
+            else
+            {
+                fb.append(ansi::TILDE);
+                fb.append("   ~");
+                fb.append(ansi::RESET);
+                fb.spaces(editWidth - 4);
+            }
+        }
+        if (split)
+        {
+            fb.append(ansi::BORDER);
+            fb.append("│");
+            fb.append(ansi::RESET);
+        }
+        if (stacked && r == editRows)
+        {
+            fb.append(ansi::BORDER);
+            fb.repeat("─", self.width);
+            fb.append(ansi::RESET);
+        }
+        int p = e.view + (split ? r : r - editRows - 1);
+        if ((split || (stacked && r > editRows)) && p < e.page.count()) preview(fb, e.page.lines[p].text, self.focus && e.page.lines[p].block == block, previewWidth);
+        fb.append("\e[K");
+        if (r < body - 1) fb.append_char('\n');
+    }
+    int distance = spot.row - e.skip;
+    for (int l = e.top; l < spot.line; l++) distance += e.height(l);
+    fb.appendf("\e[%d;%dH\e[?25h", 3 + distance, 6 + spot.column - (e.wrap ? 0 : e.left));
 }
 
 fn void View.drawFiles(&self, DString* fb)
@@ -354,13 +541,14 @@ fn void View.draw(&self)
 {
     DString* fb = &self.frame;
     fb.clear();
-    fb.append("\e[?7l\e[H");
+    fb.append("\e[?7l\e[?25l\e[H");
     switch (self.mode)
     {
         case HELP: self.drawHelp(fb);
         case OUTLINE: self.drawOutline(fb);
         case FILES: self.drawFiles(fb);
         case MENU: self.drawMenu(fb);
+        case EDITOR: self.drawEditor(fb);
         default: self.drawDocument(fb);
     }
     terminal::out(fb.str_view());

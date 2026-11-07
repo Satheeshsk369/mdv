@@ -11,7 +11,8 @@ enum Mode
     JUMP,
     OUTLINE,
     FILES,
-    MENU
+    MENU,
+    EDITOR
 }
 
 enum Act
@@ -38,13 +39,22 @@ enum Act
     PREV,
     JUMP,
     EDIT,
+    EXTERNAL,
     COPY,
     CLOSE,
     OPEN,
     ALL,
     TOGGLE,
     MENU,
-    MARK
+    MARK,
+    SAVE,
+    UNDO,
+    REDO,
+    PREVIEW,
+    CUT,
+    PASTE,
+    KILL,
+    DUPLICATE
 }
 
 struct Bind
@@ -61,7 +71,7 @@ const Bind[] MOTION = {
 };
 
 const Bind[] DOCUMENT = {
-    { 'q', QUIT }, { 'Q', QUIT },
+    { 'q', QUIT }, { 'Q', QUIT }, { terminal::CTRLC, QUIT },
     { terminal::ESC, CLEAR },
     { terminal::LEFT, LEFT }, { terminal::RIGHT, RIGHT },
     { ' ', MENU },
@@ -74,19 +84,19 @@ const Bind[] DOCUMENT = {
     { 'n', NEXT },
     { 'N', PREV },
     { ':', JUMP },
-    { 'e', EDIT }, { 'E', EDIT },
+    { 'e', EDIT }, { 'E', EXTERNAL },
     { 'y', COPY }, { 'Y', COPY },
 };
 
 const Bind[] CONTENTS = {
-    { 'q', QUIT }, { 'Q', QUIT },
+    { 'q', QUIT }, { 'Q', QUIT }, { terminal::CTRLC, QUIT },
     { terminal::ESC, CLOSE }, { terminal::TAB, CLOSE }, { 't', CLOSE }, { 'T', CLOSE },
     { terminal::LEFT, CLOSE },
     { terminal::ENTER, OPEN }, { terminal::RIGHT, OPEN },
 };
 
 const Bind[] CHOICES = {
-    { 'q', QUIT }, { 'Q', QUIT },
+    { 'q', QUIT }, { 'Q', QUIT }, { terminal::CTRLC, QUIT },
     { terminal::ESC, CLOSE }, { ' ', CLOSE }, { terminal::LEFT, CLOSE },
     { terminal::ENTER, OPEN }, { terminal::RIGHT, OPEN },
 };
@@ -98,6 +108,33 @@ struct Item
     Act act;
 }
 
+const Bind[] EDITING = {
+    { terminal::ESC, CLOSE }, { terminal::CTRLO, MENU },
+    { terminal::CTRLS, SAVE }, { terminal::CTRLZ, UNDO }, { terminal::CTRLY, REDO },
+    { terminal::CTRLH, MARK }, { terminal::CTRLW, WRAP }, { terminal::CTRLR, PREVIEW },
+    { terminal::CTRLC, COPY }, { terminal::CTRLX, CUT }, { terminal::CTRLV, PASTE },
+    { terminal::CTRLK, KILL }, { terminal::CTRLD, DUPLICATE },
+    { terminal::CTRLF, SEARCH }, { terminal::CTRLN, NEXT }, { terminal::CTRLG, JUMP },
+};
+
+const Item[] EDITS = {
+    { "Ctrl+S", "Save", SAVE },
+    { "Ctrl+Z", "Undo", UNDO },
+    { "Ctrl+Y", "Redo", REDO },
+    { "Ctrl+F", "Find", SEARCH },
+    { "Ctrl+N", "Find next", NEXT },
+    { "Ctrl+G", "Go to line", JUMP },
+    { "Ctrl+C", "Copy line", COPY },
+    { "Ctrl+X", "Cut line", CUT },
+    { "Ctrl+V", "Paste", PASTE },
+    { "Ctrl+K", "Delete line", KILL },
+    { "Ctrl+D", "Duplicate line", DUPLICATE },
+    { "Ctrl+H", "Highlight block", MARK },
+    { "Ctrl+W", "Toggle wrap", WRAP },
+    { "Ctrl+R", "Toggle preview", PREVIEW },
+    { "Esc", "Close editor", CLOSE },
+};
+
 const Item[] ITEMS = {
     { "Tab", "Outline", OUTLINE },
     { "o", "Files", FILES },
@@ -105,14 +142,15 @@ const Item[] ITEMS = {
     { ":", "Go to line", JUMP },
     { "h", "Highlight block", MARK },
     { "w", "Toggle wrap", WRAP },
-    { "e", "Edit in $EDITOR", EDIT },
+    { "e", "Edit", EDIT },
+    { "E", "Edit in $EDITOR", EXTERNAL },
     { "y", "Copy document", COPY },
     { "?", "Help", HELP },
     { "q", "Quit", QUIT },
 };
 
 const Bind[] BROWSER = {
-    { terminal::ESC, CLOSE }, { 'o', CLOSE }, { 'O', CLOSE }, { 'q', CLOSE },
+    { terminal::ESC, CLOSE }, { 'o', CLOSE }, { 'O', CLOSE }, { 'q', CLOSE }, { terminal::CTRLC, CLOSE },
     { terminal::DOWN, DOWN }, { terminal::UP, UP },
     { terminal::HOME, TOP }, { terminal::END, BOTTOM },
     { 'a', ALL }, { 'A', ALL },
@@ -122,7 +160,7 @@ const Bind[] BROWSER = {
 };
 
 const Bind[] MODAL = {
-    { terminal::ESC, CLOSE }, { 'q', CLOSE }, { 'Q', CLOSE }, { '?', CLOSE }, { 31, CLOSE },
+    { terminal::ESC, CLOSE }, { 'q', CLOSE }, { 'Q', CLOSE }, { terminal::CTRLC, CLOSE }, { '?', CLOSE }, { 31, CLOSE },
     { terminal::ENTER, CLOSE }, { terminal::TAB, CLOSE }, { terminal::LEFT, CLOSE },
 };
 
@@ -230,8 +268,7 @@ fn void View.normal(&self, Act act)
         case HELP:
             self.mode = HELP;
         case MENU:
-            self.mode = MENU;
-            self.choice = 0;
+            self.menu(ITEMS, NORMAL);
         case MARK:
             self.focus = !self.focus;
         case OUTLINE:
@@ -257,6 +294,8 @@ fn void View.normal(&self, Act act)
             self.jump.clear();
         case EDIT:
             self.edit();
+        case EXTERNAL:
+            self.external();
         case COPY:
             self.copy();
         case CLEAR:
@@ -287,30 +326,48 @@ fn void View.headings(&self, Act act)
     }
 }
 
+fn void View.menu(&self, Item[] items, Mode back)
+{
+    self.items = items;
+    self.back = back;
+    self.choice = 0;
+    self.mode = MENU;
+}
+
+fn bool View.pick(&self, Act act)
+{
+    self.mode = self.back;
+    if (self.back == EDITOR)
+    {
+        self.command(act);
+        return false;
+    }
+    if (act == QUIT) return true;
+    self.normal(act);
+    return false;
+}
+
 fn bool View.choose(&self, int key)
 {
+    bool editing = self.back == EDITOR;
     Act act = lookup(CHOICES, key);
     switch (act)
     {
-        case QUIT: return true;
-        case CLOSE: self.mode = NORMAL;
-        case OPEN:
-            self.mode = NORMAL;
-            Act chosen = ITEMS[self.choice].act;
-            if (chosen == QUIT) return true;
-            self.normal(chosen);
+        case QUIT:
+            if (!editing) return true;
+            self.mode = self.back;
+        case CLOSE: self.mode = self.back;
+        case OPEN: return self.pick(self.items[self.choice].act);
         default:
             Act motion = lookup(MOTION, key);
             if (motion != NONE)
             {
-                self.choice = self.move(self.choice, ITEMS.len, motion);
+                self.choice = self.move(self.choice, (int)self.items.len, motion);
                 return false;
             }
-            Act direct = lookup(DOCUMENT, key);
-            if (direct == NONE) return false;
-            self.mode = NORMAL;
-            if (direct == QUIT) return true;
-            self.normal(direct);
+            Act direct = lookup(editing ? EDITING : DOCUMENT, key);
+            if (direct == NONE || direct == MENU) return false;
+            return self.pick(direct);
     }
     return false;
 }
@@ -367,6 +424,8 @@ fn bool View.key(&self, int key)
             if (lookup(MODAL, key) == CLOSE) self.mode = NORMAL;
         case MENU:
             return self.choose(key);
+        case EDITOR:
+            self.type(key);
         case FILES:
             self.browse(lookup(BROWSER, key));
         case OUTLINE:

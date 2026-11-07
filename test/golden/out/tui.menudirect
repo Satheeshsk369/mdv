@@ -16,10 +16,10 @@
     [38;2;166;226;46mh[39m                     Highlight the current block
     [38;2;166;226;46mo[39m                     Switch Document (Markdown File Tree)
     [38;2;166;226;46m/[39m                     In-document search (n next, N prev)
-    [38;2;166;226;46me[39m                     Open $EDITOR at current line
+    [38;2;166;226;46me[39m                     Edit with live preview (Ctrl+O lists editor commands)
+    [38;2;166;226;46mE[39m                     Open $EDITOR at current line
     [38;2;166;226;46my[39m                     Copy document to clipboard (OSC 52)
     [38;2;166;226;46m?[39m                     Show / hide this help screen
-[38;2;60;60;50m~[39m
 [38;2;60;60;50m~[39m
 [38;2;60;60;50m~[39m
 [38;2;60;60;50m~[39m
