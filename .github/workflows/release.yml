@@ -2,10 +2,6 @@ name: release
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: Version tag, for example v1.0.0
-        required: true
 
 permissions:
   contents: write
@@ -50,10 +46,15 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
-      - run: gh release create "${{ inputs.tag }}" dist/* --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "${{ inputs.tag }}" --generate-notes
+      - name: publish
         env:
           GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=v$(jq -r .version project.json)
+          gh release delete "$tag" --cleanup-tag --yes || true
+          gh release create "$tag" dist/* --target "${{ github.sha }}" --title "$tag" --generate-notes

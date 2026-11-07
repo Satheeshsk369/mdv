@@ -11,7 +11,9 @@ import render;
 import app;
 
 
-const String HELP = `mdv 0.3.0
+const String VERSION = "mdv " +++ env::PROJECT_VERSION;
+
+const String HELP = VERSION +++ `
 
 Usage:
     mdv                       Pick a Markdown file in this folder
@@ -52,7 +54,7 @@ fn int main(String[] args)
                 io::printn(HELP);
                 return 0;
             case "-v":
-                io::printn("mdv 0.3.0");
+                io::printn(VERSION);
                 return 0;
             case "-s":
                 stdout = true;
