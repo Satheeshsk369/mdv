@@ -226,7 +226,7 @@ fn void testBigOperatorsAndLimits() @test
     defer arena.free();
 
     MathBox unionBox = tex::latex(&arena, "\\bigcup_{i=1}^n A_i");
-    test::eq(unionBox.height, 5);
+    test::eq(unionBox.height, 3);
 }
 
 fn void testPrimesAndDerivatives() @test
@@ -365,4 +365,49 @@ fn void test_scripts_raise_together() @test
     test::eq(mixed.height, 2);
     MathBox simple = tex::latex(&arena, "e^x x^2");
     test::eq(simple.height, 1);
+}
+
+fn void test_vertical_root_keeps_radicand_aligned() @test
+{
+    ast::Arena arena;
+    arena.init(16384);
+    defer arena.free();
+    MathBox root = tex::latex(&arena, "\\sqrt[3]{\\frac{a+b}{c}}");
+    test::eq(root.height, 4);
+    test::eq(root.rows[0], "  ┌───────");
+    test::eq(root.rows[2], "3 │───────");
+    test::eq(root.rows[3].starts_with(" ╲│"), true);
+}
+
+fn void test_flat_root_on_one_row() @test
+{
+    ast::Arena arena;
+    arena.init(16384);
+    defer arena.free();
+    MathBox root = tex::latex(&arena, "\\sqrt{b^2 - 4ac} + \\sqrt[3]{x}");
+    test::eq(root.height, 1);
+    test::eq(root.rows[0], "√(b² - 4ac) + ³√x");
+}
+
+fn void test_big_operators_take_three_rows() @test
+{
+    ast::Arena arena;
+    arena.init(16384);
+    defer arena.free();
+    MathBox sum = tex::latex(&arena, "\\sum_{n=0}^{\\infty} a");
+    test::eq(sum.height, 3);
+    test::eq(sum.rows[1].contains("∑"), true);
+    MathBox integral = tex::latex(&arena, "\\oint_C f");
+    test::eq(integral.height, 2);
+    test::eq(integral.rows[0].contains("∮"), true);
+}
+
+fn void test_inline_limits_bracket_when_needed() @test
+{
+    ast::Arena arena;
+    arena.init(16384);
+    defer arena.free();
+    test::eq(tex::unicode(&arena, "\\sum_{i=1}^n i"), "∑ᵢ₌₁..ₙ i");
+    test::eq(tex::unicode(&arena, "\\int_{-\\infty}^{\\infty} e^{-x^2} dx"), "∫(-∞..∞) e^(-x²) dx");
+    test::eq(tex::unicode(&arena, "\\lim_{x \\to 0} f"), "lim(x→0) f");
 }

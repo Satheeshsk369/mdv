@@ -17,12 +17,11 @@ const Pair[] ESCAPES = {
 
 const Pair[] RAISED = {
     { "alpha", "ᵅ" }, { "beta", "ᵝ" }, { "gamma", "ᵞ" }, { "delta", "ᵟ" }, { "epsilon", "ᵋ" },
-    { "theta", "ᶿ" }, { "phi", "ᵠ" }, { "chi", "ᵡ" }, { "infty", "∞" }, { "to", "→" }, { "rightarrow", "→" },
+    { "theta", "ᶿ" }, { "phi", "ᵠ" }, { "chi", "ᵡ" },
 };
 
 const Pair[] LOWERED = {
     { "beta", "ᵦ" }, { "gamma", "ᵧ" }, { "rho", "ᵨ" }, { "phi", "ᵩ" }, { "chi", "ᵪ" },
-    { "infty", "∞" }, { "to", "→" }, { "rightarrow", "→" },
 };
 
 const Pair[] VULGAR = {
@@ -251,58 +250,146 @@ fn void Flat.control(&self)
     self.i++;
     String cmd = self.name();
     usz end = self.i;
-    if (self.command(cmd) || self.styled(cmd) || self.accented(cmd)) return;
+    if (self.operator(cmd) || self.command(cmd) || self.styled(cmd) || self.accented(cmd)) return;
     self.i = end;
     self.out.append(symbol(cmd, &glyph) ? glyph : cmd);
     if (self.more() && self.s[self.i].is_alnum()) self.out.append_char(' ');
 }
 
-fn void Flat.script(&self, Pair[] greek, Script script, char mark)
+fn bool lift(String raw, Pair[] greek, Script script, DString* out)
 {
-    self.i++;
+    if (raw.len == 0) return false;
+    for (usz i = 0; i < raw.len;)
+    {
+        String glyph;
+        if (raw[i] == '\\')
+        {
+            usz start = ++i;
+            while (i < raw.len && raw[i].is_alpha()) i++;
+            if (!find(greek, raw[start : i - start], &glyph)) return false;
+        }
+        else
+        {
+            glyph = script.map(raw[i++]);
+            if (glyph.len == 0) return false;
+        }
+        out.append(glyph);
+    }
+    return true;
+}
+
+fn String squeeze(ast::Arena* arena, String s)
+{
+    String t = s.trim();
+    DString out;
+    out.init(mem, t.len + 1);
+    defer out.free();
+    foreach (i, c : t)
+    {
+        if (c != ' ')
+        {
+            out.append_char(c);
+            continue;
+        }
+        if (t[i + 1] == ' ') continue;
+        if (out.len() > 0 && out[out.len() - 1].is_alnum() && t[i + 1].is_alnum()) out.append_char(' ');
+    }
+    return out.keep(arena);
+}
+
+fn String Flat.raw(&self)
+{
     if (self.at('{'))
     {
         self.i++;
-        while (self.more() && !self.at('}'))
-        {
-            if (self.at('\\'))
-            {
-                self.i++;
-                String cmd = self.name();
-                String glyph;
-                self.out.append(find(greek, cmd, &glyph) || symbol(cmd, &glyph) ? glyph : cmd);
-                continue;
-            }
-            String g = script.map(self.s[self.i]);
-            if (g.len)
-            {
-                self.out.append(g);
-            }
-            else
-            {
-                self.out.append_char(self.s[self.i]);
-            }
-            self.i++;
-        }
-        if (self.at('}')) self.i++;
-        return;
+        return self.nested();
     }
+    usz start = self.i;
+    if (self.at('\\'))
+    {
+        self.i++;
+        self.name();
+    }
+    else if (self.more())
+    {
+        self.i++;
+    }
+    return self.s[start : self.i - start];
+}
+
+fn void Flat.script(&self, Pair[] greek, Script script, char mark)
+{
+    self.i++;
     if (!self.more())
     {
         self.out.append_char(mark);
         return;
     }
-    String g = script.map(self.s[self.i]);
-    if (g.len)
+    bool braced = self.at('{');
+    String raw = self.raw();
+    DString lifted;
+    lifted.init(mem, 64);
+    defer lifted.free();
+    if (lift(raw, greek, script, &lifted))
     {
-        self.out.append(g);
+        self.out.append(lifted.str_view());
+        return;
     }
-    else
+    self.out.append_char(mark);
+    if (braced) self.out.append_char('(');
+    self.out.append(braced ? self.sub(raw) : raw);
+    if (braced) self.out.append_char(')');
+}
+
+fn bool Flat.operator(&self, String cmd)
+{
+    MathCommand c;
+    MathCmdFlags flags;
+    if (!command(cmd, &c, &flags) || !(flags.bigOp || flags.integral || flags.limit)) return false;
+    String lower;
+    String upper;
+    for (int k = 0; k < 2; k++)
     {
-        self.out.append_char(mark);
-        self.out.append_char(self.s[self.i]);
+        usz mark = self.i;
+        self.skip(" ");
+        if (self.at('_'))
+        {
+            self.i++;
+            lower = self.raw();
+        }
+        else if (self.at('^'))
+        {
+            self.i++;
+            upper = self.raw();
+        }
+        else
+        {
+            self.i = mark;
+            break;
+        }
     }
-    self.i++;
+    self.out.append(glyph(c));
+    if (lower.len == 0 && upper.len == 0) return true;
+    DString lifted;
+    lifted.init(mem, 64);
+    defer lifted.free();
+    bool low = lower.len == 0 || lift(lower, LOWERED, SUB, &lifted);
+    if (low && upper.len > 0) lifted.append("..");
+    bool high = upper.len == 0 || lift(upper, LOWERED, SUB, &lifted);
+    if (low && high)
+    {
+        self.out.append(lifted.str_view());
+        return true;
+    }
+    self.out.append_char('(');
+    self.out.append(squeeze(self.arena, self.sub(lower)));
+    if (upper.len > 0)
+    {
+        self.out.append("..");
+        self.out.append(squeeze(self.arena, self.sub(upper)));
+    }
+    self.out.append_char(')');
+    return true;
 }
 
 fn String unicode(ast::Arena* arena, String input)

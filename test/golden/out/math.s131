@@ -1,8 +1,8 @@
 [38;2;249;38;114m[1mMath coverage[0m
 
-Inline: a   b   c   d   e    f g, ½ (a+1)/b ³√(x+1), pmod 7, xᵅ→ yᵦ∞ z^q w_y, x², aᵢⱼ, xⁿ⁺¹ₖ, f′(x), f″, a/b, √x, ³√x, αβΓ, ℝℤℕ,
-ℒ, 𝔤, v, v⃗, x̂, z̄, ẋ, ẍ, ñ, AB̄, ū, a (mod n), a mod n, if x, rank A, x ≤ y ≠ z ∈ S ⊆ T, not∈, → ⇒ ⟺ ↦, ∑ᵢ₌₁ⁿ i, ∫₀¹ f, limₙ → ∞,
-costs $5 and $10.
+Inline: a   b   c   d   e    f g, ½ (a+1)/b ³√(x+1), pmod 7, x^(α→) y_(β∞) z^q w_y, x², aᵢⱼ, xⁿ⁺¹ₖ, f′(x), f″, a/b, √x, ³√x, αβΓ,
+ℝℤℕ, ℒ, 𝔤, v, v⃗, x̂, z̄, ẋ, ẍ, ñ, AB̄, ū, a (mod n), a mod n, if x, rank A, x ≤ y ≠ z ∈ S ⊆ T, not∈, → ⇒ ⟺ ↦, ∑ᵢ₌₁..ₙ i, ∫₀..₁ f,
+lim(n→∞), costs $5 and $10.
 
 
 [38;2;166;226;46m[1mFractions and roots[0m
@@ -16,10 +16,10 @@ costs $5 and $10.
 
 
 
-                n  ╭───
-     ╭───────      ╱  a 
-    √ x² + y² +   ╱  ───
-                 √    b 
+                   ┌───
+                   │ a 
+    √(x² + y²) + n │───
+                  ╲│ b 
 
 
 
@@ -31,21 +31,15 @@ costs $5 and $10.
 [38;2;166;226;46m[1mBig operators[0m
 
 
-      n     m                                                          
-     ───   ───   ───                                                   
-     \     ┬ ┬   ┬ ┬   ╷ ╷   ╭─╮   ╷ ╷   ╷ ╷   ╷ ╷   ╷ ╷   ╷ ╷   ╭─╮   
-      >    │ │   │ │   │ │   │ │   │ │   │ │   │ │   │ │   │ │   │ │  x
-     /     │ │   │ │   ╰─╯   ╵ ╵   ╰─╯   ╰─╯   ╰─╯   ╰─╯   ╰─╯   ╵ ╵   
-     ───   ┴ ┴   ┴ ┴  a ∈ A   b     i     i     i     i     i     i    
-    k = 0 i = 1   j                                                    
+      n     m                                          
+      ∑     ∏    ∐    ⋃    ⋂   ⨁   ⨂   ⨀   ⨆   ⋁   ⋀  x
+    k = 0 i = 1  j  a ∈ A  b   i   i   i   i   i   i   
 
 
 
-       b                                      
-     ⌠    ⌠⌠    ⌠⌠⌠    ⌠    ⌠⌠    ⌠⌠⌠         
-     │    ││    │││    │    ││    │││   f   dx
-     ⌡    ⌡⌡    ⌡⌡⌡    ⌡    ⌡⌡    ⌡⌡⌡         
-       a     D      V    C     S      V       
+     b                            
+     ∫   ∬   ∭   ∮   ∯   ∰  f   dx
+     a   D   V   C   S   V        
 
 
 
@@ -90,11 +84,7 @@ costs $5 and $10.
 
 
 
-       ───           
-       \             
-        >     P(i, j)
-       /             
-       ───           
+        ∑     P(i, j)
     0 < i < m        
     0 < j < n        
 

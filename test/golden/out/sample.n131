@@ -5,11 +5,9 @@ Welcome to [1mmdv[0m! This document tests and demonstrates the full suite of i
 [38;2;117;113;94m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
 
 
-              ∞             
-            ⌠    x  n - 1   
-    Γ(x) =  │   e  x      dt
-            ⌡               
-              0             
+            ∞   x  n - 1   
+    Γ(x) =  ∫  e  x      dt
+            0              
 
 
 
@@ -29,33 +27,26 @@ Welcome to [1mmdv[0m! This document tests and demonstrates the full suite of i
 
 [38;2;253;151;31m[1mInline Math[0m
 • The famous Pythagorean identity: a² + b² = c²
-• Euler's identity: eⁱπ + 1 = 0
+• Euler's identity: e^(iπ) + 1 = 0
 • Greek letters and roots: α + β² = √γ ⋅ θ
-• Limits & Calculus: limₓ → ₀ sin(x)/x = 1 and d/dx(eˣ) = eˣ
+• Limits & Calculus: lim(x→0) sin(x)/x = 1 and d/dx(eˣ) = eˣ
 
 
-           ∞       
-          ───      
-          \     xⁿ 
-    eˣ =   >   ────
-          /     n! 
-          ───      
-         n = 0     
+           ∞    xⁿ 
+    eˣ =   ∑   ────
+         n = 0  n! 
 
 
 
-       ∞               
-     ⌠     -x²       ╭─
-     │    e    dx = √ π
-     ⌡                 
-       -∞              
+     ∞   -x²        
+     ∫  e    dx = √π
+    -∞              
 
 
 
-               ╭──────── 
-         -b ± √ b² - 4ac 
-    x = ─────────────────
-               2a        
+         -b ± √(b² - 4ac) 
+    x = ──────────────────
+                2a        
 
 
 
@@ -65,21 +56,15 @@ Welcome to [1mmdv[0m! This document tests and demonstrates the full suite of i
 
 
 
-                 n                  
-                ───                 
-           n    \    ⎛ n ⎞  n - k  k
-    (x + y)  =   >   ⎝ k ⎠ x      y 
-                /                   
-                ───                 
+           n     n   ⎛ n ⎞  n - k  k
+    (x + y)  =   ∑   ⎝ k ⎠ x      y 
                k = 0                
 
 
 
-                 ∞                 
-               ⌠          -i ω t   
-    ℱ{f(t)} =  │    f(t) e       dt
-               ⌡                   
-                 -∞                
+               ∞        -i ω t   
+    ℱ{f(t)} =  ∫  f(t) e       dt
+              -∞                 
 
 
 
@@ -134,12 +119,9 @@ Welcome to [1mmdv[0m! This document tests and demonstrates the full suite of i
 
 
 
-                        k     
-      total mass       ───    
-    ⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞    \      
-    a₁ + a₂ + ⋯+ aₖ =   >   aᵢ
-                       /      
-                       ───    
+      total mass              
+    ⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞     k     
+    a₁ + a₂ + ⋯+ aₖ =   ∑   aᵢ
                       i = 1   
                       ⏟⏟⏟⏟⏟⏟⏟⏟
                          M    
@@ -147,10 +129,10 @@ Welcome to [1mmdv[0m! This document tests and demonstrates the full suite of i
 
 
 [38;2;253;151;31m[1mComplex Equations[0m
-• Gaussian integral: ∫₋∞∞ e⁻ˣ^² dx = √π
-• Summation formula: ∑ᵢ₌₁ⁿ i = (n(n+1))/2
+• Gaussian integral: ∫(-∞..∞) e^(-x²) dx = √π
+• Summation formula: ∑ᵢ₌₁..ₙ i = (n(n+1))/2
 • Quadratic equation: x = (-b ± √(b² - 4ac))/2a
-• Vectors & Matrix multiplication: A ∈ ℝᵐ × ⁿ and x ∈ ℝⁿ
+• Vectors & Matrix multiplication: A ∈ ℝ^(m × n) and x ∈ ℝⁿ
 
 [38;2;117;113;94m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
 
@@ -222,7 +204,7 @@ Welcome to [1mmdv[0m! This document tests and demonstrates the full suite of i
 
 [38;2;102;217;239m[1mComponent      [0m  [38;2;102;217;239m[1mTechnology    [0m  [38;2;102;217;239m[1mMath Expression[0m  [38;2;102;217;239m[1m      Status[0m
 [38;2;117;113;94m───────────────  ──────────────  ───────────────  ────────────[0m
-Math Engine      [48;2;39;40;34m[38;2;102;217;239municodeit.c3[0m     ∫₀¹ x² dx = ⅓        ✔ Ready
+Math Engine      [48;2;39;40;34m[38;2;102;217;239municodeit.c3[0m    ∫₀..₁ x² dx = ⅓       ✔ Ready
 Table Renderer   [48;2;39;40;34m[38;2;102;217;239mtable.c3[0m           O(N × M)          ✔ Active
 Terminal Output  ANSI / Unicode   ∇ ⋅ E⃗ = ρ/ϵ₀     ✔ Supported
 Terminal Viewer  ANSI / Unicode       λ → ∞       ✔ Integrated

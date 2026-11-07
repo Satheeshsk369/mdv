@@ -124,90 +124,60 @@ fn MathBox fraction(ast::Arena* arena, MathBox num, MathBox den)
 
 fn MathBox root(ast::Arena* arena, MathBox inner, MathBox degree)
 {
-    int degW = degree.width;
     int h = inner.height;
-    int slant = h > 1 ? (h - 1) : 0;
-    int prefixW = (degW > 0 ? degW : 1) + slant + 1;
-    int w = prefixW + inner.width;
-    int newH = h + 1;
-    int newBase = inner.baseline + 1;
-
-    String* rBuf = (String*)arena.alloc((usz)newH * String::size);
-
+    int d = degree.width;
+    String mark = d > 0 ? degree.rows[0] : "";
+    String* rows = arena.alloc((usz)(h + 1) * String::size);
     DString mb;
     mb.init(mem, 512);
     defer mb.free();
-
-    mb.clear();
-    if (degW > 0)
+    if (h == 1 && (d == 0 || (degree.height == 1 && SUPER.fits(mark))))
     {
-        mb.append_string(degree.rows[0]);
+        String r = inner.rows[0].trim();
+        bool wrap = operated(r) && (r[0] != '(' || r[^1] != ')');
+        if (d > 0) mb.append(SUPER.apply(arena, mark));
+        mb.append("√");
+        if (wrap) mb.append_char('(');
+        mb.append(r);
+        if (wrap) mb.append_char(')');
+        return atom(arena, mb.str_view());
     }
-    else
+    if (h == 1)
     {
-        mb.append_char(' ');
+        mb.append(mark);
+        mb.append(" ┌");
+        mb.repeat("─", inner.width);
+        rows[0] = mb.keep(arena);
+        mb.clear();
+        mb.spaces(d);
+        mb.append("√ ");
+        mb.append(inner.rows[0]);
+        mb.spaces(inner.width - text::width(inner.rows[0]));
+        rows[1] = mb.keep(arena);
+        return { d + 2 + inner.width, 2, inner.baseline + 1, rows[:2] };
     }
-    if (slant > 0) mb.spaces(slant);
-    mb.append("╭");
+    mb.spaces(d + 1);
+    mb.append("┌");
     mb.repeat("─", inner.width);
-    rBuf[0] = mb.keep(arena);
-
+    rows[0] = mb.keep(arena);
     for (int r = 0; r < h; r++)
     {
         mb.clear();
-        if (degW > 0)
+        if (r == h - 2)
         {
-            mb.spaces(degW);
-        }
-
-        if (h == 1)
-        {
-            if (degW > 0)
-            {
-                mb.append("√");
-            }
-            else
-            {
-                mb.append("√ ");
-            }
+            mb.append(mark);
         }
         else
         {
-            int indent = (h - 1 - r);
-            if (indent > 0) mb.spaces(indent);
-
-            if (r == h - 1)
-            {
-                mb.append("√ ");
-            }
-            else
-            {
-                mb.append("╱ ");
-            }
-
-            if (r > 0) mb.spaces(r);
+            mb.spaces(d);
         }
-
-        mb.append_string(inner.rows[r]);
-        int rowW = text::width(inner.rows[r]);
-        int pad = inner.width - rowW;
-        if (pad > 0) mb.spaces(pad);
-
-        rBuf[r + 1] = mb.keep(arena);
+        mb.append(r == h - 1 ? "╲│" : " │");
+        mb.append(inner.rows[r]);
+        mb.spaces(inner.width - text::width(inner.rows[r]));
+        rows[r + 1] = mb.keep(arena);
     }
-
-    MathBox res;
-    res.width = w;
-    res.height = newH;
-    res.baseline = newBase;
-    res.rows = rBuf[0 : (usz)newH];
-    return res;
+    return { d + 2 + inner.width, h + 1, inner.baseline + 1, rows[:h + 1] };
 }
-
-const String[] SIGMA = { " ─── ", " \\   ", "  >  ", " /   ", " ─── " };
-const String[] PI = { " ─── ", " ┬ ┬ ", " │ │ ", " │ │ ", " ┴ ┴ " };
-const String[] CUP = { " ╷ ╷ ", " │ │ ", " ╰─╯ " };
-const String[] CAP = { " ╭─╮ ", " │ │ ", " ╵ ╵ " };
 
 fn MathBox present(MathBox b)
 {
@@ -249,93 +219,17 @@ fn String centered(ast::Arena* arena, String row, int width)
     return mb.keep(arena);
 }
 
-fn MathBox bigop(ast::Arena* arena, MathBox sub, MathBox sup, String[] glyph)
+fn MathBox bigop(ast::Arena* arena, MathBox sub, MathBox sup, String glyph)
 {
-    MathBox op = { 5, (int)glyph.len, (int)glyph.len / 2, glyph };
-    int supH = sup.width > 0 ? sup.height : 0;
-    return column(arena, { present(sup), op, present(sub) }, max(5, sub.width, sup.width), supH + op.baseline);
-}
-
-fn MathBox integral(ast::Arena* arena, MathBox sub, MathBox sup, int intOrder = 1)
-{
-    int h = 3;
-    int symW = intOrder == 1 ? 3 : (intOrder == 2 ? 4 : 5);
-    int maxW = symW;
-    if (sub.width + symW > maxW) maxW = sub.width + symW;
-    if (sup.width + symW > maxW) maxW = sup.width + symW;
-
-    int supH = (sup.width > 0 ? sup.height : 0);
-    int subH = (sub.width > 0 ? sub.height : 0);
-    int totalH = supH + h + subH;
-    int base = supH + (h / 2);
-
-    String* rBuf = (String*)arena.alloc((usz)totalH * String::size);
     DString mb;
-    mb.init(mem, 512);
+    mb.init(mem, 16);
     defer mb.free();
-
-    int curR = 0;
-
-    if (sup.width > 0)
-    {
-        for (int r = 0; r < sup.height; r++)
-        {
-            mb.clear();
-            mb.spaces(symW);
-            mb.append_string(sup.rows[r]);
-            int rw = text::width(sup.rows[r]);
-            int pad = maxW - symW - rw;
-            if (pad > 0) mb.spaces(pad);
-            rBuf[curR++] = mb.keep(arena);
-        }
-    }
-
-    for (int r = 0; r < h; r++)
-    {
-        mb.clear();
-        if (intOrder == 1)
-        {
-            if (r == 0) { mb.append(" ⌠ "); }
-            else if (r == h - 1) { mb.append(" ⌡ "); }
-            else { mb.append(" │ "); }
-        }
-        else if (intOrder == 2)
-        {
-            if (r == 0) { mb.append(" ⌠⌠ "); }
-            else if (r == h - 1) { mb.append(" ⌡⌡ "); }
-            else { mb.append(" ││ "); }
-        }
-        else
-        {
-            if (r == 0) { mb.append(" ⌠⌠⌠ "); }
-            else if (r == h - 1) { mb.append(" ⌡⌡⌡ "); }
-            else { mb.append(" │││ "); }
-        }
-
-        mb.spaces(maxW - symW);
-        rBuf[curR++] = mb.keep(arena);
-    }
-
-    if (sub.width > 0)
-    {
-        for (int r = 0; r < sub.height; r++)
-        {
-            mb.clear();
-            mb.spaces(symW);
-            mb.append_string(sub.rows[r]);
-            int rw = text::width(sub.rows[r]);
-            int pad = maxW - symW - rw;
-            if (pad > 0) mb.spaces(pad);
-            rBuf[curR++] = mb.keep(arena);
-        }
-    }
-
-    MathBox res;
-    res.width = maxW;
-    res.height = totalH;
-    res.baseline = base;
-    res.rows = rBuf[0 : (usz)totalH];
-    return res;
+    mb.append(" ");
+    mb.append(glyph);
+    mb.append(" ");
+    MathBox op = atom(arena, mb.str_view());
+    int supH = sup.width > 0 ? sup.height : 0;
+    return column(arena, { present(sup), op, present(sub) }, max(op.width, sub.width, sup.width), supH);
 }
 
 fn MathBox limits(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup)

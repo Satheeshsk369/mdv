@@ -8,11 +8,9 @@ capabilities.
 ────────────────────────────────────
 
 
-              ∞             
-            ⌠    x  n - 1   
-    Γ(x) =  │   e  x      dt
-            ⌡               
-              0             
+            ∞   x  n - 1   
+    Γ(x) =  ∫  e  x      dt
+            0              
 
 
 
@@ -37,35 +35,28 @@ capabilities.
 ### Inline Math
 • The famous Pythagorean identity:
   a² + b² = c²
-• Euler's identity: eⁱπ + 1 = 0
+• Euler's identity: e^(iπ) + 1 = 0
 • Greek letters and roots: α + β² =
   √γ ⋅ θ
-• Limits & Calculus: limₓ → ₀
+• Limits & Calculus: lim(x→0)
   sin(x)/x = 1 and d/dx(eˣ) = eˣ
 
 
-           ∞       
-          ───      
-          \     xⁿ 
-    eˣ =   >   ────
-          /     n! 
-          ───      
-         n = 0     
+           ∞    xⁿ 
+    eˣ =   ∑   ────
+         n = 0  n! 
 
 
 
-       ∞               
-     ⌠     -x²       ╭─
-     │    e    dx = √ π
-     ⌡                 
-       -∞              
+     ∞   -x²        
+     ∫  e    dx = √π
+    -∞              
 
 
 
-               ╭──────── 
-         -b ± √ b² - 4ac 
-    x = ─────────────────
-               2a        
+         -b ± √(b² - 4ac) 
+    x = ──────────────────
+                2a        
 
 
 
@@ -75,21 +66,15 @@ capabilities.
 
 
 
-                 n                  
-                ───                 
-           n    \    ⎛ n ⎞  n - k  k
-    (x + y)  =   >   ⎝ k ⎠ x      y 
-                /                   
-                ───                 
+           n     n   ⎛ n ⎞  n - k  k
+    (x + y)  =   ∑   ⎝ k ⎠ x      y 
                k = 0                
 
 
 
-                 ∞                 
-               ⌠          -i ω t   
-    ℱ{f(t)} =  │    f(t) e       dt
-               ⌡                   
-                 -∞                
+               ∞        -i ω t   
+    ℱ{f(t)} =  ∫  f(t) e       dt
+              -∞                 
 
 
 
@@ -144,12 +129,9 @@ capabilities.
 
 
 
-                        k     
-      total mass       ───    
-    ⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞    \      
-    a₁ + a₂ + ⋯+ aₖ =   >   aᵢ
-                       /      
-                       ───    
+      total mass              
+    ⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞     k     
+    a₁ + a₂ + ⋯+ aₖ =   ∑   aᵢ
                       i = 1   
                       ⏟⏟⏟⏟⏟⏟⏟⏟
                          M    
@@ -157,14 +139,14 @@ capabilities.
 
 
 ### Complex Equations
-• Gaussian integral: ∫₋∞∞ e⁻ˣ^² dx =
-  √π
-• Summation formula: ∑ᵢ₌₁ⁿ i =
+• Gaussian integral: ∫(-∞..∞)
+  e^(-x²) dx = √π
+• Summation formula: ∑ᵢ₌₁..ₙ i =
   (n(n+1))/2
 • Quadratic equation: x = (-b ± √(b²
   - 4ac))/2a
 • Vectors & Matrix multiplication: A
-  ∈ ℝᵐ × ⁿ and x ∈ ℝⁿ
+  ∈ ℝ^(m × n) and x ∈ ℝⁿ
 
 ────────────────────────────────────
 
@@ -254,8 +236,9 @@ def fibonacci(n: int) -> list[int]:
 Component  Technology   Math       Status
                     Expression           
 ───────  ─────────  ───────  ─────────
-Math     unicodeit.c3  ∫₀¹ x²     ✔ Ready
-Engine              dx = ⅓            
+Math     unicodeit.c3   ∫₀..₁     ✔ Ready
+Engine              x² dx =           
+                       ⅓              
 
 Table    table.c3    O(N ×    ✔ Active
 Renderer               M)              

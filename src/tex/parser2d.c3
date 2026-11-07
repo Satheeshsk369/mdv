@@ -284,6 +284,26 @@ fn MathBox block(Reader* p, MathAtomKind* prevAtom)
     return grid(p.arena, flatGrid, numRows, numCols, 'C', 2);
 }
 
+struct Large
+{
+    MathCommand command;
+    String glyph;
+}
+
+const Large[] LARGE = {
+    { SUM, "∑" }, { PROD, "∏" }, { COPROD, "∐" }, { BIG_UNION, "⋃" }, { BIG_INTERSECTION, "⋂" },
+    { BIG_PLUS, "⨁" }, { BIG_TIMES, "⨂" }, { BIG_DOT, "⨀" }, { BIG_SQ_CUP, "⨆" }, { BIG_VEE, "⋁" },
+    { BIG_WEDGE, "⋀" }, { INT, "∫" }, { IINT, "∬" }, { IIINT, "∭" }, { OINT, "∮" }, { OIINT, "∯" }, { OIIINT, "∰" },
+    { LIM, "lim" }, { LIMINF, "lim inf" }, { LIMSUP, "lim sup" }, { MAX, "max" }, { MIN, "min" },
+    { SUP, "sup" }, { INF, "inf" }, { ARGMAX, "arg max" }, { ARGMIN, "arg min" },
+};
+
+fn String glyph(MathCommand command)
+{
+    foreach (l : LARGE) if (l.command == command) return l.glyph;
+    return "";
+}
+
 fn MathBox commanded(Reader* p, MathAtomKind* prevAtom, MathCommand mcmd, String cmd)
 {
     switch (mcmd)
@@ -470,30 +490,8 @@ fn MathBox commanded(Reader* p, MathAtomKind* prevAtom, MathCommand mcmd, String
             return root(p.arena, sqrtInner, deg);
 
         case SUM:
-            MathBox sSub = blank(p.arena);
-            MathBox sSup = blank(p.arena);
-            for (int k = 0; k < 2; k++)
-            {
-                p.skipSpaces();
-                if (p.peek() == '_') { p.get(); sSub = group(p); }
-                else if (p.peek() == '^') { p.get(); sSup = group(p); }
-            }
-            *prevAtom = MathAtomKind.OP;
-            return bigop(p.arena, sSub, sSup, SIGMA);
-
         case PROD:
         case COPROD:
-            MathBox prSub = blank(p.arena);
-            MathBox prSup = blank(p.arena);
-            for (int k = 0; k < 2; k++)
-            {
-                p.skipSpaces();
-                if (p.peek() == '_') { p.get(); prSub = group(p); }
-                else if (p.peek() == '^') { p.get(); prSup = group(p); }
-            }
-            *prevAtom = MathAtomKind.OP;
-            return bigop(p.arena, prSub, prSup, PI);
-
         case BIG_UNION:
         case BIG_INTERSECTION:
         case BIG_PLUS:
@@ -502,38 +500,30 @@ fn MathBox commanded(Reader* p, MathAtomKind* prevAtom, MathCommand mcmd, String
         case BIG_SQ_CUP:
         case BIG_VEE:
         case BIG_WEDGE:
-            MathBox bSub = blank(p.arena);
-            MathBox bSup = blank(p.arena);
-            for (int k = 0; k < 2; k++)
-            {
-                p.skipSpaces();
-                if (p.peek() == '_') { p.get(); bSub = group(p); }
-                else if (p.peek() == '^') { p.get(); bSup = group(p); }
-            }
-            *prevAtom = MathAtomKind.OP;
-            bool isInter = (mcmd == MathCommand.BIG_INTERSECTION || mcmd == MathCommand.BIG_WEDGE);
-            return bigop(p.arena, bSub, bSup, isInter ? CAP : CUP);
-
         case INT:
         case IINT:
         case IIINT:
         case OINT:
         case OIINT:
         case OIIINT:
-            int order = 1;
-            if (mcmd == MathCommand.IINT || mcmd == MathCommand.OIINT) { order = 2; }
-            if (mcmd == MathCommand.IIINT || mcmd == MathCommand.OIIINT) { order = 3; }
-
-            MathBox intSub = blank(p.arena);
-            MathBox intSup = blank(p.arena);
+            MathBox lower = blank(p.arena);
+            MathBox upper = blank(p.arena);
             for (int k = 0; k < 2; k++)
             {
                 p.skipSpaces();
-                if (p.peek() == '_') { p.get(); intSub = group(p); }
-                else if (p.peek() == '^') { p.get(); intSup = group(p); }
+                if (p.peek() == '_')
+                {
+                    p.get();
+                    lower = group(p);
+                }
+                else if (p.peek() == '^')
+                {
+                    p.get();
+                    upper = group(p);
+                }
             }
             *prevAtom = MathAtomKind.OP;
-            return integral(p.arena, intSub, intSup, order);
+            return bigop(p.arena, lower, upper, glyph(mcmd));
 
         case LIM:
         case LIMINF:
@@ -544,11 +534,7 @@ fn MathBox commanded(Reader* p, MathAtomKind* prevAtom, MathCommand mcmd, String
         case INF:
         case ARGMAX:
         case ARGMIN:
-            String opName = cmd;
-            if (mcmd == MathCommand.LIMINF) { opName = "lim inf"; }
-            else if (mcmd == MathCommand.LIMSUP) { opName = "lim sup"; }
-            else if (mcmd == MathCommand.ARGMAX) { opName = "arg max"; }
-            else if (mcmd == MathCommand.ARGMIN) { opName = "arg min"; }
+            String opName = glyph(mcmd);
 
             MathBox opBox = atom(p.arena, opName);
             MathBox limSub = blank(p.arena);
