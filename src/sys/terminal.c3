@@ -1,7 +1,13 @@
 module terminal;
 
 import std::io;
+import std::io::path;
+import std::io::file;
+import std::os::env;
+import std::time::clock;
 import std::encoding::base64;
+import std::core::string::conv;
+import libc;
 
 const int ESC = 27;
 const int TAB = 9;
@@ -39,67 +45,13 @@ const int BACKTAB = 1015;
 const int CLICK = 1016;
 const int DRAG = 1017;
 const int RELEASE = 1018;
+const int DONE = 1019;
 const int SHIFT = 1 << 16;
 const int ALT = 1 << 17;
 const int CTRL = 1 << 18;
 const int KEY = 0xFFFF;
 const int WHEELUP = 1012;
 const int WHEELDOWN = 1013;
-
-struct WinSize
-{
-    ushort ws_row;
-    ushort ws_col;
-    ushort ws_xpixel;
-    ushort ws_ypixel;
-}
-
-struct Stat
-{
-    ulong st_dev;
-    ulong st_ino;
-    ulong st_nlink;
-    uint st_mode;
-    uint st_uid;
-    uint st_gid;
-    uint pad;
-    ulong st_rdev;
-    long st_size;
-    long st_blksize;
-    long st_blocks;
-    long st_atime;
-    ulong st_atime_nsec;
-    long st_mtime;
-    ulong st_mtime_nsec;
-    long st_ctime;
-    ulong st_ctime_nsec;
-    long[3] reserved;
-}
-
-struct Termios
-{
-    uint c_iflag;
-    uint c_oflag;
-    uint c_cflag;
-    uint c_lflag;
-    char c_line;
-    char[32] c_cc;
-    uint c_ispeed;
-    uint c_ospeed;
-}
-
-struct PollFd
-{
-    int fd;
-    short events;
-    short revents;
-}
-
-struct TimeVal
-{
-    long tv_sec;
-    long tv_usec;
-}
 
 struct Stamp
 {
@@ -114,74 +66,37 @@ fn bool Stamp.same(self, Stamp other)
     return self.inode == other.inode && self.size == other.size && self.mtime == other.mtime && self.nsec == other.nsec;
 }
 
-alias SignalHandler = fn void(int sig);
-
-extern fn int ioctl(int fd, ulong request, ...);
-extern fn int isatty(int fd);
-extern fn char* getenv(char* name);
-extern fn int stat(char* path, Stat* buf);
-extern fn int gettimeofday(TimeVal* tv, void* tz);
-extern fn int tcgetattr(int fd, Termios* termios);
-extern fn int tcsetattr(int fd, int actions, Termios* termios);
-extern fn int read(int fd, void* buf, ulong count);
-extern fn int write(int fd, void* buf, ulong count);
-extern fn int system(char* command);
-extern fn char* getcwd(char* buf, ulong size);
-extern fn int chdir(char* path);
-extern fn int poll(PollFd* fds, ulong nfds, int timeout);
-extern fn void exit(int status);
-extern fn SignalHandler signal(int signum, SignalHandler handler);
-
-Termios saved;
-int pointerColumn;
-int pointerRow;
 bool raw;
 bool alternate;
+int pointerColumn;
+int pointerRow;
 
 fn void out(String s)
 {
-    write(1, s.ptr, s.len);
+    if (scripted) return;
+    io::stdout().write(s)!!;
+    io::stdout().flush()!!;
 }
 
-fn int env(ZString name, int fallback)
+fn int env(String name, int fallback)
 {
-    char* value = getenv(name);
-    if (value == null) return fallback;
-    int n = 0;
-    for (int i = 0; value[i] >= '0' && value[i] <= '9'; i++) n = n * 10 + value[i] - '0';
-    return n > 0 ? n : fallback;
+    @pool()
+    {
+        String? value = env::tget_var(name);
+        if (catch value) return fallback;
+        return value.to_int() ?? fallback;
+    };
 }
 
-fn WinSize size()
-{
-    WinSize ws;
-    if (ioctl(1, 0x5413, &ws) != 0 && ioctl(1, 0x40087468, &ws) != 0) return {};
-    return ws;
-}
+fn String? variable(String name) => env::tget_var(name);
 
-fn int width()
-{
-    ushort cols = size().ws_col;
-    return cols > 0 ? cols : env("COLUMNS", 80);
-}
+fn int width() => scripted ? fixed[0] : max(size()[0], 0) ?: env("COLUMNS", 80);
 
-fn int height()
-{
-    ushort rows = size().ws_row;
-    return rows > 0 ? rows : env("LINES", 24);
-}
+fn int height() => scripted ? fixed[1] : max(size()[1], 0) ?: env("LINES", 24);
 
-fn bool tty()
-{
-    return isatty(1) != 0;
-}
+fn bool tty() => scripted || io::stdout().isatty();
 
-fn void onSignal(int sig)
-{
-    cooked();
-    leave();
-    exit(128 + sig);
-}
+fn bool piped() => !scripted && !io::stdin().isatty();
 
 fn void enter()
 {
@@ -201,43 +116,22 @@ fn void mouse(bool on)
     out(on ? "\e[?1002h\e[?1006h" : "\e[?1002l\e[?1006l");
 }
 
-fn void rawMode()
+fn void onSignal(CInt sig)
 {
-    if (raw || isatty(0) == 0) return;
-    signal(2, &onSignal);
-    signal(15, &onSignal);
-    signal(1, &onSignal);
-    if (tcgetattr(0, &saved) != 0) return;
-    Termios t = saved;
-    t.c_lflag &= ~0x800Au;
-    t.c_iflag &= ~0x0400u;
-    t.c_cc[0] = 0;
-    t.c_cc[10] = 0;
-    t.c_cc[6] = 0;
-    t.c_cc[5] = 0;
-    tcsetattr(0, 0, &t);
-    raw = true;
-    out("\e[?25l");
-}
-
-fn void cooked()
-{
-    if (!raw) return;
-    tcsetattr(0, 0, &saved);
-    raw = false;
-    out("\e[?25h");
+    cooked();
+    leave();
+    libc::exit(128 + sig);
 }
 
 fn void edit(String path, int line)
 {
     cooked();
     leave();
-    char* editor = getenv("EDITOR");
-    if (editor == null || editor[0] == 0) editor = getenv("VISUAL");
-    if (editor == null || editor[0] == 0) editor = "nano";
     @pool()
     {
-        system(string::tformat("%s +%d '%s'", (ZString)editor, line, path).zstr_tcopy());
+        String editor = variable("EDITOR") ?? variable("VISUAL") ?? "nano";
+        if (editor.len == 0) editor = "nano";
+        libc::system(string::tformat("%s +%d \"%s\"", editor, line, path).zstr_tcopy());
     };
     rawMode();
     enter();
@@ -251,25 +145,145 @@ fn void copy(String content)
     };
 }
 
-fn ulong now()
+fn ulong now() => scripted ? fake : (ulong)clock::now() / 1_000_000;
+
+bool scripted;
+String[] script;
+usz step;
+ulong fake;
+ulong due = 500;
+int[2] fixed = { 100, 30 };
+
+struct Named
 {
-    TimeVal tv;
-    gettimeofday(&tv, null);
-    return (ulong)tv.tv_sec * 1000 + (ulong)(tv.tv_usec / 1000);
+    String name;
+    String bytes;
 }
 
-fn bool wait(int ms)
+const Named[] NAMED = {
+    { "Up", "A" }, { "Down", "B" }, { "Right", "C" }, { "Left", "D" }, { "Home", "H" }, { "End", "F" },
+};
+
+const Named[] PLAIN = {
+    { "Enter", "\r" }, { "Escape", "\e" }, { "Tab", "\t" }, { "BTab", "\e[Z" }, { "Space", " " },
+    { "BSpace", "\x7f" }, { "DC", "\e[3~" }, { "PageDown", "\e[6~" }, { "PageUp", "\e[5~" },
+};
+
+fn void play()
 {
-    PollFd p = { .fd = 0, .events = 1 };
-    return poll(&p, 1, ms) > 0 && (p.revents & 1) != 0;
+    @pool()
+    {
+        String? keys = env::tget_var("MDV_KEYS");
+        if (catch keys) return;
+        String[] size = (env::tget_var("MDV_SIZE") ?? "100x30").tsplit("x");
+        scripted = true;
+        script = keys.copy(mem).split(mem, "\n");
+        fixed = { size[0].to_int() ?? 100, size[1].to_int() ?? 30 };
+    };
 }
 
-fn Stamp stamp(ZString path)
+fn void push(String bytes)
 {
-    Stat st;
-    if (stat(path, &st) != 0) return {};
-    return { st.st_ino, st.st_size, st.st_mtime, st.st_mtime_nsec };
+    foreach (c : bytes) if (pendingLen < pending.len) pending[pendingLen++] = c;
 }
+
+fn void press(String token)
+{
+    int mods;
+    while (token.len > 2 && token[1] == '-' && (token[0] == 'C' || token[0] == 'M' || token[0] == 'S'))
+    {
+        mods |= token[0] == 'S' ? 1 : token[0] == 'M' ? 2 : 4;
+        token = token[2..];
+    }
+    foreach (n : NAMED)
+    {
+        if (n.name != token) continue;
+        @pool()
+        {
+            push(mods == 0 ? string::tformat("\e[%s", n.bytes) : string::tformat("\e[1;%d%s", mods + 1, n.bytes));
+        };
+        return;
+    }
+    foreach (n : PLAIN)
+    {
+        if (n.name != token) continue;
+        push(n.bytes);
+        return;
+    }
+    if (mods == 4 && token.len == 1)
+    {
+        char c = token[0] & 0x1f;
+        push((String)(&c)[:1]);
+        return;
+    }
+    if (mods == 2) push("\e");
+    push(token);
+}
+
+fn void feed()
+{
+    if (pendingLen > 0 || fake < due || step >= script.len) return;
+    String token = script[step++];
+    due = fake + 300;
+    if (token.starts_with("!"))
+    {
+        @pool()
+        {
+            libc::system(token[1..].zstr_tcopy());
+        };
+        due = fake + 500;
+        return;
+    }
+    if (token.starts_with("resize:"))
+    {
+        String[] size = token[7..].tsplit("x");
+        fixed = { size[0].to_int() ?? 80, size[1].to_int() ?? 24 };
+        return;
+    }
+    if (token.starts_with("\e"))
+    {
+        push(token);
+        return;
+    }
+    press(token);
+}
+
+fn String here()
+{
+    Path? cwd = path::tcwd();
+    if (try cwd) return (String)cwd;
+    return ".";
+}
+
+fn void move(String dir) => (void)path::chdir(dir);
+
+fn Stamp stamp(String file)
+{
+    $if env::WIN32:
+        long? size = file::get_size(file);
+        Time? time = file::last_modified(file);
+        if (catch size) return {};
+        if (catch time) return {};
+        return { 1, size, (long)time, 0 };
+    $else
+        Stat st;
+        @pool()
+        {
+            if (libc::stat(file.zstr_tcopy(), &st) != 0) return {};
+        };
+        $switch:
+            $case env::DARWIN:
+                return { st.st_ino, st.st_size, st.st_mtimespec.s, (ulong)st.st_mtimespec.ns };
+            $case $defined(st.st_mtime_nsec):
+                return { st.st_ino, st.st_size, st.st_mtime, (ulong)st.st_mtime_nsec };
+            $case $defined(st.st_mtimensec):
+                return { st.st_ino, st.st_size, st.st_mtime, (ulong)st.st_mtimensec };
+            $default:
+                return { st.st_ino, st.st_size, st.st_mtime.s, (ulong)st.st_mtime.ns };
+        $endswitch
+    $endif
+}
+
 
 const char[] ARROWS = { 'A', 'B', 'C', 'D', 'H', 'F' };
 const int[] ARROWKEYS = { UP, DOWN, RIGHT, LEFT, HOME, END };
@@ -301,12 +315,6 @@ fn int wheel(int button)
 
 char[256] pending;
 int pendingLen;
-
-fn void fill()
-{
-    int n = read(0, &pending[pendingLen], (ulong)(pending.len - pendingLen));
-    if (n > 0) pendingLen += n;
-}
 
 fn int length(char[] b)
 {
@@ -390,10 +398,18 @@ fn int key()
 {
     while (true)
     {
-        if (pendingLen == 0) fill();
+        if (scripted)
+        {
+            feed();
+            if (pendingLen == 0) return step >= script.len && fake >= due ? DONE : 0;
+        }
+        else if (pendingLen == 0)
+        {
+            fill();
+        }
         if (pendingLen == 0) return 0;
         bool partial = pending[0] == ESC && (pendingLen == 1 || (pendingLen == 2 && (pending[1] == '[' || pending[1] == 'O')));
-        if (partial && wait(20)) fill();
+        if (partial && wait(20) && !scripted) fill();
         int len = length(pending[:pendingLen]);
         int k = decode(pending[:len]);
         pendingLen -= len;

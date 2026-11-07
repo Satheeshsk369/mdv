@@ -7,10 +7,14 @@ A terminal Markdown viewer written in C3. It renders Markdown with colour, Unico
 ```bash
 make          # build build/mdv
 make test     # unit tests
-make check    # golden render and TUI snapshots (needs tmux)
+make check    # golden render and TUI snapshots
 make golden   # rewrite the golden snapshots after an intended change
 make install  # copy to ~/.local/bin/mdv
 ```
+
+Runs on Linux, macOS, FreeBSD, OpenBSD, NetBSD and Windows (Windows Terminal or any console with VT support).
+
+`make check` drives the live view without a terminal: `MDV_KEYS` holds one key per line (tmux names such as `Down`, `C-s`, `S-Right`, raw escape sequences, `resize:70x20`, or `!command`), `MDV_SIZE` sets the screen (default `100x30`), and mdv prints the final frame. Keys arrive 300 ms apart on a simulated clock.
 
 ## Usage
 

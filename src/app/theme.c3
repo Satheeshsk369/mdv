@@ -1,6 +1,7 @@
 module app;
 
 import std::io;
+import std::io::path;
 import std::math;
 import std::core::mem;
 import ansi;
@@ -9,10 +10,10 @@ import text;
 
 fn String settings()
 {
-    ZString config = (ZString)terminal::getenv("XDG_CONFIG_HOME");
-    if (config != null && config[0] != 0) return string::tformat("%s/mdv/theme", config);
-    ZString home = (ZString)terminal::getenv("HOME");
-    return string::tformat("%s/.config/mdv/theme", home != null ? home : (ZString)".");
+    String config = terminal::variable("XDG_CONFIG_HOME") ?? "";
+    if (config.len > 0) return string::tformat("%s/mdv/theme", config);
+    String home = terminal::variable("HOME") ?? terminal::variable("USERPROFILE") ?? ".";
+    return string::tformat("%s/.config/mdv/theme", home);
 }
 
 fn int scheme(String name)
@@ -48,10 +49,9 @@ fn void View.remember(&self)
 {
     @pool()
     {
-        String path = settings();
-        String folder = path[:path.rindex_of_char('/') ?? 0];
-        terminal::system(string::tformat("mkdir -p '%s'", folder).zstr_tcopy());
-        if (catch io::file::save(path, ansi::title(self.theme))) self.say("✘ Could not save theme");
+        String file = settings();
+        (void)path::mkdir(file[:file.rindex_of_char('/') ?? 0], true);
+        if (catch io::file::save(file, ansi::title(self.theme))) self.say("✘ Could not save theme");
     };
 }
 

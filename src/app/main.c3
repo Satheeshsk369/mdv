@@ -10,7 +10,6 @@ import parser;
 import render;
 import app;
 
-extern fn int isatty(int fd);
 
 const String HELP = `mdv 0.3.0
 
@@ -37,6 +36,7 @@ fn void print(String content, render::Config config)
 
 fn int main(String[] args)
 {
+    terminal::play();
     bool stdout = false;
     bool noWrap = false;
     bool plain = false;
@@ -81,7 +81,7 @@ fn int main(String[] args)
 
     if (file.len == 0 || file == "-")
     {
-        if (isatty(0) == 0 || file == "-")
+        if (terminal::piped() || file == "-")
         {
             char[]? input = io::read_fully(mem, io::stdin());
             if (catch input) return 1;

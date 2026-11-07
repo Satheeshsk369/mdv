@@ -1,30 +1,30 @@
-[1m[38;2;123;168;160m[48;2;44;44;50m mdv [38;2;220;215;186m[48;2;22;22;28m sample.md [0m[38;2;114;113;105m│[39m [1m[38;2;255;160;102mKeyboard Controls & Keybindings[0m
-[38;2;114;113;105m──────────────────────────────────────────────────────────────────────────────────────────────────[39m
-  [1m[38;2;123;168;160mVertical Navigation:[0m
-    [38;2;230;195;132m↓ / ↑[39m                 Scroll down / up (accelerated)
-    [38;2;230;195;132mPgDn / PgUp[39m           Half-page scroll down / up
-    [38;2;230;195;132mHome / End[39m            Jump to Top / Bottom
-    [38;2;230;195;132m: <line>[39m              Goto line number (e.g. :42)
-
-  [1m[38;2;123;168;160mHorizontal & Layout:[0m
-    [38;2;230;195;132mw[39m                     Toggle Wrap / No-Wrap mode
-    [38;2;230;195;132m← / →[39m                 Horizontal scroll (accelerated)
-
-  [1m[38;2;123;168;160mFeatures & Actions:[0m
-    [38;2;152;187;108mSpace[39m                 Options menu
-    [38;2;152;187;108mTab / t[39m               Toggle Document Outline (Table of Contents)
-    [38;2;152;187;108mh[39m                     Highlight the current block
-    [38;2;152;187;108mc[39m                     Colour theme with live preview
-    [38;2;152;187;108mo[39m                     Switch Document (Markdown File Tree)
-    [38;2;152;187;108m/[39m                     In-document search (n next, N prev)
-    [38;2;152;187;108me[39m                     Edit with live preview (Ctrl+O lists editor commands)
-    [38;2;152;187;108mE[39m                     Open $EDITOR at current line
-    [38;2;152;187;108my[39m                     Copy document to clipboard (OSC 52)
-    [38;2;152;187;108m?[39m                     Show / hide this help screen
-[38;2;68;68;69m~[39m
-[38;2;68;68;69m~[39m
-[38;2;68;68;69m~[39m
-[38;2;68;68;69m~[39m
-[38;2;68;68;69m~[39m
-[38;2;68;68;69m~[39m
-[38;2;68;68;69m~[39m
+[?7l[?25l[H[48;2;39;40;34m[38;2;102;217;239m[1m mdv [0m[48;2;30;32;36m[38;2;248;248;242m[1m sample.md [0m[38;2;117;113;94m│[0m [38;2;253;151;31m[1mKeyboard Controls & Keybindings[0m[K
+[38;2;117;113;94m──────────────────────────────────────────────────────────────────────────────────────────────────[0m[K
+  [38;2;102;217;239m[1mVertical Navigation:[0m[K
+    [38;2;230;219;116m↓ / ↑[0m                 Scroll down / up (accelerated)[K
+    [38;2;230;219;116mPgDn / PgUp[0m           Half-page scroll down / up[K
+    [38;2;230;219;116mHome / End[0m            Jump to Top / Bottom[K
+    [38;2;230;219;116m: <line>[0m              Goto line number (e.g. :42)[K
+  [K
+  [38;2;102;217;239m[1mHorizontal & Layout:[0m[K
+    [38;2;230;219;116mw[0m                     Toggle Wrap / No-Wrap mode[K
+    [38;2;230;219;116m← / →[0m                 Horizontal scroll (accelerated)[K
+  [K
+  [38;2;102;217;239m[1mFeatures & Actions:[0m[K
+    [38;2;166;226;46mSpace[0m                 Options menu[K
+    [38;2;166;226;46mTab / t[0m               Toggle Document Outline (Table of Contents)[K
+    [38;2;166;226;46mh[0m                     Highlight the current block[K
+    [38;2;166;226;46mc[0m                     Colour theme with live preview[K
+    [38;2;166;226;46mo[0m                     Switch Document (Markdown File Tree)[K
+    [38;2;166;226;46m/[0m                     In-document search (n next, N prev)[K
+    [38;2;166;226;46me[0m                     Edit with live preview (Ctrl+O lists editor commands)[K
+    [38;2;166;226;46mE[0m                     Open $EDITOR at current line[K
+    [38;2;166;226;46my[0m                     Copy document to clipboard (OSC 52)[K
+    [38;2;166;226;46m?[0m                     Show / hide this help screen[K
+[38;2;60;60;50m~[0m[K
+[38;2;60;60;50m~[0m[K
+[38;2;60;60;50m~[0m[K
+[38;2;60;60;50m~[0m[K
+[38;2;60;60;50m~[0m[K
+[38;2;60;60;50m~[0m[K
+[38;2;60;60;50m~[0m[K

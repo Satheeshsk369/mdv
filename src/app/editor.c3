@@ -785,7 +785,7 @@ fn void View.write(&self)
         return;
     }
     self.replace(e.str().copy(mem));
-    self.stamp = terminal::stamp(self.path.zstr_view());
+    self.stamp = terminal::stamp(self.name());
     e.clean = (int)e.history.len();
     e.warned = false;
     self.say("✔ Saved");

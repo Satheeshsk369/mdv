@@ -1,23 +1,11 @@
 module app;
 
 import std::io;
+import std::io::path;
 import ast;
 import terminal;
 import text;
 import ansi;
-
-struct Dirent
-{
-    ulong d_ino;
-    long d_off;
-    ushort d_reclen;
-    char d_type;
-    char[256] d_name;
-}
-
-extern fn void* opendir(ZString name);
-extern fn Dirent* readdir(void* dir);
-extern fn int closedir(void* dir);
 
 const String[] SKIP = { "build", "node_modules", "target", ".git", "dist", ".cache" };
 
@@ -54,33 +42,33 @@ fn bool skipped(String name)
     return false;
 }
 
-fn String join(ast::Arena* arena, String dir, String name)
+fn String join(String dir, String name) => dir == "." ? name : string::tformat("%s/%s", dir, name);
+
+fn String Tree.keep(&self, String dir, String name)
 {
     @pool()
     {
-        return arena.copy(dir == "." ? name : string::tformat("%s/%s", dir, name));
+        return self.names.copy(join(dir, name));
     };
 }
 
-fn bool hasMarkdown(ZString dir, int depth)
+fn bool hasMarkdown(String dir, int depth)
 {
     if (depth <= 0) return false;
-    void* d = opendir(dir);
-    if (d == null) return false;
-    defer closedir(d);
-    for (Dirent* e = readdir(d); e != null; e = readdir(d))
+    @pool()
     {
-        String name = ((ZString)&e.d_name).str_view();
-        if (name[0] == '.') continue;
-        if (markdown(name)) return true;
-        if (e.d_type != 4 || skipped(name)) continue;
-        bool found;
-        @pool()
+        PathList? entries = path::ls(tmem, (Path)dir);
+        if (catch entries) return false;
+        foreach (entry : entries)
         {
-            found = hasMarkdown(string::tformat("%s/%s", dir, name).zstr_tcopy(), depth - 1);
-        };
-        if (found) return true;
-    }
+            String name = (String)entry;
+            if (name.len == 0 || name[0] == '.') continue;
+            if (markdown(name)) return true;
+            String inner = join(dir, name);
+            if (skipped(name) || !path::is_dir((Path)inner)) continue;
+            if (hasMarkdown(inner, depth - 1)) return true;
+        }
+    };
     return false;
 }
 
@@ -96,50 +84,45 @@ fn void Tree.add(&self, String path, String name, int depth, bool dir, bool last
     node.current = !dir && current.len > 0 && (path == current || name == current);
 }
 
-fn void Tree.walk(&self, ZString dir, int depth, String current)
+fn void Tree.walk(&self, String dir, int depth, String current)
 {
     if (self.count >= 120 || depth > 5) return;
-    void* d = opendir(dir);
-    if (d == null) return;
-    Dirent[64] dirs;
-    Dirent[64] files;
+    String[60] dirs;
+    String[60] files;
     int dirCount;
     int fileCount;
-    for (Dirent* e = readdir(d); e != null; e = readdir(d))
+    @pool()
     {
-        String name = ((ZString)&e.d_name).str_view();
-        if (name[0] == '.') continue;
-        if (e.d_type == 4)
+        PathList? entries = path::ls(tmem, (Path)dir);
+        if (catch entries) return;
+        foreach (entry : entries)
         {
-            if (skipped(name)) continue;
-            bool found;
-            @pool()
+            String name = (String)entry;
+            if (name.len == 0 || name[0] == '.') continue;
+            if (path::is_dir((Path)join(dir, name)))
             {
-                found = hasMarkdown(join(&self.names, dir.str_view(), name).zstr_tcopy(), 4);
-            };
-            if (found && dirCount < 60) dirs[dirCount++] = *e;
+                if (skipped(name) || !hasMarkdown(join(dir, name), 4) || dirCount >= 60) continue;
+                dirs[dirCount++] = self.names.copy(name);
+            }
+            else if (markdown(name) && fileCount < 60)
+            {
+                files[fileCount++] = self.names.copy(name);
+            }
         }
-        else if (markdown(name) && fileCount < 60)
-        {
-            files[fileCount++] = *e;
-        }
-    }
-    closedir(d);
+    };
     int total = dirCount + fileCount;
     int index;
     for (int i = 0; i < fileCount && self.count < 120; i++)
     {
         index++;
-        String name = ((ZString)&files[i].d_name).str_view();
-        self.add(join(&self.names, dir.str_view(), name), name, depth, false, index == total, current);
+        self.add(self.keep(dir, files[i]), files[i], depth, false, index == total, current);
     }
     for (int i = 0; i < dirCount && self.count < 120; i++)
     {
         index++;
-        String name = ((ZString)&dirs[i].d_name).str_view();
-        String path = join(&self.names, dir.str_view(), name);
-        self.add(path, name, depth, true, index == total, current);
-        self.walk((ZString)path.ptr, depth + 1, current);
+        String path = self.keep(dir, dirs[i]);
+        self.add(path, dirs[i], depth, true, index == total, current);
+        self.walk(path, depth + 1, current);
     }
 }
 

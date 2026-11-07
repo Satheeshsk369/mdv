@@ -443,15 +443,16 @@ fn void View.drawEditor(&self, DString* fb)
 
 fn void View.drawFiles(&self, DString* fb)
 {
-    char[256] buf;
-    ZString cwd = (ZString)terminal::getcwd(&buf[0], 256);
     self.badge(fb);
     fb.append(ansi::style(GREEN));
     fb.append(ansi::BOLD);
     fb.append("Tree: ");
     fb.append(ansi::RESET);
     fb.append(ansi::style(TEXT));
-    fb.append(cwd ? cwd.str_view() : ".");
+    @pool()
+    {
+        fb.append(terminal::here());
+    };
     fb.append(ansi::RESET);
     fb.append("\e[K\n");
     rule(fb, self.width);

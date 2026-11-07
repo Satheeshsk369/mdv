@@ -124,7 +124,7 @@ fn void View.external(&self)
         self.replace(fresh);
         self.cursor = self.lines.find(line - 1);
         self.center(self.cursor, self.rows / 3);
-        self.stamp = terminal::stamp(self.path.zstr_view());
+        self.stamp = terminal::stamp(self.name());
     }
     self.say("✔ Resumed from Editor");
 }
@@ -135,7 +135,7 @@ fn void View.open(&self)
     if (node == null) return;
     if (node.dir)
     {
-        terminal::chdir((ZString)node.path.ptr);
+        terminal::move(node.path);
         self.tree.scan(self.name());
         self.tree.cursor = 0;
         return;
@@ -148,7 +148,7 @@ fn void View.open(&self)
     self.replace(fresh);
     self.top = 0;
     self.cursor = 0;
-    self.stamp = terminal::stamp(self.path.zstr_view());
+    self.stamp = terminal::stamp(self.name());
     @pool()
     {
         self.say(string::tformat("✔ Switched to %s", self.name()));
@@ -180,7 +180,7 @@ fn void View.resize(&self)
 
 fn void View.watch(&self)
 {
-    terminal::Stamp now = terminal::stamp(self.path.zstr_view());
+    terminal::Stamp now = terminal::stamp(self.name());
     if (now.inode == 0 || now.same(self.stamp)) return;
     self.stamp = now;
     String? fresh = load(self.name());
@@ -246,7 +246,7 @@ fn bool run(String file, int line, bool noWrap, bool picker)
     view.restore();
     if (picker) view.files();
     view.draw();
-    view.stamp = terminal::stamp(view.path.zstr_view());
+    view.stamp = terminal::stamp(view.name());
     while (true)
     {
         bool dirty;
@@ -257,6 +257,11 @@ fn bool run(String file, int line, bool noWrap, bool picker)
         }
         for (int key = terminal::key(); key != 0; key = terminal::key())
         {
+            if (key == terminal::DONE)
+            {
+                io::print(view.frame.str_view());
+                return true;
+            }
             if (view.key(key)) return true;
             dirty = true;
         }

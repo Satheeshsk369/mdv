@@ -1,30 +1,30 @@
-[1m[38;2;123;168;160m[48;2;44;44;50m mdv [38;2;220;215;186m[48;2;22;22;28m sample.md [0m[38;2;114;113;105m│[39m [1m[38;2;152;187;108m⚡ Sync L60[0m [38;2;114;113;105m│[39m [1m[38;2;152;187;108mLn 60[0m [38;2;114;113;105m(130/215 · 60%)[39m                                [38;2;114;113;105m[Space Options[39m
-[38;2;114;113;105m──────────────────────────────────────────────────────────────────────────────────────────────────[39m
-
-
-       total mass
-     ⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞     k
-     a₁ + a₂ + ⋯+ aₖ =   ∑   aᵢ
-                       i = 1
-                       ⏟⏟⏟⏟⏟⏟⏟⏟
-                          M
-
-[1m[38;2;123;168;160m▌[0m
-
- [1m[38;2;255;160;102mComplex Equations[0m
- • Gaussian integral: ∫(-∞..∞) e^(-x²) dx = √π
- • Summation formula: ∑ᵢ₌₁..ₙ i = (n(n+1))/2
- • Quadratic equation: x = (-b ± √(b² - 4ac))/2a
- • Vectors & Matrix multiplication: A ∈ ℝ^(m × n) and x ∈ ℝⁿ
-
- [38;2;114;113;105m────────────────────────────────────────────────────────────────────────────────────────────────[39m
-
-
- [1m[38;2;152;187;108m3. Interactive Task Lists & Bullets[0m
-
- ✔  High-performance C3 native parsing engine
- ✔  Inline LaTeX math to Unicode transformation
- ✔  Automatic box-drawing tables with column alignment
- ☐  Direct Tree-sitter AST queries
- ☐  Export to formatted terminal scrollback
-
+[?7l[?25l[H[48;2;39;40;34m[38;2;102;217;239m[1m mdv [0m[48;2;30;32;36m[38;2;248;248;242m[1m sample.md [0m[38;2;117;113;94m│[0m [38;2;166;226;46m[1m⚡ Sync L60[0m [38;2;117;113;94m│[0m [38;2;166;226;46m[1mLn 60[0m [38;2;117;113;94m(130/215 · 60%)[0m                               [38;2;117;113;94m[Space Options][0m[K
+[38;2;117;113;94m──────────────────────────────────────────────────────────────────────────────────────────────────[0m[K
+ [K
+ [K
+       total mass              [K
+     ⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞     k     [K
+     a₁ + a₂ + ⋯+ aₖ =   ∑   aᵢ[K
+                       i = 1   [K
+                       ⏟⏟⏟⏟⏟⏟⏟⏟[K
+                          M    [K
+ [K
+[38;2;102;217;239m[1m▌[0m[K
+ [K
+ [38;2;253;151;31m[1mComplex Equations[0m[K
+ • Gaussian integral: ∫(-∞..∞) e^(-x²) dx = √π[K
+ • Summation formula: ∑ᵢ₌₁..ₙ i = (n(n+1))/2[K
+ • Quadratic equation: x = (-b ± √(b² - 4ac))/2a[K
+ • Vectors & Matrix multiplication: A ∈ ℝ^(m × n) and x ∈ ℝⁿ[K
+ [K
+ [38;2;117;113;94m────────────────────────────────────────────────────────────────────────────────────────────────[0m[K
+ [K
+ [K
+ [38;2;166;226;46m[1m3. Interactive Task Lists & Bullets[0m[K
+ [K
+ ✔  High-performance C3 native parsing engine[K
+ ✔  Inline LaTeX math to Unicode transformation[K
+ ✔  Automatic box-drawing tables with column alignment[K
+ ☐  Direct Tree-sitter AST queries[K
+ ☐  Export to formatted terminal scrollback[K
+ [K
