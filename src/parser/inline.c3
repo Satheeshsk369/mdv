@@ -6,12 +6,13 @@ import ast;
 import tex;
 import text;
 
-struct HtmlEntityDef {
+struct Entity
+{
     String entity;
     String symbol;
 }
 
-const HtmlEntityDef[] HTML_ENTITIES = {
+const Entity[] ENTITIES = {
     { "&copy;", "©" },
     { "&trade;", "™" },
     { "&reg;", "®" },
@@ -36,480 +37,185 @@ const HtmlEntityDef[] HTML_ENTITIES = {
     { "&yen;", "¥" },
     { "&check;", "✔" },
     { "&cross;", "✗" },
-    { "&bull;", "•" }
+    { "&bull;", "•" },
 };
 
-fn bool entity(String s, String* outSymbol, usz* outSkip)
+fn bool alnum(char c) => c.is_alnum();
+
+fn bool space(char c) => c == ' ' || c == '\t';
+
+fn sz scanBracket(String s, sz from)
 {
-    for (usz k = 0; k < HTML_ENTITIES.len; k++)
+    for (sz p = from; p < s.len; p++) if (s[p] == ']') return p;
+    return -1;
+}
+
+fn sz scanUrl(String s, sz from)
+{
+    int depth = 1;
+    for (sz p = from; p < s.len; p++)
     {
-        if (s.starts_with(HTML_ENTITIES[k].entity))
+        if (s[p] == '(') depth++;
+        if (s[p] == ')' && --depth == 0) return p;
+    }
+    return -1;
+}
+
+struct Inline
+{
+    ast::Arena* arena;
+    String src;
+    sz at;
+    sz text;
+    List{Span} out;
+}
+
+fn void Inline.flush(&self, sz end)
+{
+    if (end <= self.text) return;
+    DString decoded;
+    decoded.init(mem, end - self.text + 32);
+    defer decoded.free();
+    String t = self.src[self.text : end - self.text];
+    for (sz i = 0; i < t.len;)
+    {
+        bool hit;
+        foreach (e : ENTITIES)
         {
-            *outSymbol = HTML_ENTITIES[k].symbol;
-            *outSkip = (usz)HTML_ENTITIES[k].entity.len;
-            return true;
+            if (t[i] != '&' || !t[i..].starts_with(e.entity)) continue;
+            decoded.append(e.symbol);
+            i += e.entity.len;
+            hit = true;
+            break;
         }
+        if (!hit) decoded.append_char(t[i++]);
+    }
+    self.out.push({ .kind = TEXT, .text = decoded.keep(self.arena) });
+}
+
+fn bool Inline.emit(&self, SpanKind kind, String text, String url, sz next, bool nested)
+{
+    self.flush(self.at);
+    Span span = { .kind = kind, .text = self.arena.copy(text), .url = self.arena.copy(url) };
+    if (nested) span.children = spans(self.arena, text);
+    self.out.push(span);
+    self.at = next;
+    self.text = next;
+    return true;
+}
+
+fn bool Inline.footnote(&self)
+{
+    String s = self.src;
+    sz i = self.at;
+    if (s[i] != '[' || i + 1 >= s.len || s[i + 1] != '^') return false;
+    sz e = i + 2;
+    while (e < s.len && !space(s[e]) && s[e] != '\n' && s[e] != ']') e++;
+    if (e >= s.len || s[e] != ']') return false;
+    return self.emit(FOOTNOTE_REF, s[i + 2 : e - i - 2], "", e + 1, false);
+}
+
+fn bool Inline.link(&self, SpanKind kind, sz open)
+{
+    String s = self.src;
+    sz close = scanBracket(s, open + 1);
+    if (close < 0 || close + 1 >= s.len || s[close + 1] != '(') return false;
+    sz end = scanUrl(s, close + 2);
+    if (end < 0) return false;
+    return self.emit(kind, s[open + 1 : close - open - 1], s[close + 2 : end - close - 2], end + 1, kind == LINK);
+}
+
+fn bool Inline.math(&self)
+{
+    String s = self.src;
+    sz i = self.at;
+    bool twice = i + 1 < s.len && s[i + 1] == '$';
+    sz start = twice ? i + 2 : i + 1;
+    if (start >= s.len || space(s[start]) || s[start] == '\r' || s[start] == '\n') return false;
+    for (sz e = start; e < s.len; e++)
+    {
+        if (s[e] != '$' || space(s[e - 1]) || s[e - 1] == '\\') continue;
+        if (twice && (e + 1 >= s.len || s[e + 1] != '$')) continue;
+        self.flush(i);
+        self.out.push({ .kind = twice ? MATH_DISPLAY : MATH_INLINE, .text = tex::unicode(self.arena, s[start : e - start]) });
+        self.at = twice ? e + 2 : e + 1;
+        self.text = self.at;
+        return true;
     }
     return false;
 }
 
-fn bool alnum(char c)
+fn bool Inline.code(&self)
 {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+    sz end = self.src[self.at + 1..].index_of_char('`') ?? -1;
+    if (end < 0) return false;
+    return self.emit(CODE_INLINE, self.src[self.at + 1 : end], "", self.at + end + 2, false);
 }
 
-fn Span[] keepSpans(ast::Arena* arena, List{Span}* l)
+fn bool Inline.strong(&self)
 {
-    if (l.size == 0) return {};
-    Span* buf = (Span*)arena.alloc((usz)l.size * Span::size);
-    for (sz i = 0; i < l.size; i++)
+    String s = self.src;
+    sz i = self.at;
+    char m = s[i];
+    if (i + 1 >= s.len || s[i + 1] != m || (m == '_' && i > 0 && alnum(s[i - 1]))) return false;
+    for (sz e = i + 2; e + 1 < s.len; e++)
     {
-        buf[i] = l.entries[i];
+        if (s[e] != m || s[e + 1] != m) continue;
+        if (m == '_' && e + 2 < s.len && alnum(s[e + 2])) continue;
+        return self.emit(BOLD, s[i + 2 : e - i - 2], "", e + 2, true);
     }
-    return buf[:(usz)l.size];
+    return false;
 }
 
-fn void pushText(List{Span}* l, ast::Arena* arena, String text)
+fn bool Inline.strike(&self)
 {
-    if (text.len == 0) return;
-
-    DString decoded;
-    decoded.init(mem, (usz)(text.len + 32));
-    defer decoded.free();
-
-    usz i = 0;
-    usz len = (usz)text.len;
-
-    while (i < len)
+    String s = self.src;
+    sz i = self.at;
+    if (i + 1 >= s.len || s[i + 1] != '~') return false;
+    for (sz e = i + 2; e + 1 < s.len; e++)
     {
-        if (text[i] == '&')
-        {
-            String symbol;
-            usz skip = 0;
-            if (entity(text[i..], &symbol, &skip))
-            {
-                decoded.append_string(symbol);
-                i += skip;
-                continue;
-            }
-        }
-
-        decoded.append_char(text[i++]);
+        if (s[e] == '~' && s[e + 1] == '~') return self.emit(STRIKETHROUGH, s[i + 2 : e - i - 2], "", e + 2, true);
     }
+    return false;
+}
 
-    String finalStr = decoded.keep(arena);
-    Span span = {};
-    span.kind = SpanKind.TEXT;
-    span.text = finalStr;
-    span.url = "";
-    span.children = {};
-    l.push(span);
+fn bool Inline.emphasis(&self)
+{
+    String s = self.src;
+    sz i = self.at;
+    char m = s[i];
+    if (i + 1 >= s.len || space(s[i + 1]) || (m == '_' && i > 0 && alnum(s[i - 1]))) return false;
+    for (sz e = i + 1; e < s.len; e++)
+    {
+        if (s[e] != m || (e + 1 < s.len && s[e + 1] == m)) continue;
+        if (m == '_' && e + 1 < s.len && alnum(s[e + 1])) continue;
+        if (!space(s[e - 1])) return self.emit(ITALIC, s[i + 1 : e - i - 1], "", e + 1, true);
+    }
+    return false;
+}
+
+fn bool Inline.step(&self)
+{
+    switch (self.src[self.at])
+    {
+        case '[': return self.footnote() || self.link(LINK, self.at);
+        case '!': return self.at + 1 < self.src.len && self.src[self.at + 1] == '[' && self.link(IMAGE, self.at + 1);
+        case '$': return self.math();
+        case '`': return self.code();
+        case '*': return self.strong() || self.emphasis();
+        case '_': return self.strong() || self.emphasis();
+        case '~': return self.strike();
+        default: return false;
+    }
 }
 
 fn Span[] spans(ast::Arena* arena, String src)
 {
     if (src.len == 0) return {};
-
-    List{Span} l;
-    l.init(mem, 16);
-    defer l.free();
-
-    usz i = 0;
-    usz textStart = 0;
-    usz len = (usz)src.len;
-
-    while (i < len)
-    {
-        if (src[i] == '[' && i + 1 < len && src[i + 1] == '^')
-        {
-            usz fnEnd = i + 2;
-            bool foundFn = false;
-            while (fnEnd < len && src[fnEnd] != ' ' && src[fnEnd] != '\t' && src[fnEnd] != '\n')
-            {
-                if (src[fnEnd] == ']')
-                {
-                    foundFn = true;
-                    break;
-                }
-                fnEnd++;
-            }
-
-            if (foundFn)
-            {
-                if (i > textStart)
-                {
-                    pushText(&l, arena, src[textStart : i - textStart]);
-                }
-                String label = src[i + 2 : fnEnd - (i + 2)];
-                Span span = {};
-                span.kind = SpanKind.FOOTNOTE_REF;
-                span.text = arena.copy(label);
-                span.url = "";
-                span.children = {};
-                l.push(span);
-
-                i = fnEnd + 1;
-                textStart = i;
-                continue;
-            }
-        }
-
-        if (src[i] == '!' && i + 1 < len && src[i + 1] == '[')
-        {
-            usz altStart = i + 2;
-            usz altEnd = altStart;
-            bool foundAlt = false;
-            while (altEnd < len)
-            {
-                if (src[altEnd] == ']')
-                {
-                    foundAlt = true;
-                    break;
-                }
-                altEnd++;
-            }
-
-            if (foundAlt && altEnd + 1 < len && src[altEnd + 1] == '(')
-            {
-                usz urlStart = altEnd + 2;
-                usz urlEnd = urlStart;
-                int pDepth = 1;
-                bool foundUrl = false;
-
-                while (urlEnd < len && pDepth > 0)
-                {
-                    if (src[urlEnd] == '(')
-                    {
-                        pDepth++;
-                    }
-                    else if (src[urlEnd] == ')')
-                    {
-                        pDepth--;
-                        if (pDepth == 0)
-                        {
-                            foundUrl = true;
-                            break;
-                        }
-                    }
-                    urlEnd++;
-                }
-
-                if (foundUrl)
-                {
-                    if (i > textStart)
-                    {
-                        pushText(&l, arena, src[textStart : i - textStart]);
-                    }
-                    String altText = src[altStart : altEnd - altStart];
-                    String urlText = src[urlStart : urlEnd - urlStart];
-
-                    Span span = {};
-                    span.kind = SpanKind.IMAGE;
-                    span.text = arena.copy(altText);
-                    span.url = arena.copy(urlText);
-                    span.children = {};
-                    l.push(span);
-
-                    i = urlEnd + 1;
-                    textStart = i;
-                    continue;
-                }
-            }
-        }
-
-        if (src[i] == '[')
-        {
-            usz labelStart = i + 1;
-            usz labelEnd = labelStart;
-            bool foundLabel = false;
-            while (labelEnd < len)
-            {
-                if (src[labelEnd] == ']')
-                {
-                    foundLabel = true;
-                    break;
-                }
-                labelEnd++;
-            }
-
-            if (foundLabel && labelEnd + 1 < len && src[labelEnd + 1] == '(')
-            {
-                usz urlStart = labelEnd + 2;
-                usz urlEnd = urlStart;
-                int pDepth = 1;
-                bool foundUrl = false;
-
-                while (urlEnd < len && pDepth > 0)
-                {
-                    if (src[urlEnd] == '(')
-                    {
-                        pDepth++;
-                    }
-                    else if (src[urlEnd] == ')')
-                    {
-                        pDepth--;
-                        if (pDepth == 0)
-                        {
-                            foundUrl = true;
-                            break;
-                        }
-                    }
-                    urlEnd++;
-                }
-
-                if (foundUrl)
-                {
-                    if (i > textStart)
-                    {
-                        pushText(&l, arena, src[textStart : i - textStart]);
-                    }
-                    String label = src[labelStart : labelEnd - labelStart];
-                    String url = src[urlStart : urlEnd - urlStart];
-
-                    Span span = {};
-                    span.kind = SpanKind.LINK;
-                    span.text = arena.copy(label);
-                    span.url = arena.copy(url);
-                    span.children = spans(arena, label);
-                    l.push(span);
-
-                    i = urlEnd + 1;
-                    textStart = i;
-                    continue;
-                }
-            }
-        }
-
-        if (src[i] == '$')
-        {
-            bool isDouble = (i + 1 < len && src[i + 1] == '$');
-            usz mStart = isDouble ? i + 2 : i + 1;
-
-            if (mStart < len && src[mStart] != ' ' && src[mStart] != '\t' && src[mStart] != '\r' && src[mStart] != '\n')
-            {
-                usz mEnd = mStart;
-                bool found = false;
-
-                while (mEnd < len)
-                {
-                    if (src[mEnd] == '$' && src[mEnd - 1] != ' ' && src[mEnd - 1] != '\t' && src[mEnd - 1] != '\\')
-                    {
-                        if (isDouble)
-                        {
-                            if (mEnd + 1 < len && src[mEnd + 1] == '$')
-                            {
-                                found = true;
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            found = true;
-                            break;
-                        }
-                    }
-                    mEnd++;
-                }
-
-                if (found)
-                {
-                    if (i > textStart)
-                    {
-                        pushText(&l, arena, src[textStart : i - textStart]);
-                    }
-                    String rawMath = src[mStart : mEnd - mStart];
-                    String transformed = tex::unicode(arena, rawMath);
-
-                    Span span = {};
-                    span.kind = isDouble ? SpanKind.MATH_DISPLAY : SpanKind.MATH_INLINE;
-                    span.text = transformed;
-                    span.url = "";
-                    span.children = {};
-                    l.push(span);
-
-                    i = isDouble ? mEnd + 2 : mEnd + 1;
-                    textStart = i;
-                    continue;
-                }
-            }
-        }
-
-        if (src[i] == '`')
-        {
-            usz cEnd = i + 1;
-            bool found = false;
-            while (cEnd < len)
-            {
-                if (src[cEnd] == '`')
-                {
-                    found = true;
-                    break;
-                }
-                cEnd++;
-            }
-
-            if (found)
-            {
-                if (i > textStart)
-                {
-                    pushText(&l, arena, src[textStart : i - textStart]);
-                }
-                String codeText = src[i + 1 : cEnd - (i + 1)];
-                Span span = {};
-                span.kind = SpanKind.CODE_INLINE;
-                span.text = arena.copy(codeText);
-                span.url = "";
-                span.children = {};
-                l.push(span);
-
-                i = cEnd + 1;
-                textStart = i;
-                continue;
-            }
-        }
-
-        if (i + 1 < len && ((src[i] == '*' && src[i + 1] == '*') || (src[i] == '_' && src[i + 1] == '_')))
-        {
-            char marker = src[i];
-            bool validStart = true;
-            if (marker == '_' && i > 0 && alnum(src[i - 1]))
-            {
-                validStart = false;
-            }
-
-            if (validStart)
-            {
-                usz bEnd = i + 2;
-                bool found = false;
-                while (bEnd + 1 < len)
-                {
-                    if (src[bEnd] == marker && src[bEnd + 1] == marker)
-                    {
-                        if (marker == '_' && bEnd + 2 < len && alnum(src[bEnd + 2]))
-                        {
-                            bEnd++;
-                            continue;
-                        }
-                        found = true;
-                        break;
-                    }
-                    bEnd++;
-                }
-
-                if (found)
-                {
-                    if (i > textStart)
-                    {
-                        pushText(&l, arena, src[textStart : i - textStart]);
-                    }
-                    String inner = src[i + 2 : bEnd - (i + 2)];
-                    Span span = {};
-                    span.kind = SpanKind.BOLD;
-                    span.text = arena.copy(inner);
-                    span.url = "";
-                    span.children = spans(arena, inner);
-                    l.push(span);
-
-                    i = bEnd + 2;
-                    textStart = i;
-                    continue;
-                }
-            }
-        }
-
-        if (src[i] == '~' && i + 1 < len && src[i + 1] == '~')
-        {
-            usz sEnd = i + 2;
-            bool found = false;
-            while (sEnd + 1 < len)
-            {
-                if (src[sEnd] == '~' && src[sEnd + 1] == '~')
-                {
-                    found = true;
-                    break;
-                }
-                sEnd++;
-            }
-
-            if (found)
-            {
-                if (i > textStart)
-                {
-                    pushText(&l, arena, src[textStart : i - textStart]);
-                }
-                String inner = src[i + 2 : sEnd - (i + 2)];
-                Span span = {};
-                span.kind = SpanKind.STRIKETHROUGH;
-                span.text = arena.copy(inner);
-                span.url = "";
-                span.children = spans(arena, inner);
-                l.push(span);
-
-                i = sEnd + 2;
-                textStart = i;
-                continue;
-            }
-        }
-
-        if ((src[i] == '*' || src[i] == '_') && i + 1 < len && src[i + 1] != ' ' && src[i + 1] != '\t')
-        {
-            char marker = src[i];
-            bool validStart = true;
-            if (marker == '_' && i > 0 && alnum(src[i - 1]))
-            {
-                validStart = false;
-            }
-
-            if (validStart)
-            {
-                usz itEnd = i + 1;
-                bool found = false;
-                while (itEnd < len)
-                {
-                    if (src[itEnd] == marker && (itEnd + 1 >= len || src[itEnd + 1] != marker))
-                    {
-                        if (marker == '_' && itEnd + 1 < len && alnum(src[itEnd + 1]))
-                        {
-                            itEnd++;
-                            continue;
-                        }
-                        if (src[itEnd - 1] != ' ' && src[itEnd - 1] != '\t')
-                        {
-                            found = true;
-                            break;
-                        }
-                    }
-                    itEnd++;
-                }
-
-                if (found)
-                {
-                    if (i > textStart)
-                    {
-                        pushText(&l, arena, src[textStart : i - textStart]);
-                    }
-                    String inner = src[i + 1 : itEnd - (i + 1)];
-                    Span span = {};
-                    span.kind = SpanKind.ITALIC;
-                    span.text = arena.copy(inner);
-                    span.url = "";
-                    span.children = spans(arena, inner);
-                    l.push(span);
-
-                    i = itEnd + 1;
-                    textStart = i;
-                    continue;
-                }
-            }
-        }
-
-        i++;
-    }
-
-    if (i > textStart)
-    {
-        pushText(&l, arena, src[textStart : i - textStart]);
-    }
-
-    return keepSpans(arena, &l);
+    Inline p = { .arena = arena, .src = src };
+    p.out.init(mem, 16);
+    defer p.out.free();
+    while (p.at < src.len) if (!p.step()) p.at++;
+    p.flush(src.len);
+    return keep(arena, &p.out);
 }

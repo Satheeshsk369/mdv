@@ -72,3 +72,70 @@ fn void DString.spaces(&self, int count)
 {
     if (count > 0) self.append_char_repeat(' ', count);
 }
+
+fn char lower(char c) => c >= 'A' && c <= 'Z' ? c + 32 : c;
+
+fn bool same(String a, String b)
+{
+    foreach (i, c : a) if (lower(c) != lower(b[i])) return false;
+    return true;
+}
+
+fn void escape(DString* fb, String line, usz* p)
+{
+    fb.append_char(line[(*p)++]);
+    while (*p < line.len && line[*p] != 'm' && line[*p] != 'K' && line[*p] != 'H') fb.append_char(line[(*p)++]);
+    if (*p < line.len) fb.append_char(line[(*p)++]);
+}
+
+fn void mark(DString* fb, String line, String query, bool current)
+{
+    usz p = 0;
+    while (p < line.len)
+    {
+        if (line[p] == '\e')
+        {
+            escape(fb, line, &p);
+            continue;
+        }
+        if (p + query.len <= line.len && same(line[p:query.len], query))
+        {
+            fb.append(current ? "\e[48;2;166;226;46m\e[38;2;0;0;0m\e[1m" : "\e[48;2;253;151;31m\e[38;2;0;0;0m\e[1m");
+            fb.append(line[p:query.len]);
+            fb.append("\e[0m");
+            p += query.len;
+            continue;
+        }
+        fb.append_char(line[p++]);
+    }
+}
+
+fn void cut(DString* fb, String line, int left, int width)
+{
+    if (left <= 0)
+    {
+        fb.append(line);
+        return;
+    }
+    usz p = 0;
+    int column;
+    int emitted;
+    while (p < line.len)
+    {
+        if (line[p] == '\e')
+        {
+            escape(fb, line, &p);
+            continue;
+        }
+        char c = line[p];
+        usz bytes = (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : (c & 0xF8) == 0xF0 ? 4 : 1;
+        bytes = min(bytes, line.len - p);
+        if (column >= left && (width <= 0 || emitted < width))
+        {
+            fb.append(line[p:bytes]);
+            emitted++;
+        }
+        p += bytes;
+        column++;
+    }
+}

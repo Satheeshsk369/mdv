@@ -1,0 +1,274 @@
+# C3 Markdown & LaTeX Engine Showcase
+
+Welcome to mdv ! This document tests
+and demonstrates the full suite of
+in-editor Markdown and LaTeX rendering
+capabilities.
+
+────────────────────────────────────
+
+
+              ∞          
+            ⌠   x n - 1  
+    Γ(x) =  │  e x     dt
+            ⌡            
+              0          
+
+
+
+## 1. Typography & Formatting
+
+• Bold tex with **bold** or __bold__
+• Italic text with *italic* or
+  _italic_
+• Strikethrough with ~~strike~~
+• Inline code like fn int main()
+  with code
+• Hyperlinks: C3 Language Portal
+  (https://c3-lang.org) and GitHub
+  Project (https://github.com)
+
+────────────────────────────────────
+
+
+## 2. LaTeX Math Formulas
+
+
+### Inline Math
+• The famous Pythagorean identity:
+  a² + b² = c²
+• Euler's identity: eⁱπ + 1 = 0
+• Greek letters and roots: α + β² =
+  √γ ⋅ θ
+• Limits & Calculus: limₓ → ₀
+  sin(x)/x = 1 and d/dx(eˣ) = eˣ
+
+
+           ∞      
+          ───   n 
+     x    \    x  
+    e  =   >  ────
+          /    n! 
+          ───     
+         n = 0    
+
+
+
+       ∞    2        
+     ⌠    -x       ╭─
+     │   e   dx = √ π
+     ⌡               
+       -∞            
+
+
+
+                ╭──────── 
+               ╱  2       
+         -b ± √  b  - 4ac 
+    x = ──────────────────
+                2a        
+
+
+
+          sin(x)     
+     lim ──────── = 1
+    x → 0   x        
+
+
+
+                 n               
+                ───              
+           n    \   ⎛ n ⎞ n - k k
+    (x + y)  =   >  ⎝ k ⎠x     y 
+                /                
+                ───              
+               k = 0             
+
+
+
+                 ∞            
+               ⌠        -iωt  
+    ℱ{f(t)} =  │   f(t)e    dt
+               ⌡              
+                 -∞           
+
+
+
+               1       
+    x = ───────────────
+                 1     
+         1 + ───────── 
+                   1   
+              1 + ───  
+                   x   
+
+
+
+             │ a  b │          
+    det(A) = │ c  d │ = ad - bc
+
+
+
+             ⎧ 1    if x > 0
+    sgn(x) = ⎨ 0    if x = 0
+             ⎩ -1   if x < 0
+
+
+
+        ⎛ 1  0  0 ⎞
+    A = ⎜ 0  1  0 ⎟
+        ⎝ 0  0  1 ⎠
+
+
+
+           ⎧   2                
+           ⎪  x  - 1            
+    f(x) = ⎨ ────────   if x ≠ 1
+           ⎪  x - 1             
+           ⎩ 2          if x = 1
+
+
+
+              ∂B⃗          
+    ∇ × E⃗ = -────         
+              ∂t          
+    ∇ ⋅ B⃗ = 0             
+                       ∂E⃗ 
+    ∇ × B⃗ = μ₀J⃗ + μ₀ϵ₀────
+                       ∂t 
+
+
+
+    ┌─────────────┐
+    │  iπ         │
+    │ e   + 1 = 0 │
+    └─────────────┘
+
+
+
+                       k    
+      total mass      ───   
+    ⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞    \     
+    a₁ + a₂ + ⋯+aₖ =   >  aᵢ
+                      /     
+                      ───   
+                     i = 1  
+                     ⏟⏟⏟⏟⏟⏟⏟
+                        M   
+
+
+
+### Complex Equations
+• Gaussian integral: ∫₋∞∞ e⁻ˣ^² dx =
+  √π
+• Summation formula: ∑ᵢ₌₁ⁿ i =
+  (n(n+1))/2
+• Quadratic equation: x = (-b ± √(b²
+  - 4ac))/2a
+• Vectors & Matrix multiplication: A
+  ∈ ℝᵐ × ⁿ and x ∈ ℝⁿ
+
+────────────────────────────────────
+
+
+## 3. Interactive Task Lists & Bullets
+
+✔  High-performance C3 native
+   parsing engine
+✔  Inline LaTeX math to Unicode
+   transformation
+✔  Automatic box-drawing tables with
+   column alignment
+☐  Direct Tree-sitter AST queries
+☐  Export to formatted terminal
+   scrollback
+
+
+### Nested Lists
+• Systems Programming
+  ◦ Low overhead & zero runtime cost
+  ◦ C ABI interop with @export and
+    extern
+• Terminal Integration
+  ◦ Ghostty terminal split & watch
+    mode
+  ◦ CLI pipelines and stdout
+    streaming
+
+────────────────────────────────────
+
+
+## 4. Modern Callouts & Admonitions
+
+| [!NOTE]
+│ This note callout provides
+│ helpful contextual info without
+│ interrupting your reading flow.
+
+| [!TIP]
+│ Run mdv --stdout file.md in
+│ scripts or AI workflows to
+│ render full terminal previews
+│ instantly!
+
+| [!WARNING]
+│ Keep your LaTeX brackets {}
+│ balanced so expressions
+│ transform cleanly.
+
+| [!IMPORTANT]
+│ The original source file remains
+│ 100% untouched while previewing.
+
+| [!CAUTION]
+│ Avoid mixing raw HTML tags with
+│ Markdown tables to ensure clean
+│ alignment.
+
+────────────────────────────────────
+
+
+## 5. Source Code Blocks
+
+module demo;
+import std::io;
+
+fn int main(String[] args)
+{
+    io::printn("Hello from the native C3 Markdown engine!");
+    return 0;
+}
+
+def fibonacci(n: int) -> list[int]:
+    """Generate Fibonacci series up to n terms."""
+    a, b = 0, 1
+    result = []
+    for _ in range(n):
+        result.append(a)
+        a, b = b, a + b
+    return result
+
+────────────────────────────────────
+
+
+## 6. Table Layouts & Alignment
+
+Component  Technology   Math       Status
+                    Expression           
+───────  ─────────  ───────  ─────────
+Math     unicodeit.c3  ∫₀¹ x²     ✔ Ready
+Engine              dx = ⅓            
+
+Table    table.c3    O(N ×    ✔ Active
+Renderer               M)              
+
+Terminal  ANSI /     ∇ ⋅ E⃗ =          ✔
+Output   Unicode     ρ/ϵ₀    Supported
+
+Terminal  ANSI /      λ → ∞           ✔
+Viewer   Unicode             Integrated
+
+────────────────────────────────────
+
+Compiled and rendered at native speed
+with C3 & mdv.

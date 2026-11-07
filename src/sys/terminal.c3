@@ -1,6 +1,7 @@
 module terminal;
 
 import std::io;
+import std::encoding::base64;
 
 const int ESC = 27;
 const int TAB = 9;
@@ -205,6 +206,14 @@ fn void edit(String path, int line)
     };
     rawMode();
     enter();
+}
+
+fn void copy(String content)
+{
+    @pool()
+    {
+        out(string::tformat("\e]52;c;%s\e\\", base64::tencode(content)));
+    };
 }
 
 fn ulong now()

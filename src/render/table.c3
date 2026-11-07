@@ -6,466 +6,216 @@ import ast;
 import ansi;
 import text;
 
-alias EmitLineFn = fn void(void* ctx, String text, int srcLine);
+const int GAP = 2;
 
-struct WrappedCellLine {
-    String text;
-    int displayWidth;
-}
+fn bool blankChar(char c) => c == ' ' || c == '\t';
 
-struct WrappedCell {
-    List{WrappedCellLine} lines;
-}
-
-fn void measure(Span[] spans, int* outMinW, int* outMaxW)
+fn void measure(Span[] list, int* least, int* most)
 {
-    if (spans.len == 0) return;
-    int totalW = 0;
-    int maxWordW = 0;
-
-    for (usz s = 0; s < spans.len; s++)
+    if (list.len == 0) return;
+    int total;
+    int word;
+    foreach (s : list)
     {
-        Span sp = spans[s];
-        String txt = sp.text;
-        usz p = 0;
-        usz tlen = (usz)txt.len;
-
-        while (p < tlen)
+        String t = s.text;
+        sz p;
+        while (p < t.len)
         {
-            while (p < tlen && (txt[p] == ' ' || txt[p] == '\t')) p++;
-            if (p >= tlen) break;
-
-            usz wStart = p;
-            while (p < tlen && txt[p] != ' ' && txt[p] != '\t' && txt[p] != '\n') p++;
-            String word = txt[wStart : p - wStart];
-            int ww = text::width(word);
-            if (ww > maxWordW) maxWordW = ww;
+            while (p < t.len && blankChar(t[p])) p++;
+            if (p >= t.len) break;
+            sz start = p;
+            while (p < t.len && !blankChar(t[p]) && t[p] != '\n') p++;
+            word = max(word, text::width(t[start : p - start]));
         }
-
-        int sw = text::width(txt);
-        totalW += sw;
-
-        if (sp.kind == SpanKind.LINK && sp.url.len > 0)
+        total += text::width(t);
+        if (s.kind == SpanKind.LINK && s.url.len > 0)
         {
-            int uw = text::width(sp.url) + 3;
-            if (uw > maxWordW) maxWordW = uw;
-            totalW += uw;
+            int u = text::width(s.url) + 3;
+            word = max(word, u);
+            total += u;
         }
     }
-
-    if (totalW > *outMaxW) *outMaxW = totalW;
-    if (maxWordW > *outMinW) *outMinW = maxWordW;
+    *most = max(*most, total);
+    *least = max(*least, word);
 }
 
-fn void wrapCell(ast::Arena* arena, Span[] spans, int maxW, bool plain, WrappedCell* outCell)
+fn void grow(int[] widths, int[] least, int[] most, bool[] done, int budget)
 {
-    outCell.lines.init(mem, 4);
-
-    if (spans.len == 0 || maxW <= 0)
-    {
-        WrappedCellLine firstLine;
-        firstLine.text = "";
-        firstLine.displayWidth = 0;
-        outCell.lines.push(firstLine);
-        return;
-    }
-
-    DString curLine;
-    curLine.init(mem, 256);
-    defer curLine.free();
-
-    int curW = 0;
-
-    for (usz s = 0; s < spans.len; s++)
-    {
-        Span sp = spans[s];
-
-        String style = plain ? "" : STYLES[sp.kind];
-
-        String txt = sp.text;
-        usz p = 0;
-        usz tlen = (usz)txt.len;
-
-        while (p < tlen)
-        {
-            while (p < tlen && (txt[p] == ' ' || txt[p] == '\t')) p++;
-            if (p >= tlen) break;
-
-            usz wStart = p;
-            while (p < tlen && txt[p] != ' ' && txt[p] != '\t' && txt[p] != '\n') p++;
-            String word = txt[wStart : p - wStart];
-            int wordW = text::width(word);
-
-            if (curW + 1 + wordW > maxW && curW > 0)
-            {
-                WrappedCellLine wl;
-                wl.text = arena.copy(curLine.str_view());
-                wl.displayWidth = curW;
-                outCell.lines.push(wl);
-
-                curLine.clear();
-                curW = 0;
-            }
-            else if (curW > 0)
-            {
-                curLine.append_char(' ');
-                curW++;
-            }
-
-            curLine.append(style);
-            curLine.append(word);
-            if (style.len) curLine.append(ansi::RESET);
-            curW += wordW;
-        }
-
-        if (sp.kind == SpanKind.LINK && sp.url.len > 0)
-        {
-            int urlW = text::width(sp.url) + 3;
-            if (curW + 1 + urlW > maxW && curW > 0)
-            {
-                WrappedCellLine wl;
-                wl.text = arena.copy(curLine.str_view());
-                wl.displayWidth = curW;
-                outCell.lines.push(wl);
-
-                curLine.clear();
-                curW = 0;
-            }
-            else if (curW > 0)
-            {
-                curLine.append_char(' ');
-                curW++;
-            }
-
-            if (!plain) curLine.append(ansi::MUTED);
-            curLine.append_char('(');
-            curLine.append_string(sp.url);
-            curLine.append_char(')');
-            if (!plain) curLine.append(ansi::RESET);
-            curW += urlW;
-        }
-    }
-
-    if (curLine.len() > 0 || outCell.lines.size == 0)
-    {
-        WrappedCellLine wl;
-        wl.text = arena.copy(curLine.str_view());
-        wl.displayWidth = curW;
-        outCell.lines.push(wl);
-    }
-}
-
-fn void emitRow(
-    DString* tb,
-    WrappedCell[] wrappedCells,
-    Alignment[] alignments,
-    int[] colWidths,
-    int cols,
-    int gap,
-    bool isHeader,
-    bool plain,
-    int srcLine,
-    void* ctx,
-    EmitLineFn emitFn
-)
-{
-    int maxLines = 1;
+    int cols = (int)widths.len;
+    int sumMost;
+    int sumLeast;
     for (int c = 0; c < cols; c++)
     {
-        if ((int)wrappedCells[c].lines.size > maxLines)
-        {
-            maxLines = (int)wrappedCells[c].lines.size;
-        }
+        sumMost += most[c];
+        sumLeast += least[c];
     }
-
-    for (int l = 0; l < maxLines; l++)
+    if (sumMost <= budget)
     {
-        tb.clear();
-
+        widths[..] = most[..];
+        return;
+    }
+    if (sumLeast > budget)
+    {
+        int given;
         for (int c = 0; c < cols; c++)
         {
-            int w = colWidths[c];
-            Alignment align = (c < (int)alignments.len) ? alignments[c] : Alignment.LEFT;
-
-            if (l < (int)wrappedCells[c].lines.size)
+            widths[c] = max(sumLeast > 0 ? least[c] * budget / sumLeast : budget / cols, 3);
+            given += widths[c];
+        }
+        if (widths[cols - 1] + budget - given >= 3) widths[cols - 1] += budget - given;
+        return;
+    }
+    widths[..] = least[..];
+    int left = budget - sumLeast;
+    for (int c = 0; c < cols; c++) done[c] = widths[c] >= most[c];
+    while (left > 0)
+    {
+        int best = -1;
+        int need = 999999;
+        for (int c = 0; c < cols; c++)
+        {
+            int n = most[c] - widths[c];
+            if (!done[c] && n > 0 && n < need)
             {
-                WrappedCellLine* lineInfo = &wrappedCells[c].lines.entries[(usz)l];
-                int dw = lineInfo.displayWidth;
-                int pad = w - dw;
-                if (pad < 0) pad = 0;
+                need = n;
+                best = c;
+            }
+        }
+        if (best < 0 || need > left) break;
+        widths[best] += need;
+        left -= need;
+        done[best] = true;
+    }
+    if (left <= 0) return;
+    int open;
+    for (int c = 0; c < cols; c++) if (!done[c]) open += most[c] - widths[c];
+    if (open <= 0) return;
+    int given;
+    for (int c = 0; c < cols; c++)
+    {
+        if (done[c]) continue;
+        int add = left * (most[c] - widths[c]) / open;
+        widths[c] += add;
+        given += add;
+    }
+    for (int rem = left - given; rem > 0; rem--)
+    {
+        int best = -1;
+        int need;
+        for (int c = 0; c < cols; c++)
+        {
+            if (most[c] - widths[c] > need)
+            {
+                need = most[c] - widths[c];
+                best = c;
+            }
+        }
+        if (best < 0) break;
+        widths[best]++;
+    }
+}
 
-                if (isHeader && !plain)
-                {
-                    tb.append(ansi::CYAN);
-                    tb.append(ansi::BOLD);
-                }
+struct Cell
+{
+    List{Piece} lines;
+}
 
-                if (align == Alignment.CENTER)
-                {
-                    int lpad = pad / 2;
-                    int rpad = pad - lpad;
-                    tb.spaces(lpad);
-                    tb.append_string(lineInfo.text);
-                    tb.spaces(rpad);
-                }
-                else if (align == Alignment.RIGHT)
-                {
-                    tb.spaces(pad);
-                    tb.append_string(lineInfo.text);
-                }
-                else
-                {
-                    tb.append_string(lineInfo.text);
-                    tb.spaces(pad);
-                }
+fn void Cell.fill(&self, ast::Arena* arena, Span[] list, int width, bool plain)
+{
+    self.lines.init(mem, 4);
+    if (width <= 0)
+    {
+        self.lines.push({ "", 0 });
+        return;
+    }
+    wrap(&self.lines, arena, list, width, "", "", plain, true);
+}
 
-                if (isHeader && !plain)
-                {
-                    tb.append(ansi::RESET);
-                }
+fn void Renderer.row(&self, Cell[] cells, Alignment[] aligns, int[] widths, bool header, int src)
+{
+    int height = 1;
+    foreach (&c : cells) height = max(height, (int)c.lines.len());
+    bool bold = header && !self.config.plain;
+    for (int l = 0; l < height; l++)
+    {
+        foreach (c, &cell : cells)
+        {
+            int w = widths[c];
+            if (l >= cell.lines.len())
+            {
+                self.buf.spaces(w);
             }
             else
             {
-                tb.spaces(w);
+                Piece piece = cell.lines[l];
+                int pad = max(w - piece.width, 0);
+                Alignment align = c < aligns.len ? aligns[c] : LEFT;
+                int before = align == CENTER ? pad / 2 : align == RIGHT ? pad : 0;
+                if (bold) self.buf.append(ansi::CYAN +++ ansi::BOLD);
+                self.buf.spaces(before);
+                self.buf.append(piece.text);
+                self.buf.spaces(pad - before);
+                if (bold) self.buf.append(ansi::RESET);
             }
-
-            if (c < cols - 1) tb.spaces(gap);
+            if (c < cells.len - 1) self.buf.spaces(GAP);
         }
-
-        emitFn(ctx, tb.str_view(), srcLine);
+        self.flush(src);
     }
 }
 
-fn void table(TableBlock* table, int srcLine, int termWidth, bool plain, void* ctx, EmitLineFn emitFn)
+fn void Renderer.table(&self, ast::Table* t, int src)
 {
-    if (table.colCount <= 0) return;
-    int cols = table.colCount;
-
+    int cols = t.columns;
+    if (cols <= 0) return;
     ast::Arena scratch;
     scratch.init(32768);
     defer scratch.free();
-
-    int* maxWPtr = (int*)scratch.alloc((usz)cols * int::size);
-    int* minWPtr = (int*)scratch.alloc((usz)cols * int::size);
-    int* colWidthsPtr = (int*)scratch.alloc((usz)cols * int::size);
-
-    int[] maxW = maxWPtr[0 : (usz)cols];
-    int[] minW = minWPtr[0 : (usz)cols];
-    int[] colWidths = colWidthsPtr[0 : (usz)cols];
-
+    int* most = scratch.alloc((usz)cols * int::size);
+    int* least = scratch.alloc((usz)cols * int::size);
+    int* widths = scratch.alloc((usz)cols * int::size);
     for (int c = 0; c < cols; c++)
     {
-        maxW[c] = 3;
-        minW[c] = 3;
+        most[c] = 3;
+        least[c] = 3;
     }
-
-    for (int c = 0; c < cols && c < (int)table.headers.len; c++)
+    for (int c = 0; c < cols && c < t.headers.len; c++) measure(t.headers[c], &least[c], &most[c]);
+    foreach (row : t.rows)
     {
-        measure(table.headers[c], &minW[c], &maxW[c]);
+        for (int c = 0; c < cols && c < row.len; c++) measure(row[c], &least[c], &most[c]);
     }
+    for (int c = 0; c < cols; c++) least[c] = max(min(least[c], most[c]), 3);
+    int avail = self.width > 20 ? self.width - 2 : 80;
+    bool* done = scratch.alloc((usz)cols * bool::size);
+    grow(widths[:cols], least[:cols], most[:cols], done[:cols], max(avail - (cols - 1) * GAP, cols * 3));
 
-    for (usz r = 0; r < table.rows.len; r++)
+    bool plain = self.config.plain;
+    int count = (int)t.rows.len + 1;
+    Cell* cells = scratch.alloc((usz)(count * cols) * Cell::size);
+    bool wrapped;
+    for (int r = 0; r < count; r++)
     {
-        Span[][] row = table.rows[r];
-        for (int c = 0; c < cols && c < (int)row.len; c++)
-        {
-            measure(row[c], &minW[c], &maxW[c]);
-        }
-    }
-
-    for (int c = 0; c < cols; c++)
-    {
-        if (minW[c] > maxW[c]) minW[c] = maxW[c];
-        if (minW[c] < 3) minW[c] = 3;
-    }
-
-    int gap = 2;
-    int maxAvail = termWidth > 20 ? termWidth - 2 : 80;
-    int availBudget = maxAvail - (cols - 1) * gap;
-    if (availBudget < cols * 3) availBudget = cols * 3;
-
-    int sumMax = 0;
-    int sumMin = 0;
-    for (int c = 0; c < cols; c++)
-    {
-        sumMax += maxW[c];
-        sumMin += minW[c];
-    }
-
-    if (sumMax <= availBudget)
-    {
+        Span[][] row = r == 0 ? t.headers : t.rows[r - 1];
         for (int c = 0; c < cols; c++)
         {
-            colWidths[c] = maxW[c];
+            Cell* cell = &cells[r * cols + c];
+            cell.fill(&scratch, c < row.len ? row[c] : {}, widths[c], plain);
+            wrapped = wrapped || cell.lines.len() > 1;
         }
     }
-    else if (sumMin <= availBudget)
-    {
-        for (int c = 0; c < cols; c++)
-        {
-            colWidths[c] = minW[c];
-        }
-
-        int remainingBudget = availBudget - sumMin;
-
-        bool changed = true;
-        bool* satisfiedPtr = (bool*)scratch.alloc((usz)cols * bool::size);
-        bool[] satisfied = satisfiedPtr[0 : (usz)cols];
-        for (int c = 0; c < cols; c++) satisfied[c] = (colWidths[c] >= maxW[c]);
-
-        while (changed && remainingBudget > 0)
-        {
-            changed = false;
-            int bestC = -1;
-            int minNeed = 999999;
-            for (int c = 0; c < cols; c++)
-            {
-                if (!satisfied[c])
-                {
-                    int need = maxW[c] - colWidths[c];
-                    if (need > 0 && need < minNeed)
-                    {
-                        minNeed = need;
-                        bestC = c;
-                    }
-                }
-            }
-
-            if (bestC >= 0 && minNeed <= remainingBudget)
-            {
-                colWidths[bestC] += minNeed;
-                remainingBudget -= minNeed;
-                satisfied[bestC] = true;
-                changed = true;
-            }
-        }
-
-        if (remainingBudget > 0)
-        {
-            int sumUnsatisfiedNeed = 0;
-            for (int c = 0; c < cols; c++)
-            {
-                if (!satisfied[c])
-                {
-                    sumUnsatisfiedNeed += (maxW[c] - colWidths[c]);
-                }
-            }
-
-            if (sumUnsatisfiedNeed > 0)
-            {
-                int allocated = 0;
-                for (int c = 0; c < cols; c++)
-                {
-                    if (!satisfied[c])
-                    {
-                        int need = maxW[c] - colWidths[c];
-                        int add = (remainingBudget * need) / sumUnsatisfiedNeed;
-                        colWidths[c] += add;
-                        allocated += add;
-                    }
-                }
-
-                int rem = remainingBudget - allocated;
-                while (rem > 0)
-                {
-                    int bestC = -1;
-                    int bestNeed = 0;
-                    for (int c = 0; c < cols; c++)
-                    {
-                        int need = maxW[c] - colWidths[c];
-                        if (need > bestNeed)
-                        {
-                            bestNeed = need;
-                            bestC = c;
-                        }
-                    }
-                    if (bestC >= 0)
-                    {
-                        colWidths[bestC]++;
-                        rem--;
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    else
-    {
-        int distributed = 0;
-        for (int c = 0; c < cols; c++)
-        {
-            if (sumMin > 0)
-            {
-                colWidths[c] = (minW[c] * availBudget) / sumMin;
-            }
-            else
-            {
-                colWidths[c] = availBudget / cols;
-            }
-            if (colWidths[c] < 3) colWidths[c] = 3;
-            distributed += colWidths[c];
-        }
-        int diff = availBudget - distributed;
-        if (cols > 0 && colWidths[cols - 1] + diff >= 3)
-        {
-            colWidths[cols - 1] += diff;
-        }
-    }
-
-    DString tb;
-    tb.init(mem, 4096);
-    defer tb.free();
-
-    bool anyWrapped = false;
-    WrappedCell* hcells = (WrappedCell*)scratch.alloc((usz)cols * WrappedCell::size);
+    self.row(cells[:cols], t.aligns, widths[:cols], true, src);
+    if (!plain) self.buf.append(ansi::MUTED);
     for (int c = 0; c < cols; c++)
     {
-        Span[] hspans = (c < (int)table.headers.len) ? table.headers[c] : {};
-        wrapCell(&scratch, hspans, colWidths[c], plain, &hcells[c]);
-        if (hcells[c].lines.size > 1) anyWrapped = true;
+        self.buf.repeat("─", widths[c]);
+        if (c < cols - 1) self.buf.spaces(GAP);
     }
-
-    usz numRows = table.rows.len;
-    WrappedCell[]* allBodyRows = (WrappedCell[]*)scratch.alloc(numRows * WrappedCell[]::size);
-
-    for (usz r = 0; r < numRows; r++)
+    if (!plain) self.buf.append(ansi::RESET);
+    self.flush(src + 1);
+    for (int r = 1; r < count; r++)
     {
-        Span[][] row = table.rows[r];
-        WrappedCell* rcells = (WrappedCell*)scratch.alloc((usz)cols * WrappedCell::size);
-        for (int c = 0; c < cols; c++)
-        {
-            Span[] cspans = (c < (int)row.len) ? row[c] : {};
-            wrapCell(&scratch, cspans, colWidths[c], plain, &rcells[c]);
-            if (rcells[c].lines.size > 1) anyWrapped = true;
-        }
-        allBodyRows[r] = rcells[0 : (usz)cols];
+        int line = src + 1 + r;
+        self.row(cells[r * cols : cols], t.aligns, widths[:cols], false, line);
+        if (wrapped && r + 1 < count) self.emit("", line);
     }
-
-    emitRow(&tb, hcells[0 : (usz)cols], table.alignments, colWidths, cols, gap, true, plain, srcLine, ctx, emitFn);
-    for (int c = 0; c < cols; c++) hcells[c].lines.free();
-
-    tb.clear();
-    if (!plain) tb.append(ansi::MUTED);
-    for (int c = 0; c < cols; c++)
-    {
-        tb.repeat("─", colWidths[c]);
-        if (c < cols - 1) tb.spaces(gap);
-    }
-    if (!plain) tb.append(ansi::RESET);
-    emitFn(ctx, tb.str_view(), srcLine + 1);
-
-    for (usz r = 0; r < numRows; r++)
-    {
-        WrappedCell[] rcells = allBodyRows[r];
-        emitRow(&tb, rcells, table.alignments, colWidths, cols, gap, false, plain, srcLine + 2 + (int)r, ctx, emitFn);
-        for (int c = 0; c < cols; c++) rcells[c].lines.free();
-
-        if (anyWrapped && r + 1 < numRows)
-        {
-            emitFn(ctx, "", srcLine + 2 + (int)r);
-        }
-    }
+    for (int i = 0; i < count * cols; i++) cells[i].lines.free();
 }

@@ -1,0 +1,61 @@
+[38;2;102;217;239m[1mtitle[0m:  [38;2;248;248;242mGolden text fixture[0m
+[38;2;102;217;239m[1mauthor[0m: [38;2;248;248;242mmdv[0m
+[38;2;102;217;239m[1mdate[0m:   [38;2;248;248;242m2026-11-07[0m
+[38;2;117;113;94m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+
+
+[38;2;249;38;114m[1mHeading one[0m
+
+
+[38;2;166;226;46m[1mHeading two[0m
+
+
+[38;2;253;151;31m[1mHeading three[0m
+
+
+[38;2;230;219;116m[1mHeading four[0m
+
+
+[38;2;174;129;255m[1mHeading five[0m
+
+
+[38;2;102;217;239m[1mHeading six[0m
+
+A paragraph with [1mbold[0m, [3mitalic[0m, [1m*both[0m*, [9m[38;2;117;113;94mstruck[0m, [48;2;39;40;34m[38;2;102;217;239m code [0m, a ]8;;https://example.com\[38;2;102;217;239m[4mlink[0m]8;;\ [38;2;117;113;94m(https://example.com)[0m, an 🖼  [38;2;102;217;239m[1m[image][0m [38;2;117;113;94m(pic.png)[0m, a footnote[38;2;102;217;239m[1m[1][0m, © — ∞ entities, snake_case_words and a very long sentence that keeps going so that wrapping at forty columns has to break it into several lines.
+
+  [1] The footnote body with [3memphasis[0m.
+
+1. First
+2. Second with a longer line that needs to wrap around the edge of a narrow terminal
+   1. Nested ordered
+10. Tenth
+
+• Bullet
+  ◦ Nested bullet
+    ▪ Deeper bullet
+      ▪ Deepest bullet
+☐  Open task
+✔  Done task
+
+│ A quote that spans two source lines.
+
+[38;2;166;226;46m[1m│ 💡 TIP[0m
+│ Callout body with [1mbold[0m.
+
+[38;2;102;217;239m[1mLeft                                                [0m  [38;2;102;217;239m[1m                  Center                   [0m  [38;2;102;217;239m[1mRight[0m
+[38;2;117;113;94m────────────────────────────────────────────────────  ───────────────────────────────────────────  ─────[0m
+a                                                                        [38;2;102;217;239mlink[0m                          1
+                                                        [38;2;117;113;94m(https://example.org/a/very/long/path)[0m         
+
+a much longer cell that should wrap inside the table                       b                          22
+
+[38;2;117;113;94m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+
+[38;2;102;217;239mint[0m [38;2;166;226;46mmain[0m([38;2;102;217;239mvoid[0m) { [38;2;249;38;114m[1mreturn[0m [38;2;174;129;255m0[0m; } [38;2;117;113;94m[3m// comment[0m
+
+[38;2;249;38;114m[1mdef[0m [38;2;166;226;46mf[0m([38;2;248;248;242mx[0m):  [38;2;117;113;94m[3m# comment[0m
+    [38;2;249;38;114m[1mreturn[0m [38;2;230;219;116m"s"[0m [38;2;249;38;114m+[0m [38;2;166;226;46mstr[0m([38;2;174;129;255m1.5[0m)
+
+[38;2;248;248;242mplain[0m [38;2;248;248;242mfence[0m
+
+indented line

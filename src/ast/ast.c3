@@ -1,6 +1,7 @@
 module ast;
 
-enum SpanKind {
+enum SpanKind
+{
     TEXT,
     BOLD,
     ITALIC,
@@ -13,14 +14,16 @@ enum SpanKind {
     IMAGE
 }
 
-struct Span {
+struct Span
+{
     SpanKind kind;
     String text;
     String url;
     Span[] children;
 }
 
-enum BlockKind {
+enum BlockKind
+{
     FRONTMATTER,
     HEADING,
     PARAGRAPH,
@@ -32,30 +35,11 @@ enum BlockKind {
     THEMATIC_BREAK,
     MATH_BLOCK,
     FOOTNOTE_DEF,
-    IMAGE_BLOCK,
     BLANK
 }
 
-struct ImageBlock {
-    String alt;
-    String url;
-}
-
-struct FrontmatterEntry {
-    String key;
-    String value;
-}
-
-struct FrontmatterBlock {
-    FrontmatterEntry[] entries;
-}
-
-struct FootnoteDefBlock {
-    String label;
-    Span[] spans;
-}
-
-enum CalloutKind {
+enum CalloutKind
+{
     NOTE,
     TIP,
     WARNING,
@@ -63,143 +47,86 @@ enum CalloutKind {
     CAUTION
 }
 
-enum ListKind {
+enum ListKind
+{
     BULLET,
     ORDERED,
     TASK_UNCHECKED,
     TASK_CHECKED
 }
 
-enum Alignment {
+enum Alignment
+{
     LEFT,
     CENTER,
     RIGHT
 }
 
-struct HeadingBlock {
-    int level;
-    Span[] spans;
+struct Entry
+{
+    String key;
+    String value;
 }
 
-struct ParagraphBlock {
-    Span[] spans;
-}
-
-struct CodeBlock {
+struct Code
+{
     String language;
     String[] lines;
 }
 
-struct BlockquoteBlock {
-    Span[] spans;
-}
-
-struct CalloutBlock {
+struct Callout
+{
     CalloutKind kind;
     String title;
-    Span[] spans;
 }
 
-struct ListItemBlock {
+struct Item
+{
     ListKind kind;
-    int indentLevel;
-    int orderNumber;
-    Span[] spans;
+    int indent;
+    int number;
 }
 
-struct TableBlock {
-    int colCount;
-    Alignment[] alignments;
+struct Table
+{
+    int columns;
+    Alignment[] aligns;
     Span[][] headers;
     Span[][][] rows;
 }
 
-struct MathBlock {
-    String latex;
-}
-
-struct Block {
+struct Block
+{
     BlockKind kind;
-    int srcLineStart;
-    int srcLineEnd;
+    int start;
+    int end;
+    Span[] spans;
     union
     {
-        FrontmatterBlock frontmatter;
-        HeadingBlock heading;
-        ParagraphBlock paragraph;
-        CodeBlock code;
-        BlockquoteBlock blockquote;
-        CalloutBlock callout;
-        ListItemBlock listItem;
-        TableBlock table;
-        MathBlock mathBlock;
-        FootnoteDefBlock footnoteDef;
-        ImageBlock imageBlock;
+        int level;
+        String label;
+        String latex;
+        Entry[] entries;
+        Code code;
+        Callout callout;
+        Item item;
+        Table table;
     }
 }
 
-struct Document {
+fn Block make(BlockKind kind, int start, int end, Span[] spans = {})
+{
+    return { .kind = kind, .start = start, .end = end, .spans = spans };
+}
+
+struct Document
+{
     Block[] blocks;
     Arena arena;
 }
 
-fn void Document.init(Document* doc)
+fn void Document.free(&self)
 {
-    doc.blocks = {};
-    doc.arena.init(65536);
-}
-
-fn void Document.free(Document* doc)
-{
-    doc.arena.free();
-    doc.blocks = {};
-}
-
-struct VisualLine {
-    String text;
-    int srcLine;
-    int displayWidth;
-}
-
-struct VisualDocument {
-    VisualLine[] lines;
-    Arena arena;
-}
-
-fn void VisualDocument.init(VisualDocument* doc)
-{
-    doc.lines = {};
-    doc.arena.init(65536);
-}
-
-fn int VisualDocument.count(VisualDocument* doc)
-{
-    return (int)doc.lines.len;
-}
-
-fn int VisualDocument.visual(VisualDocument* doc, int srcTarget)
-{
-    if (srcTarget < 0) return 0;
-    int total = (int)doc.lines.len;
-    for (int i = 0; i < total; i++)
-    {
-        if (doc.lines[i].srcLine >= srcTarget)
-        {
-            return i;
-        }
-    }
-    if (total > 0) return total - 1;
-    return 0;
-}
-
-fn void VisualDocument.free(VisualDocument* doc)
-{
-    doc.arena.free();
-    doc.lines = {};
-}
-
-struct RenderConfig {
-    int width;
-    bool plain;
-    bool noWrap;
+    self.arena.free();
+    self.blocks = {};
 }

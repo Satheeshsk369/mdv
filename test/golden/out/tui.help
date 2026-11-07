@@ -1,0 +1,30 @@
+[1m[38;2;102;217;239m[48;2;39;40;34m mdv [38;2;248;248;242m[48;2;30;32;36m sample.md [0m[38;2;117;113;94m│[39m [1m[38;2;253;151;31mKeyboard Controls & Keybindings[0m
+[38;2;117;113;94m──────────────────────────────────────────────────────────────────────────────────────────────────[39m
+  [1m[38;2;102;217;239mVertical Navigation:[0m
+    [38;2;230;219;116mj / ↓[39m                 Scroll down (accelerated)
+    [38;2;230;219;116mk / ↑[39m                 Scroll up (accelerated)
+    [38;2;230;219;116md / Ctrl+D / Space[39m    Half-page scroll down
+    [38;2;230;219;116mu / Ctrl+U / Shift+Sp[39m Half-page scroll up
+    [38;2;230;219;116mg / G[39m                 Jump to Top / Bottom
+    [38;2;230;219;116m: <line>[39m              Goto line number (e.g. :42)
+
+  [1m[38;2;102;217;239mHorizontal & Layout:[0m
+    [38;2;230;219;116mw[39m                     Toggle Wrap / No-Wrap mode
+    [38;2;230;219;116mh / l / ← / →[39m         Horizontal scroll (accelerated)
+
+  [1m[38;2;102;217;239mFeatures & Actions:[0m
+    [38;2;166;226;46mTab / t[39m               Toggle Document Outline (Table of Contents)
+    [38;2;166;226;46mo[39m                     Switch Document (Markdown File Tree)
+    [38;2;166;226;46m/[39m                     In-document search (n next, N prev)
+    [38;2;166;226;46me[39m                     Open $EDITOR at current line
+    [38;2;166;226;46my[39m                     Copy document to clipboard (OSC 52)
+    [38;2;166;226;46m?[39m                     Show / hide this help screen
+[38;2;60;60;50m~[39m
+[38;2;60;60;50m~[39m
+[38;2;60;60;50m~[39m
+[38;2;60;60;50m~[39m
+[38;2;60;60;50m~[39m
+[38;2;60;60;50m~[39m
+[38;2;60;60;50m~[39m
+[38;2;60;60;50m~[39m
+[38;2;60;60;50m~[39m

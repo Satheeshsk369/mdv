@@ -28,7 +28,7 @@ Options:
     -h           Help
     -v           Version`;
 
-fn void print(String content, RenderConfig config)
+fn void print(String content, render::Config config)
 {
     Document doc = parser::parse(content);
     defer doc.free();
@@ -77,7 +77,7 @@ fn int main(String[] args)
 
     if (width <= 0) width = terminal::width();
 
-    RenderConfig config = { .width = width, .plain = plain, .noWrap = noWrap };
+    render::Config config = { .width = width, .plain = plain, .noWrap = noWrap };
 
     if (file.len == 0 || file == "-")
     {
@@ -100,7 +100,7 @@ fn int main(String[] args)
         {
             if (!tree.nodes[i].dir)
             {
-                return app::run(((ZString)&tree.nodes[i].path).str_view(), 0, noWrap, true) ? 0 : 1;
+                return app::run(tree.nodes[i].path, 0, noWrap, true) ? 0 : 1;
             }
         }
         io::printn("No Markdown files (*.md) found in this folder.");

@@ -113,8 +113,8 @@ fn void testMultilineParagraphReflow() @test
     test::eq((int)doc.blocks[1].kind, (int)BlockKind.BLANK);
     test::eq((int)doc.blocks[2].kind, (int)BlockKind.PARAGRAPH);
 
-    test::eq(doc.blocks[0].paragraph.spans[0].text, "Line one of paragraph. Line two of paragraph. Line three of paragraph.");
-    test::eq(doc.blocks[2].paragraph.spans[0].text, "Second paragraph here.");
+    test::eq(doc.blocks[0].spans[0].text, "Line one of paragraph. Line two of paragraph. Line three of paragraph.");
+    test::eq(doc.blocks[2].spans[0].text, "Second paragraph here.");
 }
 
 fn void testOrderedListsAndTasks() @test
@@ -126,18 +126,18 @@ fn void testOrderedListsAndTasks() @test
     test::eq((int)doc.blocks.len, 5);
 
     test::eq((int)doc.blocks[0].kind, (int)BlockKind.LIST_ITEM);
-    test::eq((int)doc.blocks[0].listItem.kind, (int)ListKind.ORDERED);
-    test::eq(doc.blocks[0].listItem.orderNumber, 1);
+    test::eq((int)doc.blocks[0].item.kind, (int)ListKind.ORDERED);
+    test::eq(doc.blocks[0].item.number, 1);
 
     test::eq((int)doc.blocks[1].kind, (int)BlockKind.LIST_ITEM);
-    test::eq((int)doc.blocks[1].listItem.kind, (int)ListKind.ORDERED);
-    test::eq(doc.blocks[1].listItem.orderNumber, 2);
+    test::eq((int)doc.blocks[1].item.kind, (int)ListKind.ORDERED);
+    test::eq(doc.blocks[1].item.number, 2);
 
     test::eq((int)doc.blocks[3].kind, (int)BlockKind.LIST_ITEM);
-    test::eq((int)doc.blocks[3].listItem.kind, (int)ListKind.TASK_CHECKED);
+    test::eq((int)doc.blocks[3].item.kind, (int)ListKind.TASK_CHECKED);
 
     test::eq((int)doc.blocks[4].kind, (int)BlockKind.LIST_ITEM);
-    test::eq((int)doc.blocks[4].listItem.kind, (int)ListKind.TASK_UNCHECKED);
+    test::eq((int)doc.blocks[4].item.kind, (int)ListKind.TASK_UNCHECKED);
 }
 
 fn void testMultilineCallout() @test
@@ -151,8 +151,8 @@ fn void testMultilineCallout() @test
     test::eq((int)doc.blocks[0].callout.kind, (int)CalloutKind.NOTE);
     test::eq(doc.blocks[0].callout.title, "NOTE");
 
-    test::eq((int)doc.blocks[0].callout.spans.len, 1);
-    test::eq(doc.blocks[0].callout.spans[0].text, "This is the first line of the note. And this is the second line of the note. And the third line.");
+    test::eq((int)doc.blocks[0].spans.len, 1);
+    test::eq(doc.blocks[0].spans[0].text, "This is the first line of the note. And this is the second line of the note. And the third line.");
 }
 
 fn void testFootnoteDefLabel() @test
@@ -163,8 +163,8 @@ fn void testFootnoteDefLabel() @test
 
     test::eq((int)doc.blocks.len, 3);
     test::eq((int)doc.blocks[2].kind, (int)BlockKind.FOOTNOTE_DEF);
-    test::eq(doc.blocks[2].footnoteDef.label, "ref");
-    test::eq(doc.blocks[2].footnoteDef.spans[0].text, "This is the custom footnote explanation.");
+    test::eq(doc.blocks[2].label, "ref");
+    test::eq(doc.blocks[2].spans[0].text, "This is the custom footnote explanation.");
 }
 
 fn void testLatex2dFractionsAndMatrices() @test
@@ -315,4 +315,15 @@ fn void testLogicArenaBlocks() @test
     String large = arena.copy("a string longer than the sixty four byte block so it spills into a new block");
     test::eq(small, "persistent_state");
     test::eq(large, "a string longer than the sixty four byte block so it spills into a new block");
+}
+
+fn void test_block_start_lines_become_paragraphs() @test
+{
+    foreach (String input : { ">foo", "#\tx", "\\begin{cases} a \\end{cases}" })
+    {
+        Document doc = parser::parse(input);
+        defer doc.free();
+        test::eq(doc.blocks.len, 1);
+        test::eq(doc.blocks[0].kind, BlockKind.PARAGRAPH);
+    }
 }

@@ -1,6 +1,7 @@
 module app;
 
 import std::io;
+import ast;
 import terminal;
 import text;
 import ansi;
@@ -22,8 +23,8 @@ const String[] SKIP = { "build", "node_modules", "target", ".git", "dist", ".cac
 
 struct Node
 {
-    char[128] path;
-    char[64] name;
+    String path;
+    String name;
     int depth;
     bool dir;
     bool open;
@@ -33,6 +34,7 @@ struct Node
 
 struct Tree
 {
+    ast::Arena names;
     Node[128] nodes;
     usz count;
     int[128] shown;
@@ -52,22 +54,12 @@ fn bool skipped(String name)
     return false;
 }
 
-fn void join(char[] out, String dir, String name)
+fn String join(ast::Arena* arena, String dir, String name)
 {
     @pool()
     {
-        String path = dir == "." ? name : string::tformat("%s/%s", dir, name);
-        sz n = min(path.len, out.len - 1);
-        out[:n] = path[:n];
-        out[n] = 0;
+        return arena.copy(dir == "." ? name : string::tformat("%s/%s", dir, name));
     };
-}
-
-fn void copy(char[] out, String s)
-{
-    sz n = min(s.len, out.len - 1);
-    out[:n] = s[:n];
-    out[n] = 0;
 }
 
 fn bool hasMarkdown(ZString dir, int depth)
@@ -82,23 +74,26 @@ fn bool hasMarkdown(ZString dir, int depth)
         if (name[0] == '.') continue;
         if (markdown(name)) return true;
         if (e.d_type != 4 || skipped(name)) continue;
-        char[128] sub;
-        join(&sub, dir.str_view(), name);
-        if (hasMarkdown((ZString)&sub, depth - 1)) return true;
+        bool found;
+        @pool()
+        {
+            found = hasMarkdown(string::tformat("%s/%s", dir, name).zstr_tcopy(), depth - 1);
+        };
+        if (found) return true;
     }
     return false;
 }
 
-fn void Tree.add(&self, ZString path, String name, int depth, bool dir, bool last, String current)
+fn void Tree.add(&self, String path, String name, int depth, bool dir, bool last, String current)
 {
     Node* node = &self.nodes[self.count++];
-    copy(&node.path, path.str_view());
-    copy(&node.name, name);
+    node.path = path;
+    node.name = self.names.copy(name);
     node.depth = depth;
     node.dir = dir;
     node.open = dir && depth < 3;
     node.last = last;
-    node.current = !dir && current.len > 0 && (path.str_view() == current || name == current);
+    node.current = !dir && current.len > 0 && (path == current || name == current);
 }
 
 fn void Tree.walk(&self, ZString dir, int depth, String current)
@@ -117,9 +112,12 @@ fn void Tree.walk(&self, ZString dir, int depth, String current)
         if (e.d_type == 4)
         {
             if (skipped(name)) continue;
-            char[128] sub;
-            join(&sub, dir.str_view(), name);
-            if (hasMarkdown((ZString)&sub, 4) && dirCount < 60) dirs[dirCount++] = *e;
+            bool found;
+            @pool()
+            {
+                found = hasMarkdown(join(&self.names, dir.str_view(), name).zstr_tcopy(), 4);
+            };
+            if (found && dirCount < 60) dirs[dirCount++] = *e;
         }
         else if (markdown(name) && fileCount < 60)
         {
@@ -133,30 +131,25 @@ fn void Tree.walk(&self, ZString dir, int depth, String current)
     {
         index++;
         String name = ((ZString)&files[i].d_name).str_view();
-        char[128] path;
-        join(&path, dir.str_view(), name);
-        self.add((ZString)&path, name, depth, false, index == total, current);
+        self.add(join(&self.names, dir.str_view(), name), name, depth, false, index == total, current);
     }
     for (int i = 0; i < dirCount && self.count < 120; i++)
     {
         index++;
         String name = ((ZString)&dirs[i].d_name).str_view();
-        char[128] path;
-        join(&path, dir.str_view(), name);
-        self.add((ZString)&path, name, depth, true, index == total, current);
-        self.walk((ZString)&path, depth + 1, current);
+        String path = join(&self.names, dir.str_view(), name);
+        self.add(path, name, depth, true, index == total, current);
+        self.walk((ZString)path.ptr, depth + 1, current);
     }
 }
 
 fn void Tree.scan(&self, String current)
 {
+    self.names.free();
+    self.names.init(16384);
     self.count = 0;
     self.top = 0;
-    Node* up = &self.nodes[self.count++];
-    *up = {};
-    copy(&up.path, "..");
-    copy(&up.name, "..");
-    up.dir = true;
+    self.nodes[self.count++] = { .path = "..", .name = "..", .dir = true };
     self.walk(".", 0, current);
     self.layout();
 }
@@ -200,7 +193,7 @@ fn void Tree.toggleAll(&self)
     for (usz i = 0; i < self.count; i++)
     {
         Node* node = &self.nodes[i];
-        if (node.dir && ((ZString)&node.name).str_view() != "..") node.open = !open;
+        if (node.dir && node.name != "..") node.open = !open;
     }
     self.layout();
 }
@@ -250,97 +243,4 @@ fn bool Tree.toggle(&self)
     node.open = !node.open;
     self.layout();
     return true;
-}
-
-fn void Tree.draw(&self, DString* fb, int rows)
-{
-    self.top = follow(self.top, self.cursor, self.visible, rows);
-    int offset = self.top;
-    for (int r = 0; r < rows; r++)
-    {
-        int v = offset + r;
-        if (v >= self.visible)
-        {
-            tilde(fb, r, rows);
-            continue;
-        }
-        Node* node = &self.nodes[self.shown[v]];
-        bool active = v == self.cursor;
-        String name = ((ZString)&node.name).str_view();
-        fb.append(active ? "  " : "    ");
-        if (active)
-        {
-            fb.append(ansi::ACTIVE);
-            fb.append("▶ ");
-        }
-        if (name == "..")
-        {
-            if (active)
-            {
-                fb.append(ansi::ACTIVE);
-                fb.append(ansi::ORANGE);
-                fb.append(ansi::BOLD);
-                fb.append("📁 ../ (Parent Directory)");
-                fb.append(ansi::RESET);
-            }
-            else
-            {
-                fb.append(ansi::ORANGE);
-                fb.append(ansi::BOLD);
-                fb.append("📁 ../ ");
-                fb.append(ansi::RESET);
-                fb.append(ansi::MUTED);
-                fb.append("(Parent Directory)");
-                fb.append(ansi::RESET);
-            }
-        }
-        else
-        {
-            for (int d = 0; d < node.depth && d < 6; d++)
-            {
-                fb.append(ansi::MUTED);
-                fb.append("│   ");
-                fb.append(ansi::RESET);
-            }
-            if (node.dir)
-            {
-                fb.append(ansi::ORANGE);
-                fb.append(ansi::BOLD);
-                fb.append(node.open ? "▾ " : "▸ ");
-                fb.append(ansi::RESET);
-                if (active) fb.append(ansi::SELECTED);
-                fb.append(ansi::CYAN);
-                fb.append(ansi::BOLD);
-                fb.append(name);
-                fb.append("/");
-                fb.append(ansi::RESET);
-            }
-            else
-            {
-                fb.append(ansi::MUTED);
-                fb.append(node.last ? "└── " : "├── ");
-                fb.append(ansi::RESET);
-                if (active)
-                {
-                    fb.append(ansi::SELECTED);
-                    fb.append(ansi::BOLD);
-                }
-                else
-                {
-                    fb.append(ansi::TEXT);
-                }
-                fb.append(name);
-                fb.append(ansi::RESET);
-                if (node.current)
-                {
-                    fb.append(" ");
-                    fb.append(ansi::GREEN);
-                    fb.append("[Active]");
-                    fb.append(ansi::RESET);
-                }
-            }
-        }
-        fb.append("\e[K");
-        if (r < rows - 1) fb.append_char('\n');
-    }
 }

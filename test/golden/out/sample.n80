@@ -1,0 +1,234 @@
+[38;2;249;38;114m[1mC3 Markdown & LaTeX Engine Showcase[0m
+
+Welcome to [1mmdv[0m! This document tests and demonstrates the full suite of in-editor Markdown and LaTeX rendering capabilities.
+
+[38;2;117;113;94m────────────────────────────────────────────────────────────────────────────[0m
+
+
+              ∞          
+            ⌠   x n - 1  
+    Γ(x) =  │  e x     dt
+            ⌡            
+              0          
+
+
+
+[38;2;166;226;46m[1m1. Typography & Formatting[0m
+
+• [1mBold tex[0m with [48;2;39;40;34m[38;2;102;217;239m **bold** [0m or [48;2;39;40;34m[38;2;102;217;239m __bold__ [0m
+• [3mItalic text[0m with [48;2;39;40;34m[38;2;102;217;239m *italic* [0m or [48;2;39;40;34m[38;2;102;217;239m _italic_ [0m
+• [9m[38;2;117;113;94mStrikethrough[0m with [48;2;39;40;34m[38;2;102;217;239m ~~strike~~ [0m
+• Inline code like [48;2;39;40;34m[38;2;102;217;239m fn int main() [0m with [48;2;39;40;34m[38;2;102;217;239m   [0mcode[48;2;39;40;34m[38;2;102;217;239m   [0m
+• Hyperlinks: ]8;;https://c3-lang.org\[38;2;102;217;239m[4mC3 Language Portal[0m]8;;\ [38;2;117;113;94m(https://c3-lang.org)[0m and ]8;;https://github.com\[38;2;102;217;239m[4mGitHub Project[0m]8;;\ [38;2;117;113;94m(https://github.com)[0m
+
+[38;2;117;113;94m────────────────────────────────────────────────────────────────────────────[0m
+
+
+[38;2;166;226;46m[1m2. LaTeX Math Formulas[0m
+
+
+[38;2;253;151;31m[1mInline Math[0m
+• The famous Pythagorean identity: a² + b² = c²
+• Euler's identity: eⁱπ + 1 = 0
+• Greek letters and roots: α + β² = √γ ⋅ θ
+• Limits & Calculus: limₓ → ₀ sin(x)/x = 1 and d/dx(eˣ) = eˣ
+
+
+           ∞      
+          ───   n 
+     x    \    x  
+    e  =   >  ────
+          /    n! 
+          ───     
+         n = 0    
+
+
+
+       ∞    2        
+     ⌠    -x       ╭─
+     │   e   dx = √ π
+     ⌡               
+       -∞            
+
+
+
+                ╭──────── 
+               ╱  2       
+         -b ± √  b  - 4ac 
+    x = ──────────────────
+                2a        
+
+
+
+          sin(x)     
+     lim ──────── = 1
+    x → 0   x        
+
+
+
+                 n               
+                ───              
+           n    \   ⎛ n ⎞ n - k k
+    (x + y)  =   >  ⎝ k ⎠x     y 
+                /                
+                ───              
+               k = 0             
+
+
+
+                 ∞            
+               ⌠        -iωt  
+    ℱ{f(t)} =  │   f(t)e    dt
+               ⌡              
+                 -∞           
+
+
+
+               1       
+    x = ───────────────
+                 1     
+         1 + ───────── 
+                   1   
+              1 + ───  
+                   x   
+
+
+
+             │ a  b │          
+    det(A) = │ c  d │ = ad - bc
+
+
+
+             ⎧ 1    if x > 0
+    sgn(x) = ⎨ 0    if x = 0
+             ⎩ -1   if x < 0
+
+
+
+        ⎛ 1  0  0 ⎞
+    A = ⎜ 0  1  0 ⎟
+        ⎝ 0  0  1 ⎠
+
+
+
+           ⎧   2                
+           ⎪  x  - 1            
+    f(x) = ⎨ ────────   if x ≠ 1
+           ⎪  x - 1             
+           ⎩ 2          if x = 1
+
+
+
+              ∂B⃗          
+    ∇ × E⃗ = -────         
+              ∂t          
+    ∇ ⋅ B⃗ = 0             
+                       ∂E⃗ 
+    ∇ × B⃗ = μ₀J⃗ + μ₀ϵ₀────
+                       ∂t 
+
+
+
+    ┌─────────────┐
+    │  iπ         │
+    │ e   + 1 = 0 │
+    └─────────────┘
+
+
+
+                       k    
+      total mass      ───   
+    ⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞⏞    \     
+    a₁ + a₂ + ⋯+aₖ =   >  aᵢ
+                      /     
+                      ───   
+                     i = 1  
+                     ⏟⏟⏟⏟⏟⏟⏟
+                        M   
+
+
+
+[38;2;253;151;31m[1mComplex Equations[0m
+• Gaussian integral: ∫₋∞∞ e⁻ˣ^² dx = √π
+• Summation formula: ∑ᵢ₌₁ⁿ i = (n(n+1))/2
+• Quadratic equation: x = (-b ± √(b² - 4ac))/2a
+• Vectors & Matrix multiplication: A ∈ ℝᵐ × ⁿ and x ∈ ℝⁿ
+
+[38;2;117;113;94m────────────────────────────────────────────────────────────────────────────[0m
+
+
+[38;2;166;226;46m[1m3. Interactive Task Lists & Bullets[0m
+
+✔  High-performance C3 native parsing engine
+✔  Inline LaTeX math to Unicode transformation
+✔  Automatic box-drawing tables with column alignment
+☐  Direct Tree-sitter AST queries
+☐  Export to formatted terminal scrollback
+
+
+[38;2;253;151;31m[1mNested Lists[0m
+• Systems Programming
+  ◦ Low overhead & zero runtime cost
+  ◦ C ABI interop with [48;2;39;40;34m[38;2;102;217;239m @export [0m and [48;2;39;40;34m[38;2;102;217;239m extern [0m
+• Terminal Integration
+  ◦ Ghostty terminal split & watch mode
+  ◦ CLI pipelines and stdout streaming
+
+[38;2;117;113;94m────────────────────────────────────────────────────────────────────────────[0m
+
+
+[38;2;166;226;46m[1m4. Modern Callouts & Admonitions[0m
+
+[38;2;102;217;239m[1m│ ℹ NOTE[0m
+│ This note callout provides helpful contextual info without interrupting your reading flow.
+
+[38;2;166;226;46m[1m│ 💡 TIP[0m
+│ Run [48;2;39;40;34m[38;2;102;217;239m mdv --stdout file.md [0m in scripts or AI workflows to render full terminal previews instantly!
+
+[38;2;253;151;31m[1m│ ⚠ WARNING[0m
+│ Keep your LaTeX brackets [48;2;39;40;34m[38;2;102;217;239m {} [0m balanced so expressions transform cleanly.
+
+[38;2;174;129;255m[1m│ 🔔 IMPORTANT[0m
+│ The original source file remains 100% untouched while previewing.
+
+[38;2;249;38;114m[1m│ ⛔ CAUTION[0m
+│ Avoid mixing raw HTML tags with Markdown tables to ensure clean alignment.
+
+[38;2;117;113;94m────────────────────────────────────────────────────────────────────────────[0m
+
+
+[38;2;166;226;46m[1m5. Source Code Blocks[0m
+
+[38;2;249;38;114m[1mmodule[0m [38;2;248;248;242mdemo[0m;
+[38;2;249;38;114m[1mimport[0m [38;2;248;248;242mstd[0m::[38;2;248;248;242mio[0m;
+
+[38;2;249;38;114m[1mfn[0m [38;2;102;217;239mint[0m [38;2;166;226;46mmain[0m([38;2;102;217;239mString[0m[] [38;2;248;248;242margs[0m)
+{
+    [38;2;248;248;242mio[0m::[38;2;166;226;46mprintn[0m([38;2;230;219;116m"Hello from the native C3 Markdown engine!"[0m);
+    [38;2;249;38;114m[1mreturn[0m [38;2;174;129;255m0[0m;
+}
+
+[38;2;249;38;114m[1mdef[0m [38;2;166;226;46mfibonacci[0m([38;2;248;248;242mn[0m: [38;2;102;217;239mint[0m) [38;2;249;38;114m-[0m[38;2;249;38;114m>[0m [38;2;248;248;242mlist[0m[[38;2;102;217;239mint[0m]:
+    [38;2;230;219;116m""[0m[38;2;230;219;116m"Generate Fibonacci series up to n terms."[0m[38;2;230;219;116m""[0m
+    [38;2;248;248;242ma[0m, [38;2;248;248;242mb[0m [38;2;249;38;114m=[0m [38;2;174;129;255m0[0m, [38;2;174;129;255m1[0m
+    [38;2;248;248;242mresult[0m [38;2;249;38;114m=[0m []
+    [38;2;249;38;114m[1mfor[0m [38;2;248;248;242m_[0m [38;2;249;38;114m[1min[0m [38;2;166;226;46mrange[0m([38;2;248;248;242mn[0m):
+        [38;2;248;248;242mresult[0m.[38;2;166;226;46mappend[0m([38;2;248;248;242ma[0m)
+        [38;2;248;248;242ma[0m, [38;2;248;248;242mb[0m [38;2;249;38;114m=[0m [38;2;248;248;242mb[0m, [38;2;248;248;242ma[0m [38;2;249;38;114m+[0m [38;2;248;248;242mb[0m
+    [38;2;249;38;114m[1mreturn[0m [38;2;248;248;242mresult[0m
+
+[38;2;117;113;94m────────────────────────────────────────────────────────────────────────────[0m
+
+
+[38;2;166;226;46m[1m6. Table Layouts & Alignment[0m
+
+[38;2;102;217;239m[1mComponent      [0m  [38;2;102;217;239m[1mTechnology    [0m  [38;2;102;217;239m[1mMath Expression[0m  [38;2;102;217;239m[1m      Status[0m
+[38;2;117;113;94m───────────────  ──────────────  ───────────────  ────────────[0m
+Math Engine      [48;2;39;40;34m[38;2;102;217;239municodeit.c3[0m     ∫₀¹ x² dx = ⅓        ✔ Ready
+Table Renderer   [48;2;39;40;34m[38;2;102;217;239mtable.c3[0m           O(N × M)          ✔ Active
+Terminal Output  ANSI / Unicode   ∇ ⋅ E⃗ = ρ/ϵ₀     ✔ Supported
+Terminal Viewer  ANSI / Unicode       λ → ∞       ✔ Integrated
+
+[38;2;117;113;94m────────────────────────────────────────────────────────────────────────────[0m
+
+[3mCompiled and rendered at native speed with C3 & mdv.[0m
