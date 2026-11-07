@@ -1,0 +1,81 @@
+# Setext H1
+
+
+## Setext H2
+
+line one
+hard break two
+hard break three
+
+Escapes: *not em* _x_ # `tick`
+
+snake_case_word and 234
+
+Ref link (https://example.com) and r (https://example.com) and https://auto.link and www.bare.com
+
+html
+Ctrl © © 😀
+
+│ outer
+│ │ nested quote
+│ • list in quote
+
+1. one
+2. two
+   ◦ nested
+     1. deep
+   int x;
+3. three
+
+5. starts at five
+6. six
+
+indented code block
+
+✔  done
+☐  todo
+
+Term : definition
+
+a | pipe  `b   c`   x² 
+────────  ───  ───  ───
+1         2    3       
+
+Inline a+b and c inline and $5 and $6 money.
+
+
+         1 
+    x = ───
+         2 
+
+
+
+    E = mc²
+
+
+alt
+
+Text with footnote1.
+
+  [1] The note.
+
+
+## Heading {#custom-id}
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+Sum hidden
+
+
+para before
+
+indented code
+second line
+
+| [!TIP]
+│ • tip list
+│ • second
+│
+│ int y;
+
+Inline cases {1 x > 0; 0 else and C(n,k), ─f→, x̸.

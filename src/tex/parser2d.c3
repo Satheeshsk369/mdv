@@ -39,6 +39,56 @@ fn void Reader.skipSpaces(Reader* p)
     }
 }
 
+fn void Reader.skipLimits(&self)
+{
+    while (true)
+    {
+        self.skipSpaces();
+        usz save = self.pos;
+        if (self.peek() != '\\') return;
+        self.pos++;
+        String name = self.name();
+        if (name == "limits" || name == "nolimits") continue;
+        self.pos = save;
+        return;
+    }
+}
+
+fn MathBox negated(Reader* p, MathAtomKind* prevAtom)
+{
+    p.skipSpaces();
+    usz start = p.pos;
+    String key;
+    if (p.peek() == '\\')
+    {
+        p.get();
+        key = p.name();
+    }
+    else
+    {
+        p.get();
+        key = p.src[start : p.pos - start];
+    }
+    String glyph = negate(key);
+    MathAtomKind kind = MathAtomKind.REL;
+    DString mb;
+    mb.init(mem, 32);
+    defer mb.free();
+    if (glyph.len == 0)
+    {
+        if (!symbol(key, &glyph, &kind)) glyph = key;
+        mb.append(glyph);
+        mb.append("\u0338");
+        *prevAtom = kind;
+        return atom(p.arena, mb.keep(p.arena));
+    }
+    *prevAtom = kind;
+    mb.append_char(' ');
+    mb.append(glyph);
+    mb.append_char(' ');
+    return atom(p.arena, mb.keep(p.arena));
+}
+
 fn MathBox styled(Reader* p, MathAtomKind* prevAtom, Alphabet alphabet)
 {
     p.skipSpaces();
@@ -114,8 +164,8 @@ fn MathBox paired(Reader* p, MathAtomKind* prevAtom)
         else if (d_name == "langle") { openCh = '<'; }
         else if (d_name == "lbrace" || d_name == "{") { openCh = '{'; }
         else if (d_name == "rbrace" || d_name == "}") { openCh = '}'; }
-        else if (d_name == "vert" || d_name == "|") { openCh = '|'; }
-        else if (d_name == "Vert") { openCh = 'V'; }
+        else if (d_name == "vert" || d_name == "lvert" || d_name == "|") { openCh = '|'; }
+        else if (d_name == "Vert" || d_name == "lVert") { openCh = 'V'; }
     }
     if (openCh == '.') openCh = 0;
 
@@ -144,8 +194,8 @@ fn MathBox paired(Reader* p, MathAtomKind* prevAtom)
                 else if (rdName == "rangle") { closeCh = '>'; }
                 else if (rdName == "lbrace" || rdName == "{") { closeCh = '{'; }
                 else if (rdName == "rbrace" || rdName == "}") { closeCh = '}'; }
-                else if (rdName == "vert" || rdName == "|") { closeCh = '|'; }
-                else if (rdName == "Vert") { closeCh = 'V'; }
+                else if (rdName == "vert" || rdName == "rvert" || rdName == "|") { closeCh = '|'; }
+                else if (rdName == "Vert" || rdName == "rVert") { closeCh = 'V'; }
             }
             if (closeCh == '.') closeCh = 0;
         }
@@ -163,8 +213,10 @@ fn MathBox block(Reader* p, MathAtomKind* prevAtom)
     while (!p.eof() && p.peek() != '}') p.pos++;
     String envName = p.src[envStart : p.pos - envStart];
     if (p.peek() == '}') p.get();
-
-    if (envName == "array")
+    MathEnvironment menv;
+    MathEnvFlags envFlags;
+    bool known = environment(envName, &menv, &envFlags);
+    if (known && envFlags.argument)
     {
         p.skipSpaces();
         if (p.peek() == '{')
@@ -268,10 +320,7 @@ fn MathBox block(Reader* p, MathAtomKind* prevAtom)
     MathBox[] flatGrid = flatBuf[: (usz)(numRows * numCols)];
 
     *prevAtom = MathAtomKind.INNER;
-
-    MathEnvironment menv;
-    MathEnvFlags envFlags;
-    if (environment(envName, &menv, &envFlags))
+    if (known)
     {
         MathBox inner = grid(p.arena, flatGrid, numRows, numCols, envFlags.alignMode, (int)envFlags.colGap);
         if (envFlags.delimLeft != 0 || envFlags.delimRight != 0)
@@ -510,7 +559,7 @@ fn MathBox commanded(Reader* p, MathAtomKind* prevAtom, MathCommand mcmd, String
             MathBox upper = blank(p.arena);
             for (int k = 0; k < 2; k++)
             {
-                p.skipSpaces();
+                p.skipLimits();
                 if (p.peek() == '_')
                 {
                     p.get();
@@ -541,7 +590,7 @@ fn MathBox commanded(Reader* p, MathAtomKind* prevAtom, MathCommand mcmd, String
             MathBox limSup = blank(p.arena);
             for (int k = 0; k < 2; k++)
             {
-                p.skipSpaces();
+                p.skipLimits();
                 if (p.peek() == '_') { p.get(); limSub = group(p); }
                 else if (p.peek() == '^') { p.get(); limSup = group(p); }
             }
@@ -590,9 +639,14 @@ fn MathBox commanded(Reader* p, MathAtomKind* prevAtom, MathCommand mcmd, String
             return atom(p.arena, "text");
 
         case OPERATORNAME:
+            p.skipSpaces();
+            if (p.peek() == '*') p.get();
             MathBox opBox = group(p);
             *prevAtom = MathAtomKind.OP;
             return opBox;
+
+        case PHANTOM:
+            return gap(p.arena, group(p).width);
     }
 }
 
@@ -633,7 +687,7 @@ fn MathBox control(Reader* p, MathAtomKind* prevAtom)
     if (c == '{' || c == '}' || c == '%' || c == '$')
     {
         p.get();
-        *prevAtom = MathAtomKind.ORD;
+        *prevAtom = c == '{' ? MathAtomKind.OPEN : c == '}' ? MathAtomKind.CLOSE : MathAtomKind.ORD;
         return letter(p.arena, c);
     }
     if (c == '!')
@@ -654,6 +708,7 @@ fn MathBox control(Reader* p, MathAtomKind* prevAtom)
         return atom(p.arena, space.glyph);
     }
     String cmd = p.name();
+    if (cmd == "not") return negated(p, prevAtom);
     Alphabet alphabet;
     if (font(cmd, &alphabet)) return styled(p, prevAtom, alphabet);
     MathAccent mark;
@@ -787,6 +842,21 @@ fn MathBox expression(Reader* p, bool stopAtAmp = false, bool stopAtBslash = fal
             usz save = p.pos;
             p.get();
             String name = p.name();
+            bool argument;
+            if (skip(name, &argument))
+            {
+                if (argument) group(p);
+                continue;
+            }
+            if (name == "over" || name == "choose" || name == "atop")
+            {
+                MathBox left = assemble(p.arena, pieces.array_view(), raise);
+                MathBox right = expression(p, stopAtAmp, stopAtBslash, stopAtRbracket);
+                if (name == "over") return fraction(p.arena, left, right);
+                MathBox[2] pair = { left, right };
+                MathBox stacked = stack(p.arena, pair[0:2]);
+                return name == "choose" ? delimit(p.arena, stacked, '(', ')') : stacked;
+            }
             p.pos = save;
             if (name == "right" || name == "end") break;
         }
@@ -807,14 +877,19 @@ fn MathBox expression(Reader* p, bool stopAtAmp = false, bool stopAtBslash = fal
         }
         bool scripted = piece.sup.width > 0 || piece.sub.width > 0;
         raise = raise || (scripted && !flat(piece.base, piece.sup, piece.sub));
-        piece.gap = spaced && joins(prevAtom);
+        piece.gap = spaced && joins(prevAtom) && prevAtom != MathAtomKind.CLOSE;
         pieces.push(piece);
     }
-    MathBox res = blank(p.arena);
+    return assemble(p.arena, pieces.array_view(), raise);
+}
+
+fn MathBox assemble(ast::Arena* arena, Piece[] pieces, bool raise)
+{
+    MathBox res = blank(arena);
     foreach (piece : pieces)
     {
-        MathBox next = scripts(p.arena, piece.base, piece.sup, piece.sub, raise);
-        res = beside(p.arena, res, next, piece.gap && res.width > 0 ? 1 : 0);
+        MathBox next = scripts(arena, piece.base, piece.sup, piece.sub, raise);
+        res = beside(arena, res, next, piece.gap && res.width > 0 ? 1 : 0);
     }
     return res;
 }

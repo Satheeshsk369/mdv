@@ -147,7 +147,8 @@ enum MathCommand {
     TEXT,
     OPERATORNAME,
     QUAD,
-    QQUAD
+    QQUAD,
+    PHANTOM
 }
 
 struct CommandDef {
@@ -217,6 +218,15 @@ const CommandDef[] COMMANDS = {
     { "left", MathCommand.LEFT, { .arity = 1 } },
     { "begin", MathCommand.BEGIN, { .arity = 1 } },
     { "text", MathCommand.TEXT, { .arity = 1 } },
+    { "textbf", MathCommand.TEXT, { .arity = 1 } },
+    { "textit", MathCommand.TEXT, { .arity = 1 } },
+    { "textrm", MathCommand.TEXT, { .arity = 1 } },
+    { "textsf", MathCommand.TEXT, { .arity = 1 } },
+    { "texttt", MathCommand.TEXT, { .arity = 1 } },
+    { "textnormal", MathCommand.TEXT, { .arity = 1 } },
+    { "mbox", MathCommand.TEXT, { .arity = 1 } },
+    { "phantom", MathCommand.PHANTOM, { .arity = 1 } },
+    { "hphantom", MathCommand.PHANTOM, { .arity = 1 } },
     { "operatorname", MathCommand.OPERATORNAME, { .arity = 1 } },
     { "quad", MathCommand.QUAD, { .spacing } },
     { "qquad", MathCommand.QQUAD, { .spacing } }
@@ -240,11 +250,7 @@ fn bool command(String name, MathCommand* outCmd, MathCmdFlags* outFlags = null)
 }
 
 bitstruct MathEnvFlags : uint {
-    bool matrix      : 0;
-    bool cases       : 1;
-    bool align       : 2;
-    bool gather      : 3;
-    bool array       : 4;
+    bool argument    : 0;
     uint colGap     : 5..7;
     char alignMode  : 8..15;
     char delimLeft  : 16..23;
@@ -279,27 +285,34 @@ struct EnvironmentDef {
 }
 
 const EnvironmentDef[] ENVIRONMENTS = {
-    { "matrix",      MathEnvironment.MATRIX,      { .matrix, .colGap = 2, .alignMode = 'C' } },
-    { "pmatrix",     MathEnvironment.PMATRIX,     { .matrix, .colGap = 2, .alignMode = 'C', .delimLeft = '(', .delimRight = ')' } },
-    { "bmatrix",     MathEnvironment.BMATRIX,     { .matrix, .colGap = 2, .alignMode = 'C', .delimLeft = '[', .delimRight = ']' } },
-    { "vmatrix",     MathEnvironment.VMATRIX,     { .matrix, .colGap = 2, .alignMode = 'C', .delimLeft = '|', .delimRight = '|' } },
-    { "Vmatrix",     MathEnvironment.VM_MATRIX,   { .matrix, .colGap = 2, .alignMode = 'C', .delimLeft = 'V', .delimRight = 'V' } },
-    { "Bmatrix",     MathEnvironment.B_MATRIX,    { .matrix, .colGap = 2, .alignMode = 'C', .delimLeft = '{', .delimRight = '}' } },
-    { "smallmatrix", MathEnvironment.SMALLMATRIX, { .matrix, .colGap = 2, .alignMode = 'C' } },
-    { "cases",       MathEnvironment.CASES,       { .cases,  .colGap = 3, .alignMode = 'L', .delimLeft = '{' } },
-    { "dcases",      MathEnvironment.DCASES,      { .cases,  .colGap = 3, .alignMode = 'L', .delimLeft = '{' } },
-    { "rcases",      MathEnvironment.RCASES,      { .cases,  .colGap = 3, .alignMode = 'L', .delimRight = '}' } },
-    { "align",       MathEnvironment.ALIGN,       { .align,  .colGap = 0, .alignMode = 'A' } },
-    { "align*",      MathEnvironment.ALIGN,       { .align,  .colGap = 0, .alignMode = 'A' } },
-    { "aligned",     MathEnvironment.ALIGNED,     { .align,  .colGap = 0, .alignMode = 'A' } },
-    { "split",       MathEnvironment.SPLIT,       { .align,  .colGap = 0, .alignMode = 'A' } },
-    { "flalign",     MathEnvironment.FLALIGN,     { .align,  .colGap = 0, .alignMode = 'A' } },
-    { "flalign*",    MathEnvironment.FLALIGN,     { .align,  .colGap = 0, .alignMode = 'A' } },
-    { "eqnarray",    MathEnvironment.EQNARRAY,    { .align,  .colGap = 0, .alignMode = 'A' } },
-    { "gather",      MathEnvironment.GATHER,      { .gather, .colGap = 0, .alignMode = 'C' } },
-    { "gather*",     MathEnvironment.GATHER,      { .gather, .colGap = 0, .alignMode = 'C' } },
-    { "gathered",    MathEnvironment.GATHERED,    { .gather, .colGap = 0, .alignMode = 'C' } },
-    { "array",       MathEnvironment.ARRAY,       { .array,  .colGap = 0, .alignMode = 'A' } }
+    { "matrix",      MathEnvironment.MATRIX,      { .colGap = 2, .alignMode = 'C' } },
+    { "pmatrix",     MathEnvironment.PMATRIX,     { .colGap = 2, .alignMode = 'C', .delimLeft = '(', .delimRight = ')' } },
+    { "bmatrix",     MathEnvironment.BMATRIX,     { .colGap = 2, .alignMode = 'C', .delimLeft = '[', .delimRight = ']' } },
+    { "vmatrix",     MathEnvironment.VMATRIX,     { .colGap = 2, .alignMode = 'C', .delimLeft = '|', .delimRight = '|' } },
+    { "Vmatrix",     MathEnvironment.VM_MATRIX,   { .colGap = 2, .alignMode = 'C', .delimLeft = 'V', .delimRight = 'V' } },
+    { "Bmatrix",     MathEnvironment.B_MATRIX,    { .colGap = 2, .alignMode = 'C', .delimLeft = '{', .delimRight = '}' } },
+    { "smallmatrix", MathEnvironment.SMALLMATRIX, { .colGap = 2, .alignMode = 'C' } },
+    { "cases",       MathEnvironment.CASES,       { .colGap = 3, .alignMode = 'L', .delimLeft = '{' } },
+    { "dcases",      MathEnvironment.DCASES,      { .colGap = 3, .alignMode = 'L', .delimLeft = '{' } },
+    { "rcases",      MathEnvironment.RCASES,      { .colGap = 3, .alignMode = 'L', .delimRight = '}' } },
+    { "align",       MathEnvironment.ALIGN,       { .colGap = 0, .alignMode = 'A' } },
+    { "align*",      MathEnvironment.ALIGN,       { .colGap = 0, .alignMode = 'A' } },
+    { "aligned",     MathEnvironment.ALIGNED,     { .colGap = 0, .alignMode = 'A' } },
+    { "split",       MathEnvironment.SPLIT,       { .colGap = 0, .alignMode = 'A' } },
+    { "flalign",     MathEnvironment.FLALIGN,     { .colGap = 0, .alignMode = 'A' } },
+    { "flalign*",    MathEnvironment.FLALIGN,     { .colGap = 0, .alignMode = 'A' } },
+    { "eqnarray",    MathEnvironment.EQNARRAY,    { .colGap = 0, .alignMode = 'A' } },
+    { "gather",      MathEnvironment.GATHER,      { .colGap = 0, .alignMode = 'C' } },
+    { "gather*",     MathEnvironment.GATHER,      { .colGap = 0, .alignMode = 'C' } },
+    { "gathered",    MathEnvironment.GATHERED,    { .colGap = 0, .alignMode = 'C' } },
+    { "array",       MathEnvironment.ARRAY,       { .argument, .colGap = 2, .alignMode = 'C' } },
+    { "alignat",     MathEnvironment.ALIGN,       { .argument, .colGap = 0, .alignMode = 'A' } },
+    { "alignat*",    MathEnvironment.ALIGN,       { .argument, .colGap = 0, .alignMode = 'A' } },
+    { "alignedat",   MathEnvironment.ALIGNED,     { .argument, .colGap = 0, .alignMode = 'A' } },
+    { "multline",    MathEnvironment.GATHER,      { .colGap = 0, .alignMode = 'C' } },
+    { "multline*",   MathEnvironment.GATHER,      { .colGap = 0, .alignMode = 'C' } },
+    { "equation",    MathEnvironment.GATHER,      { .colGap = 0, .alignMode = 'C' } },
+    { "equation*",   MathEnvironment.GATHER,      { .colGap = 0, .alignMode = 'C' } }
 };
 
 fn bool environment(String name, MathEnvironment* outEnv, MathEnvFlags* outFlags = null)
@@ -330,6 +343,10 @@ enum MathAccent {
     TILDE,
     ACUTE,
     GRAVE,
+    CHECK,
+    BREVE,
+    RING,
+    ARROWS,
     OVERLINE,
     UNDERLINE
 }
@@ -353,8 +370,14 @@ const AccentDef[] ACCENTS = {
     { "tilde",     MathAccent.TILDE,     "̃", false, false },
     { "acute",     MathAccent.ACUTE,     "́", false, false },
     { "grave",     MathAccent.GRAVE,     "̀", false, false },
+    { "widehat",   MathAccent.HAT,       "̂", false, false },
+    { "widetilde", MathAccent.TILDE,     "̃", false, false },
+    { "check",     MathAccent.CHECK,     "̌", false, false },
+    { "breve",     MathAccent.BREVE,     "̆", false, false },
+    { "mathring",  MathAccent.RING,      "̊", false, false },
+    { "overleftrightarrow", MathAccent.ARROWS, "⃡", false, false },
     { "overline",  MathAccent.OVERLINE,  "̄", true,  false },
-    { "underline", MathAccent.UNDERLINE, "̄", false, true }
+    { "underline", MathAccent.UNDERLINE, "\u0332", false, true }
 };
 
 fn bool accent(String name, MathAccent* outAccent, String* outCombining = null, bool* outOverline = null, bool* outUnderline = null)
@@ -653,8 +676,133 @@ const SymbolEntry[] SYMBOLS = {
     { "ldots", "…", MathAtomKind.PUNCT },
     { "vdots", "⋮", MathAtomKind.PUNCT },
     { "ddots", "⋱", MathAtomKind.PUNCT },
-    { "iddots", "⋰", MathAtomKind.PUNCT }
+    { "iddots", "⋰", MathAtomKind.PUNCT },
+    { "dotsc", "…", MathAtomKind.PUNCT },
+    { "dotsb", "⋯", MathAtomKind.PUNCT },
+    { "colon", ":", MathAtomKind.PUNCT },
+    { "cdotp", "·", MathAtomKind.PUNCT },
+
+    { "lvert", "|", MathAtomKind.OPEN },
+    { "rvert", "|", MathAtomKind.CLOSE },
+    { "lVert", "‖", MathAtomKind.OPEN },
+    { "rVert", "‖", MathAtomKind.CLOSE },
+    { "lbrace", "{", MathAtomKind.OPEN },
+    { "rbrace", "}", MathAtomKind.CLOSE },
+    { "lbrack", "[", MathAtomKind.OPEN },
+    { "rbrack", "]", MathAtomKind.CLOSE },
+
+    { "therefore", "∴", MathAtomKind.REL },
+    { "because", "∵", MathAtomKind.REL },
+    { "gets", "←", MathAtomKind.REL },
+    { "impliedby", "⟸", MathAtomKind.REL },
+    { "longmapsto", "⟼", MathAtomKind.REL },
+    { "hookleftarrow", "↩", MathAtomKind.REL },
+    { "hookrightarrow", "↪", MathAtomKind.REL },
+    { "leadsto", "⇝", MathAtomKind.REL },
+    { "nmid", "∤", MathAtomKind.REL },
+    { "approxeq", "≊", MathAtomKind.REL },
+    { "lesssim", "≲", MathAtomKind.REL },
+    { "gtrsim", "≳", MathAtomKind.REL },
+    { "nless", "≮", MathAtomKind.REL },
+    { "ngtr", "≯", MathAtomKind.REL },
+    { "coloneqq", "≔", MathAtomKind.REL },
+    { "eqqcolon", "≕", MathAtomKind.REL },
+    { "trianglelefteq", "⊴", MathAtomKind.REL },
+    { "trianglerighteq", "⊵", MathAtomKind.REL },
+    { "varpropto", "∝", MathAtomKind.REL },
+    { "between", "≬", MathAtomKind.REL },
+    { "pitchfork", "⋔", MathAtomKind.REL },
+
+    { "lhd", "⊲", MathAtomKind.BIN },
+    { "rhd", "⊳", MathAtomKind.BIN },
+    { "unlhd", "⊴", MathAtomKind.BIN },
+    { "unrhd", "⊵", MathAtomKind.BIN },
+    { "bigtriangleup", "△", MathAtomKind.BIN },
+    { "bigtriangledown", "▽", MathAtomKind.BIN },
+    { "boxplus", "⊞", MathAtomKind.BIN },
+    { "boxminus", "⊟", MathAtomKind.BIN },
+    { "boxtimes", "⊠", MathAtomKind.BIN },
+    { "boxdot", "⊡", MathAtomKind.BIN },
+    { "ltimes", "⋉", MathAtomKind.BIN },
+    { "rtimes", "⋊", MathAtomKind.BIN },
+    { "curlyvee", "⋎", MathAtomKind.BIN },
+    { "curlywedge", "⋏", MathAtomKind.BIN },
+    { "intercal", "⊺", MathAtomKind.BIN },
+    { "barwedge", "⊼", MathAtomKind.BIN },
+    { "veebar", "⊻", MathAtomKind.BIN },
+    { "dotplus", "∔", MathAtomKind.BIN },
+    { "divideontimes", "⋇", MathAtomKind.BIN },
+    { "centerdot", "·", MathAtomKind.BIN },
+    { "circledast", "⊛", MathAtomKind.BIN },
+    { "circledcirc", "⊚", MathAtomKind.BIN },
+
+    { "imath", "ı", MathAtomKind.ORD },
+    { "jmath", "ȷ", MathAtomKind.ORD },
+    { "backprime", "‵", MathAtomKind.ORD },
+    { "surd", "√", MathAtomKind.ORD },
+    { "blacksquare", "■", MathAtomKind.ORD },
+    { "checkmark", "✓", MathAtomKind.ORD },
+    { "degree", "°", MathAtomKind.ORD },
+    { "circledR", "®", MathAtomKind.ORD },
+    { "copyright", "©", MathAtomKind.ORD },
+    { "pounds", "£", MathAtomKind.ORD },
+    { "yen", "¥", MathAtomKind.ORD },
+    { "euro", "€", MathAtomKind.ORD },
+    { "dag", "†", MathAtomKind.ORD },
+    { "ddag", "‡", MathAtomKind.ORD },
+    { "S", "§", MathAtomKind.ORD },
+    { "P", "¶", MathAtomKind.ORD },
+    { "blacktriangle", "▲", MathAtomKind.ORD },
+    { "vartriangle", "△", MathAtomKind.ORD },
+    { "complement", "∁", MathAtomKind.ORD },
+    { "Finv", "Ⅎ", MathAtomKind.ORD },
+    { "Game", "⅁", MathAtomKind.ORD },
+    { "lozenge", "◊", MathAtomKind.ORD },
+    { "blacklozenge", "⧫", MathAtomKind.ORD },
+    { "bigstar", "★", MathAtomKind.ORD }
 };
+
+struct Skip
+{
+    String name;
+    bool argument;
+}
+
+const Skip[] SKIPS = {
+    { "big", false }, { "Big", false }, { "bigg", false }, { "Bigg", false },
+    { "bigl", false }, { "bigr", false }, { "Bigl", false }, { "Bigr", false },
+    { "biggl", false }, { "biggr", false }, { "Biggl", false }, { "Biggr", false },
+    { "middle", false }, { "limits", false }, { "nolimits", false }, { "nonumber", false }, { "notag", false },
+    { "displaystyle", false }, { "textstyle", false }, { "scriptstyle", false }, { "scriptscriptstyle", false },
+    { "hline", false }, { "label", true }, { "vphantom", true },
+};
+
+fn bool skip(String name, bool* argument)
+{
+    foreach (k : SKIPS)
+    {
+        if (k.name != name) continue;
+        *argument = k.argument;
+        return true;
+    }
+    return false;
+}
+
+const SymbolEntry[] NEGATIONS = {
+    { "=", "≠", MathAtomKind.REL }, { "<", "≮", MathAtomKind.REL }, { ">", "≯", MathAtomKind.REL },
+    { "in", "∉", MathAtomKind.REL }, { "ni", "∌", MathAtomKind.REL }, { "subset", "⊄", MathAtomKind.REL },
+    { "supset", "⊅", MathAtomKind.REL }, { "subseteq", "⊈", MathAtomKind.REL }, { "supseteq", "⊉", MathAtomKind.REL },
+    { "equiv", "≢", MathAtomKind.REL }, { "sim", "≁", MathAtomKind.REL }, { "simeq", "≄", MathAtomKind.REL },
+    { "approx", "≉", MathAtomKind.REL }, { "cong", "≇", MathAtomKind.REL }, { "le", "≰", MathAtomKind.REL },
+    { "leq", "≰", MathAtomKind.REL }, { "ge", "≱", MathAtomKind.REL }, { "geq", "≱", MathAtomKind.REL },
+    { "mid", "∤", MathAtomKind.REL }, { "parallel", "∦", MathAtomKind.REL }, { "exists", "∄", MathAtomKind.ORD },
+};
+
+fn String negate(String key)
+{
+    foreach (n : NEGATIONS) if (n.name == key) return n.glyph;
+    return "";
+}
 
 fn bool symbol(String name, String* outGlyph, MathAtomKind* outKind = null)
 {

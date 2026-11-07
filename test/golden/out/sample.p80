@@ -162,12 +162,12 @@ in-editor Markdown and LaTeX rendering capabilities.
 ## 4. Modern Callouts & Admonitions
 
 | [!NOTE]
-│ This note callout provides helpful contextual info without interrupting
-│ your reading flow.
+│ This note callout provides helpful contextual info without interrupting your
+│ reading flow.
 
 | [!TIP]
-│ Run mdv --stdout file.md in scripts or AI workflows to render full
-│ terminal previews instantly!
+│ Run mdv --stdout file.md in scripts or AI workflows to render full terminal
+│ previews instantly!
 
 | [!WARNING]
 │ Keep your LaTeX brackets {} balanced so expressions transform cleanly.
@@ -176,8 +176,7 @@ in-editor Markdown and LaTeX rendering capabilities.
 │ The original source file remains 100% untouched while previewing.
 
 | [!CAUTION]
-│ Avoid mixing raw HTML tags with Markdown tables to ensure clean
-│ alignment.
+│ Avoid mixing raw HTML tags with Markdown tables to ensure clean alignment.
 
 ────────────────────────────────────────────────────────────────────────────
 

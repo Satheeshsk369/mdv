@@ -24,9 +24,17 @@ $assert(TITLES.len == CalloutKind::len);
 
 const String[] TASKS = { "- [ ] ", "* [ ] ", "- [x] ", "- [X] ", "* [x] ", "* [X] " };
 
-const String[] STARTS = { "```", "~~~", "$$", "\\begin{", ">" };
+const String[] STARTS = { "```", "~~~", "$$", "\\[", "\\begin{", ">", "<!--" };
 
-const String[] ENVIRONMENTS = { "$$", "\\begin{equation}", "\\begin{align}", "\\begin{gather}", "\\begin{aligned}" };
+const String[] ENVIRONMENTS = { "$$", "\\[", "\\begin{equation}", "\\begin{align}", "\\begin{gather}", "\\begin{aligned}" };
+
+struct Delimiter
+{
+    String open;
+    String close;
+}
+
+const Delimiter[] DISPLAYS = { { "$$", "$$" }, { "\\[", "\\]" } };
 
 fn bool thematic(String line)
 {
@@ -116,6 +124,28 @@ fn sz footnoteColon(String t)
     return p + 1 < t.len ? p : -1;
 }
 
+fn int setext(String line)
+{
+    String t = line.trim();
+    if (t.len == 0 || (t[0] != '=' && t[0] != '-')) return 0;
+    foreach (c : t) if (c != t[0]) return 0;
+    return t[0] == '=' ? 1 : 2;
+}
+
+fn bool definition(String t, Entry* entry)
+{
+    if (t.len < 4 || t[0] != '[' || t[1] == '^') return false;
+    sz close = t.index_of("]:") ?? -1;
+    if (close < 2) return false;
+    String url = t[close + 2..].trim();
+    sz end = url.index_of_char(' ') ?? url.len;
+    url = url[:end];
+    if (url.len >= 2 && url[0] == '<' && url[^1] == '>') url = url[1 : url.len - 2];
+    if (url.len == 0) return false;
+    *entry = { t[1 : close - 1], url };
+    return true;
+}
+
 fn bool blockStart(String line)
 {
     String t = line.trim();
@@ -128,7 +158,7 @@ fn bool blockStart(String line)
     return bullet(line, indent) || ordered(line, indent, &number, &prefix);
 }
 
-fn Span[][] cells(ast::Arena* arena, String line, int* count)
+fn Span[][] cells(ast::Arena* arena, Entry[] refs, String line, int* count)
 {
     List{Span[]} list;
     list.init(mem, 8);
@@ -138,8 +168,8 @@ fn Span[][] cells(ast::Arena* arena, String line, int* count)
     while (i < t.len)
     {
         sz start = i;
-        while (i < t.len && t[i] != '|') i++;
-        list.push(spans(arena, t[start : i - start].trim()));
+        while (i < t.len && (t[i] != '|' || t[i - 1] == '\\')) i++;
+        list.push(spans(arena, t[start : i - start].trim(), refs));
         if (i < t.len) i++;
     }
     *count = (int)list.len();
@@ -183,7 +213,9 @@ struct Parser
 {
     Document* doc;
     String[] lines;
+    Entry[] refs;
     int at;
+    int base;
     List{Block} blocks;
 }
 
@@ -193,7 +225,36 @@ fn String Parser.peek(&self, int ahead = 0) => self.lines[self.at + ahead];
 
 fn ast::Arena* Parser.arena(&self) => &self.doc.arena;
 
-fn void Parser.add(&self, Block b) => self.blocks.push(b);
+fn Span[] Parser.spans(&self, String src) => spans(self.arena(), src, self.refs);
+
+fn void Parser.add(&self, Block b)
+{
+    b.start += self.base;
+    b.end += self.base;
+    self.blocks.push(b);
+}
+
+fn Block[] Parser.inner(&self, String[] lines, int base)
+{
+    Parser p = { .doc = self.doc, .lines = lines, .refs = self.refs, .base = self.base + base };
+    p.blocks.init(mem, 16);
+    defer p.blocks.free();
+    while (!p.done()) p.block();
+    return keep(self.arena(), &p.blocks);
+}
+
+fn String Parser.join(&self, String[] rows)
+{
+    DString latex;
+    latex.init(mem, 512);
+    defer latex.free();
+    foreach (i, row : rows)
+    {
+        if (i > 0) latex.append_char(' ');
+        latex.append(row);
+    }
+    return latex.keep(self.arena());
+}
 
 fn void Parser.single(&self, BlockKind kind)
 {
@@ -248,10 +309,65 @@ fn void Parser.fence(&self)
     {
         code.push(self.arena().copy(self.peek()));
     }
-    Block b = ast::make(CODE_BLOCK, start, self.at);
-    b.code = { self.arena().copy(t[length..].trim()), keep(self.arena(), &code) };
+    String language = t[length..].trim();
+    Block b = ast::make(language == "math" ? MATH_BLOCK : CODE_BLOCK, start, self.at);
+    if (language == "math")
+    {
+        b.latex = self.join(code.array_view());
+    }
+    else
+    {
+        b.code = { self.arena().copy(language), keep(self.arena(), &code) };
+    }
     self.add(b);
     self.at++;
+}
+
+fn void Parser.indented(&self)
+{
+    int start = self.at;
+    int last = start;
+    for (; !self.done(); self.at++)
+    {
+        String line = self.peek();
+        if (line.trim().len == 0) continue;
+        if (!line.starts_with("    ") && !line.starts_with("\t")) break;
+        last = self.at;
+    }
+    List{String} code;
+    code.init(mem, 16);
+    defer code.free();
+    foreach (line : self.lines[start..last])
+    {
+        String body = line.starts_with("\t") ? line[1..] : line.len >= 4 ? line[4..] : "";
+        code.push(self.arena().copy(body));
+    }
+    Block b = ast::make(CODE_BLOCK, start, last);
+    b.code = { "", keep(self.arena(), &code) };
+    self.add(b);
+    self.at = last + 1;
+}
+
+fn bool Parser.standalone(&self, String line)
+{
+    if (!line.starts_with("    ") && !line.starts_with("\t")) return false;
+    Block[] seen = self.blocks.array_view();
+    if (seen.len > 0 && seen[^1].kind != BLANK) return false;
+    foreach_r (b : seen) if (b.kind != BLANK) return b.kind != LIST_ITEM;
+    return true;
+}
+
+fn void Parser.comment(&self)
+{
+    while (!self.done() && !self.peek().contains("-->")) self.at++;
+    self.drop();
+}
+
+fn void Parser.drop(&self)
+{
+    self.at++;
+    Block[] seen = self.blocks.array_view();
+    if (seen.len > 0 && seen[^1].kind == BLANK && !self.done() && self.peek().trim().len == 0) self.at++;
 }
 
 fn void Parser.math(&self)
@@ -259,11 +375,14 @@ fn void Parser.math(&self)
     int start = self.at;
     String line = self.peek();
     String t = line.trim();
-    bool dollar = t.starts_with("$$");
-    if (dollar && t.len > 4 && t.ends_with("$$"))
+    Delimiter d;
+    foreach (x : DISPLAYS) if (t.starts_with(x.open)) d = x;
+    bool delimited = d.open.len > 0;
+    String rest = t[d.open.len..];
+    if (delimited && rest.len > d.close.len && rest.ends_with(d.close))
     {
         Block b = ast::make(MATH_BLOCK, start, start);
-        b.latex = self.arena().copy(t[2 : t.len - 4].trim());
+        b.latex = self.arena().copy(rest[:rest.len - d.close.len].trim());
         self.add(b);
         self.at++;
         return;
@@ -271,30 +390,22 @@ fn void Parser.math(&self)
     List{String} rows;
     rows.init(mem, 16);
     defer rows.free();
-    if (!dollar) rows.push(line);
-    if (dollar && t.len > 2) rows.push(t[2..]);
+    if (!delimited) rows.push(line);
+    if (delimited && rest.len > 0) rows.push(rest);
     for (self.at++; !self.done(); self.at++)
     {
         String row = self.peek();
         String r = row.trim();
-        if (dollar && (r.ends_with("$$") || r.starts_with("$$")))
+        if (delimited && (r.ends_with(d.close) || r.starts_with(d.close)))
         {
-            if (r.len > 2 && !r.starts_with("$$")) rows.push(r[:r.len - 2]);
+            if (r.len > d.close.len && !r.starts_with(d.close)) rows.push(r[:r.len - d.close.len]);
             break;
         }
         rows.push(row);
-        if (!dollar && r.starts_with("\\end{")) break;
-    }
-    DString latex;
-    latex.init(mem, 512);
-    defer latex.free();
-    foreach (i, row : rows)
-    {
-        if (i > 0) latex.append_char(' ');
-        latex.append(row);
+        if (!delimited && r.starts_with("\\end{")) break;
     }
     Block b = ast::make(MATH_BLOCK, start, self.at);
-    b.latex = latex.keep(self.arena());
+    b.latex = self.join(rows.array_view());
     self.add(b);
     self.at++;
 }
@@ -303,7 +414,7 @@ fn void Parser.table(&self)
 {
     int start = self.at;
     int columns;
-    Span[][] headers = cells(self.arena(), self.peek(), &columns);
+    Span[][] headers = cells(self.arena(), self.refs, self.peek(), &columns);
     Alignment[] aligns = alignments(self.arena(), self.peek(1), columns);
     List{Span[][]} rows;
     rows.init(mem, 32);
@@ -311,7 +422,7 @@ fn void Parser.table(&self)
     int count;
     for (self.at += 2; !self.done() && self.peek().trim().starts_with("|"); self.at++)
     {
-        rows.push(cells(self.arena(), self.peek(), &count));
+        rows.push(cells(self.arena(), self.refs, self.peek(), &count));
     }
     Block b = ast::make(TABLE, start, self.at - 1);
     b.table = { columns, aligns, headers, keep(self.arena(), &rows) };
@@ -322,28 +433,28 @@ fn void Parser.heading(&self)
 {
     String t = self.peek().trim();
     int n = level(t);
-    Block b = ast::make(HEADING, self.at, self.at, spans(self.arena(), t[n + 1..].trim()));
+    Block b = ast::make(HEADING, self.at, self.at, self.spans(t[n + 1..].trim()));
     b.level = n;
     self.add(b);
     self.at++;
 }
 
-fn String Parser.quoted(&self, bool alerts, int* last)
+fn Block[] Parser.quoted(&self, bool alerts, int* last)
 {
-    DString body;
-    body.init(mem, 512);
-    defer body.free();
+    int base = self.at;
+    List{String} rows;
+    rows.init(mem, 16);
+    defer rows.free();
     for (; !self.done(); self.at++)
     {
         String t = self.peek().trim();
         if (!t.starts_with(">") || (alerts && t.starts_with("> [!"))) break;
         String rest = t[1..];
         if (rest.len > 0 && rest[0] == ' ') rest = rest[1..];
-        if (body.len() > 0) body.append_char(' ');
-        body.append(rest);
+        rows.push(rest);
         *last = self.at;
     }
-    return body.keep(self.arena());
+    return self.inner(rows.array_view(), base);
 }
 
 fn void Parser.callout(&self)
@@ -359,8 +470,9 @@ fn void Parser.callout(&self)
     }
     int last = start;
     self.at++;
-    String body = self.quoted(false, &last);
-    Block b = ast::make(CALLOUT, start, last, spans(self.arena(), body));
+    Block b = ast::make(CALLOUT, start, start);
+    b.children = self.quoted(false, &last);
+    b.end = last;
     b.callout = { kind, TITLES[kind] };
     self.add(b);
 }
@@ -369,14 +481,16 @@ fn void Parser.quote(&self)
 {
     int start = self.at;
     int last = start;
-    String body = self.quoted(true, &last);
-    self.add(ast::make(BLOCKQUOTE, start, last, spans(self.arena(), body)));
+    Block b = ast::make(BLOCKQUOTE, start, start);
+    b.children = self.quoted(true, &last);
+    b.end = last;
+    self.add(b);
 }
 
 fn void Parser.footnote(&self, sz colon)
 {
     String t = self.peek().trim();
-    Block b = ast::make(FOOTNOTE_DEF, self.at, self.at, spans(self.arena(), t[colon + 2..].trim()));
+    Block b = ast::make(FOOTNOTE_DEF, self.at, self.at, self.spans(t[colon + 2..].trim()));
     b.label = self.arena().copy(t[2 : colon - 2]);
     self.add(b);
     self.at++;
@@ -384,7 +498,7 @@ fn void Parser.footnote(&self, sz colon)
 
 fn void Parser.item(&self, ListKind kind, int indent, int number, String rest)
 {
-    Block b = ast::make(LIST_ITEM, self.at, self.at, spans(self.arena(), rest));
+    Block b = ast::make(LIST_ITEM, self.at, self.at, self.spans(rest));
     b.item = { kind, indent, number };
     self.add(b);
     self.at++;
@@ -396,14 +510,27 @@ fn void Parser.paragraph(&self)
     DString body;
     body.init(mem, 512);
     defer body.free();
-    do
+    while (true)
     {
-        if (body.len() > 0) body.append_char(' ');
-        body.append(self.peek().trim());
+        String raw = self.peek();
+        String t = raw.trim();
         self.at++;
+        bool more = !self.done() && setext(self.peek()) == 0 && !blockStart(self.peek());
+        bool slash = more && t.ends_with("\\");
+        body.append(slash ? t[:t.len - 1] : t);
+        if (!more) break;
+        body.append_char(slash || raw.ends_with("  ") ? '\n' : ' ');
     }
-    while (!self.done() && !blockStart(self.peek()));
-    self.add(ast::make(PARAGRAPH, start, self.at - 1, spans(self.arena(), body.str_view())));
+    int rank = self.done() ? 0 : setext(self.peek());
+    if (rank == 0)
+    {
+        self.add(ast::make(PARAGRAPH, start, self.at - 1, self.spans(body.str_view())));
+        return;
+    }
+    Block b = ast::make(HEADING, start, self.at, self.spans(body.str_view()));
+    b.level = rank;
+    self.add(b);
+    self.at++;
 }
 
 fn bool Parser.list(&self, String line)
@@ -437,11 +564,14 @@ fn void Parser.block(&self)
     sz colon = footnoteColon(t);
     bool math;
     foreach (env : ENVIRONMENTS) math = math || t.starts_with(env);
+    Entry entry;
     switch
     {
-        case self.at == 0 && t == "---": self.frontmatter();
         case t.len == 0: self.single(BLANK);
+        case self.standalone(line): self.indented();
         case t.starts_with("```") || t.starts_with("~~~"): self.fence();
+        case t.starts_with("<!--"): self.comment();
+        case definition(t, &entry): self.drop();
         case math: self.math();
         case t.starts_with("|") && (sz)self.at + 1 < self.lines.len && separator(self.peek(1)): self.table();
         case thematic(line): self.single(THEMATIC_BREAK);
@@ -474,9 +604,19 @@ fn Document parse(String content)
     List{String} lines;
     lines.init(mem, 128);
     defer lines.free();
-    Parser p = { .doc = &doc, .lines = split(content, &lines) };
+    List{Entry} refs;
+    refs.init(mem, 8);
+    defer refs.free();
+    String[] all = split(content, &lines);
+    foreach (line : all)
+    {
+        Entry entry;
+        if (definition(line.trim(), &entry)) refs.push({ doc.arena.copy(entry.key), doc.arena.copy(entry.value) });
+    }
+    Parser p = { .doc = &doc, .lines = all, .refs = keep(&doc.arena, &refs) };
     p.blocks.init(mem, 64);
     defer p.blocks.free();
+    if (all.len > 0 && all[0].trim() == "---") p.frontmatter();
     while (!p.done()) p.block();
     doc.blocks = keep(&doc.arena, &p.blocks);
     return doc;

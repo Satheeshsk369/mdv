@@ -60,7 +60,7 @@ fn void span(DString* b, Span s, bool plain)
     b.append(look.right);
     if (!plain) b.append(look.close);
     if (link) b.append("\e]8;;\e\\");
-    if (!look.url || s.url.len == 0) return;
+    if (!look.url || s.url.len == 0 || s.url == s.text) return;
     b.append_char(' ');
     if (!plain) b.append(ansi::MUTED);
     b.append_char('(');
@@ -156,6 +156,13 @@ fn void wrap(List{Piece}* out, ast::Arena* arena, Span[] list, int max, String f
         sz p;
         while (p < t.len)
         {
+            if (t[p] == '\n')
+            {
+                w.flush();
+                w.gap = false;
+                p++;
+                continue;
+            }
             sz from = p;
             while (p < t.len && blank(t[p])) p++;
             if (p > from) w.gap = true;
@@ -165,7 +172,7 @@ fn void wrap(List{Piece}* out, ast::Arena* arena, Span[] list, int max, String f
             String word = t[start : p - start];
             w.word(word, text::width(word), style);
         }
-        if (s.kind == SpanKind.LINK && s.url.len > 0)
+        if (s.kind == SpanKind.LINK && s.url.len > 0 && s.url != s.text)
         {
             w.url(s.url);
             w.gap = false;

@@ -1,0 +1,81 @@
+[38;2;249;38;114m[1mSetext H1[0m
+
+
+[38;2;166;226;46m[1mSetext H2[0m
+
+line one
+hard break two
+hard break three
+
+Escapes: *not em* _x_ # `tick`
+
+snake_case_word and 2[3m3[0m4
+
+Ref [38;2;102;217;239mlink[0m [38;2;117;113;94m(https://example.com)[0m and [38;2;102;217;239mr[0m [38;2;117;113;94m(https://example.com)[0m and [38;2;102;217;239mhttps://auto.link[0m and www.bare.com
+
+html
+Ctrl © © 😀
+
+│ outer
+│ │ nested quote
+│ • list in quote
+
+1. one
+2. two
+   ◦ nested
+     1. deep
+   [38;2;102;217;239mint[0m [38;2;248;248;242mx[0m;
+3. three
+
+5. starts at five
+6. six
+
+indented code block
+
+✔  done
+☐  todo
+
+Term : definition
+
+[38;2;102;217;239m[1ma | pipe[0m  [38;2;102;217;239m[1m`b [0m  [38;2;102;217;239m[1mc` [0m  [38;2;102;217;239m[1mx² [0m
+[38;2;117;113;94m────────  ───  ───  ───[0m
+1         2    3       
+
+Inline a+b and c inline and $5 and $6 money.
+
+
+         1 
+    x = ───
+         2 
+
+
+
+    E = mc²
+
+
+alt
+
+Text with footnote[38;2;102;217;239m1[0m.
+
+  [1] The note.
+
+
+[38;2;166;226;46m[1mHeading {#custom-id}[0m
+
+[38;2;117;113;94m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+
+Sum hidden
+
+
+para before
+
+[38;2;248;248;242mindented[0m [38;2;248;248;242mcode[0m
+[38;2;248;248;242msecond[0m [38;2;248;248;242mline[0m
+
+[38;2;166;226;46m[1m│ 💡 TIP[0m
+[38;2;166;226;46m│[0m • tip list
+[38;2;166;226;46m│[0m • second
+[38;2;166;226;46m│[0m
+[38;2;166;226;46m│[0m [38;2;102;217;239mint[0m [38;2;248;248;242my[0m;
+
+Inline cases {1 x > 0; 0 else and C(n,k), ─f→, x̸.

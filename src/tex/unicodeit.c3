@@ -172,8 +172,21 @@ fn bool Flat.command(&self, String cmd)
             self.out.append(cmd == "pmod" ? " (mod " : " (");
             self.out.append(inner);
             self.out.append_char(')');
+        case "phantom":
+        case "hphantom":
+            self.skip(" ");
+            if (!self.at('{')) return false;
+            self.i++;
+            self.out.spaces(text::width(self.sub(self.nested())));
         case "operatorname":
         case "text":
+        case "textbf":
+        case "textit":
+        case "textrm":
+        case "textsf":
+        case "texttt":
+        case "textnormal":
+        case "mbox":
         case "hspace":
         case "vspace":
             self.skip(" *");
@@ -187,13 +200,166 @@ fn bool Flat.command(&self, String cmd)
         case "frac":
         case "dfrac":
         case "tfrac":
+        case "cfrac":
             return self.fraction();
         case "sqrt":
             self.root();
+        case "tag":
+            self.skip(" *");
+            self.out.append_char('(');
+            self.out.append(self.sub(self.arg()));
+            self.out.append_char(')');
+        case "xrightarrow":
+        case "xleftarrow":
+        case "xleftrightarrow":
+            self.skip(" ");
+            if (self.at('['))
+            {
+                self.i++;
+                self.until(']');
+            }
+            String label = self.sub(self.arg());
+            self.out.append(cmd == "xrightarrow" ? "─" : "←");
+            self.out.append(label);
+            self.out.append(cmd == "xleftarrow" ? "─" : "→");
+        case "overrightarrow":
+            self.mark(self.sub(self.arg()), "⃗", false);
+        case "overleftarrow":
+            self.mark(self.sub(self.arg()), "⃖", false);
+        case "cancel":
+        case "bcancel":
+        case "xcancel":
+            self.mark(self.sub(self.arg()), "\u0338", true);
+        case "color":
+        case "textcolor":
+        case "mathcolor":
+            self.arg();
+            self.out.append(self.sub(self.arg()));
+        case "boxed":
+            self.out.append_char('[');
+            self.out.append(self.sub(self.arg()));
+            self.out.append_char(']');
+        case "binom":
+        case "dbinom":
+        case "tbinom":
+            self.out.append("C(");
+            self.out.append(self.sub(self.arg()));
+            self.out.append_char(',');
+            self.out.append(self.sub(self.arg()));
+            self.out.append_char(')');
+        case "overset":
+        case "stackrel":
+        case "underset":
+            String label = self.arg();
+            self.out.append(self.sub(self.arg()));
+            self.attach(label, true, cmd == "underset" ? '_' : '^');
+        case "overbrace":
+        case "underbrace":
+            self.out.append(self.sub(self.arg()));
+            self.out.append(cmd == "overbrace" ? "⏞" : "⏟");
+        case "substack":
+            String rows = self.arg();
+            for (usz k = 0; k < rows.len; k++)
+            {
+                if (rows[k] == '\\' && k + 1 < rows.len && rows[k + 1] == '\\')
+                {
+                    self.out.append(", ");
+                    k++;
+                    continue;
+                }
+                usz start = k;
+                while (k + 1 < rows.len && !(rows[k + 1] == '\\' && k + 2 < rows.len && rows[k + 2] == '\\')) k++;
+                self.out.append(self.sub(rows[start : k + 1 - start]));
+            }
+        case "left":
+        case "right":
+            self.skip(" ");
+            if (self.at('.')) self.i++;
+        case "begin":
+            self.block(self.arg());
         default:
             return false;
     }
     return true;
+}
+
+fn String Flat.arg(&self)
+{
+    self.skip(" ");
+    return self.raw();
+}
+
+fn void Flat.mark(&self, String s, String combining, bool every)
+{
+    foreach (i, c : s)
+    {
+        if (every && i > 0 && (c & 0xC0) != 0x80) self.out.append(combining);
+        self.out.append_char(c);
+    }
+    if (s.len > 0) self.out.append(combining);
+}
+
+fn void Flat.block(&self, String name)
+{
+    String rest = self.s[self.i..];
+    sz end = rest.len;
+    sz after = rest.len;
+    @pool()
+    {
+        String close = string::tformat("\\end{%s}", name);
+        if (try at = rest.index_of(close))
+        {
+            end = at;
+            after = at + close.len;
+        }
+    };
+    String body = rest[:end];
+    self.i += (usz)after;
+    MathEnvironment env;
+    MathEnvFlags flags;
+    bool known = environment(name, &env, &flags);
+    if (known && flags.argument && body.trim().starts_with("{"))
+    {
+        body = body.trim()[1..];
+        body = body[(body.index_of_char('}') ?? -1) + 1..];
+    }
+    bool aligned = known && flags.alignMode == 'A';
+    self.fence(known ? flags.delimLeft : 0);
+    DString row;
+    row.init(mem, 64);
+    defer row.free();
+    bool first = true;
+    while (body.len > 0)
+    {
+        sz cut = body.index_of("\\\\") ?? body.len;
+        String line = body[:cut].trim();
+        body = cut < body.len ? body[cut + 2..] : "";
+        if (line.len == 0) continue;
+        if (!first) self.out.append("; ");
+        first = false;
+        row.clear();
+        foreach (c : line)
+        {
+            if (c == '&' && aligned) continue;
+            char next = c == '&' ? ' ' : c;
+            if (next == ' ' && row.len() > 0 && row[row.len() - 1] == ' ') continue;
+            row.append_char(next);
+        }
+        self.out.append(self.sub(row.str_view()));
+    }
+    self.fence(known ? flags.delimRight : 0);
+}
+
+fn void Flat.fence(&self, char c)
+{
+    if (c == 'V')
+    {
+        self.out.append("‖");
+    }
+    else if (c != 0)
+    {
+        self.out.append_char(c);
+    }
 }
 
 fn bool Flat.styled(&self, String cmd)
@@ -220,21 +386,12 @@ fn bool Flat.styled(&self, String cmd)
 
 fn bool Flat.accented(&self, String cmd)
 {
-    MathAccent mark;
+    MathAccent kind;
     String diacritic;
-    if (!accent(cmd, &mark, &diacritic)) return false;
-    self.skip(" ");
-    if (self.at('{'))
-    {
-        self.i++;
-        self.out.append(self.sub(self.until('}')));
-        self.out.append(diacritic);
-    }
-    else if (self.more())
-    {
-        self.out.append_char(self.s[self.i++]);
-        self.out.append(diacritic);
-    }
+    bool over;
+    bool under;
+    if (!accent(cmd, &kind, &diacritic, &over, &under)) return false;
+    self.mark(self.sub(self.arg()), diacritic, over || under);
     return true;
 }
 
@@ -249,6 +406,28 @@ fn void Flat.control(&self)
     }
     self.i++;
     String cmd = self.name();
+    bool argument;
+    if (skip(cmd, &argument))
+    {
+        self.skip(" ");
+        if (argument) self.raw();
+        return;
+    }
+    if (cmd == "not")
+    {
+        self.skip(" ");
+        String key = self.raw();
+        if (key.len > 0 && key[0] == '\\') key = key[1..];
+        String negation = negate(key);
+        if (negation.len > 0)
+        {
+            self.out.append(negation);
+            return;
+        }
+        self.out.append(symbol(key, &glyph) ? glyph : key);
+        self.out.append("\u0338");
+        return;
+    }
     usz end = self.i;
     if (self.operator(cmd) || self.command(cmd) || self.styled(cmd) || self.accented(cmd)) return;
     self.i = end;
@@ -317,7 +496,7 @@ fn String Flat.raw(&self)
     return self.s[start : self.i - start];
 }
 
-fn void Flat.script(&self, Pair[] greek, Script script, char mark)
+fn void Flat.script(&self, char mark)
 {
     self.i++;
     if (!self.more())
@@ -326,11 +505,16 @@ fn void Flat.script(&self, Pair[] greek, Script script, char mark)
         return;
     }
     bool braced = self.at('{');
-    String raw = self.raw();
+    self.attach(self.raw(), braced, mark);
+}
+
+fn void Flat.attach(&self, String raw, bool braced, char mark)
+{
+    bool up = mark == '^';
     DString lifted;
     lifted.init(mem, 64);
     defer lifted.free();
-    if (lift(raw, greek, script, &lifted))
+    if (lift(raw, up ? RAISED : LOWERED, up ? SUPER : SUB, &lifted))
     {
         self.out.append(lifted.str_view());
         return;
@@ -351,6 +535,8 @@ fn bool Flat.operator(&self, String cmd)
     for (int k = 0; k < 2; k++)
     {
         usz mark = self.i;
+        self.skip(" ");
+        foreach (String word : { "\\limits", "\\nolimits" }) if (self.s[self.i..].starts_with(word)) self.i += word.len;
         self.skip(" ");
         if (self.at('_'))
         {
@@ -403,8 +589,8 @@ fn String unicode(ast::Arena* arena, String input)
         switch (input[f.i])
         {
             case '\\': f.control();
-            case '^': f.script(RAISED, SUPER, '^');
-            case '_': f.script(LOWERED, SUB, '_');
+            case '^': f.script('^');
+            case '_': f.script('_');
             case '\'':
                 int count;
                 for (; f.at('\''); f.i++) count++;

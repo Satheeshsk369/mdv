@@ -2,8 +2,8 @@
 
 Inline: a   b   c   d   e    f g, ½ (a+1)/b ³√(x+1), pmod 7, x^(α→) y_(β∞) z^q
 w_y, x², aᵢⱼ, xⁿ⁺¹ₖ, f′(x), f″, a/b, √x, ³√x, αβΓ, ℝℤℕ, ℒ, 𝔤, v, v⃗, x̂, z̄, ẋ, ẍ
-, ñ, AB̄, ū, a (mod n), a mod n, if x, rank A, x ≤ y ≠ z ∈ S ⊆ T, not∈, → ⇒ ⟺ ↦
-, ∑ᵢ₌₁..ₙ i, ∫₀..₁ f, lim(n→∞), costs $5 and $10.
+, ñ, ĀB̄, u̲, a (mod n), a mod n, if x, rank A, x ≤ y ≠ z ∈ S ⊆ T, ∉, → ⇒ ⟺ ↦,
+∑ᵢ₌₁..ₙ i, ∫₀..₁ f, lim(n→∞), costs $5 and $10.
 
 
 [38;2;166;226;46m[1mFractions and roots[0m
@@ -44,8 +44,8 @@ w_y, x², aᵢⱼ, xⁿ⁺¹ₖ, f′(x), f″, a/b, √x, ³√x, αβΓ, ℝ�
 
 
 
-     lim  lim inf lim sup max min sup inf  * argmax  arg max arg min f
-    x → 0    n       n     i   j   x   y           θ    x       y     
+     lim  lim inf lim sup max min sup inf argmax  arg max arg min f
+    x → 0    n       n     i   j   x   y        θ    x       y     
 
 
 
@@ -141,8 +141,8 @@ w_y, x², aᵢⱼ, xⁿ⁺¹ₖ, f′(x), f″, a/b, √x, ³√x, αβΓ, ℝ�
 
 
 
-    12 u
-    34 v
+    1  2 u
+    3  4 v
 
 
 

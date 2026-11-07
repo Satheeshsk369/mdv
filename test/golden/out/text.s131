@@ -41,7 +41,7 @@ snake_case_words and a very long sentence that keeps going so that wrapping at f
 │ A quote that spans two source lines.
 
 [38;2;166;226;46m[1m│ 💡 TIP[0m
-│ Callout body with [1mbold[0m.
+[38;2;166;226;46m│[0m Callout body with [1mbold[0m.
 
 [38;2;102;217;239m[1mLeft                                                [0m  [38;2;102;217;239m[1m                  Center                   [0m  [38;2;102;217;239m[1mRight[0m
 [38;2;117;113;94m────────────────────────────────────────────────────  ───────────────────────────────────────────  ─────[0m
@@ -59,4 +59,4 @@ a much longer cell that should wrap inside the table                       b    
 
 [38;2;248;248;242mplain[0m [38;2;248;248;242mfence[0m
 
-indented line
+[38;2;248;248;242mindented[0m [38;2;248;248;242mline[0m

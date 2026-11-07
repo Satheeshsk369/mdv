@@ -50,11 +50,13 @@ cat notes.md | mdv      # render stdin
 
 ## Rendering
 
-- Headings, bold, italic, strikethrough, inline code, links, images and footnotes.
+- CommonMark blocks: ATX and setext headings, paragraphs with hard breaks, fenced and indented code, nested block quotes holding any block, lists, thematic breaks.
+- Inline: bold, italic, strikethrough, code, links, reference links, autolinks, images, footnotes, backslash escapes, named and numeric entities. Common HTML tags are hidden, `<br>` breaks the line, comments are dropped.
 - Tables with column alignment and wrapping cells.
 - Callouts: `[!NOTE]`, `[!TIP]`, `[!WARNING]`, `[!IMPORTANT]`, `[!CAUTION]`.
 - YAML frontmatter as a header card.
 - Code highlighting for C, C3, Python, Rust, Go, Zig, JavaScript, TypeScript, Bash, JSON, YAML, TOML, SQL, HTML and CSS.
+- Math delimiters: `$…$`, `\(…\)` inline; `$$…$$`, `\[…\]`, ```` ```math ```` and bare `\begin{…}` for display.
 - Display math in 2D: fractions, roots, sums, products, integrals, limits, matrices, cases, aligned equations, braces, arrows, `\boxed`, `\cancel`, `\mathbb`, `\mathcal`, `\mathfrak`. Inline math becomes single-line Unicode.
 
 ## Layout

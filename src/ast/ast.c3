@@ -101,6 +101,7 @@ struct Block
     int start;
     int end;
     Span[] spans;
+    Block[] children;
     union
     {
         int level;

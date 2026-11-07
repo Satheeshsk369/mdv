@@ -181,20 +181,18 @@ capabilities.
 ## 4. Modern Callouts & Admonitions
 
 | [!NOTE]
-│ This note callout provides
-│ helpful contextual info without
-│ interrupting your reading flow.
+│ This note callout provides helpful
+│ contextual info without interrupting
+│ your reading flow.
 
 | [!TIP]
-│ Run mdv --stdout file.md in
-│ scripts or AI workflows to
-│ render full terminal previews
-│ instantly!
+│ Run mdv --stdout file.md in scripts
+│ or AI workflows to render full
+│ terminal previews instantly!
 
 | [!WARNING]
-│ Keep your LaTeX brackets {}
-│ balanced so expressions
-│ transform cleanly.
+│ Keep your LaTeX brackets {} balanced
+│ so expressions transform cleanly.
 
 | [!IMPORTANT]
 │ The original source file remains

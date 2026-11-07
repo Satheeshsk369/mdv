@@ -151,8 +151,49 @@ fn void testMultilineCallout() @test
     test::eq((int)doc.blocks[0].callout.kind, (int)CalloutKind.NOTE);
     test::eq(doc.blocks[0].callout.title, "NOTE");
 
-    test::eq((int)doc.blocks[0].spans.len, 1);
-    test::eq(doc.blocks[0].spans[0].text, "This is the first line of the note. And this is the second line of the note. And the third line.");
+    Block[] inner = doc.blocks[0].children;
+    test::eq((int)inner.len, 1);
+    test::eq((int)inner[0].kind, (int)BlockKind.PARAGRAPH);
+    test::eq(inner[0].start, 1);
+    test::eq(inner[0].end, 3);
+    test::eq(inner[0].spans[0].text, "This is the first line of the note. And this is the second line of the note. And the third line.");
+}
+
+fn void testQuoteHoldsBlocks() @test
+{
+    Document doc = parser::parse("> a\n> > b\n> - c");
+    defer doc.free();
+    Block[] inner = doc.blocks[0].children;
+    test::eq((int)inner.len, 3);
+    test::eq((int)inner[1].children[0].kind, (int)BlockKind.PARAGRAPH);
+    test::eq((int)inner[2].kind, (int)BlockKind.LIST_ITEM);
+    test::eq(inner[2].start, 2);
+}
+
+fn void testCommonMarkInline() @test
+{
+    Document doc = parser::parse("\\*a\\* <https://x.io> [t][R] &#169; \\(x^2\\)  \nnext\n\n[r]: http://y\n");
+    defer doc.free();
+    Span[] s = doc.blocks[0].spans;
+    test::eq(s[0].text, "*a");
+    test::eq(s[1].text, "* ");
+    test::eq(s[2].url, "https://x.io");
+    test::eq(s[4].url, "http://y");
+    test::eq(s[5].text, " © ");
+    test::eq(s[6].text, "x²");
+    test::eq(s[7].text, "\nnext");
+}
+
+fn void testSetextAndFences() @test
+{
+    Document doc = parser::parse("Title\n===\n\n```math\nx^2\n```\n\n\\[ y \\]\n\npara\n\n    code");
+    defer doc.free();
+    test::eq((int)doc.blocks[0].kind, (int)BlockKind.HEADING);
+    test::eq(doc.blocks[0].level, 1);
+    test::eq((int)doc.blocks[2].kind, (int)BlockKind.MATH_BLOCK);
+    test::eq(doc.blocks[2].latex, "x^2");
+    test::eq(doc.blocks[4].latex, "y");
+    test::eq((int)doc.blocks[8].kind, (int)BlockKind.CODE_BLOCK);
 }
 
 fn void testFootnoteDefLabel() @test
@@ -317,7 +358,7 @@ fn void testLogicArenaBlocks() @test
     test::eq(large, "a string longer than the sixty four byte block so it spills into a new block");
 }
 
-fn void test_block_start_lines_become_paragraphs() @test
+fn void testBlockStartLinesBecomeParagraphs() @test
 {
     foreach (String input : { ">foo", "\\begin{cases} a \\end{cases}" })
     {
@@ -328,7 +369,7 @@ fn void test_block_start_lines_become_paragraphs() @test
     }
 }
 
-fn void test_compact_scripts_and_spacing() @test
+fn void testCompactScriptsAndSpacing() @test
 {
     ast::Arena arena;
     arena.init(16384);
@@ -339,7 +380,7 @@ fn void test_compact_scripts_and_spacing() @test
     test::eq(frac.rows[2].trim(), "2m L²");
 }
 
-fn void test_no_space_before_punctuation() @test
+fn void testNoSpaceBeforePunctuation() @test
 {
     Document doc = parser::parse("Welcome to **mdv**! See $x^2$.");
     defer doc.free();
@@ -348,7 +389,7 @@ fn void test_no_space_before_punctuation() @test
     test::eq(page.lines[0].text, "Welcome to mdv! See x².");
 }
 
-fn void test_heading_after_tab() @test
+fn void testHeadingAfterTab() @test
 {
     Document doc = parser::parse("#\tTitle");
     defer doc.free();
@@ -356,7 +397,7 @@ fn void test_heading_after_tab() @test
     test::eq(doc.blocks[0].level, 1);
 }
 
-fn void test_scripts_raise_together() @test
+fn void testScriptsRaiseTogether() @test
 {
     ast::Arena arena;
     arena.init(16384);
@@ -367,7 +408,7 @@ fn void test_scripts_raise_together() @test
     test::eq(simple.height, 1);
 }
 
-fn void test_vertical_root_keeps_radicand_aligned() @test
+fn void testVerticalRootKeepsRadicandAligned() @test
 {
     ast::Arena arena;
     arena.init(16384);
@@ -379,7 +420,7 @@ fn void test_vertical_root_keeps_radicand_aligned() @test
     test::eq(root.rows[3].starts_with(" ╲│"), true);
 }
 
-fn void test_flat_root_on_one_row() @test
+fn void testFlatRootOnOneRow() @test
 {
     ast::Arena arena;
     arena.init(16384);
@@ -389,7 +430,7 @@ fn void test_flat_root_on_one_row() @test
     test::eq(root.rows[0], "√(b² - 4ac) + ³√x");
 }
 
-fn void test_big_operators_take_three_rows() @test
+fn void testBigOperatorsTakeThreeRows() @test
 {
     ast::Arena arena;
     arena.init(16384);
@@ -402,7 +443,7 @@ fn void test_big_operators_take_three_rows() @test
     test::eq(integral.rows[0].contains("∮"), true);
 }
 
-fn void test_inline_limits_bracket_when_needed() @test
+fn void testInlineLimitsBracketWhenNeeded() @test
 {
     ast::Arena arena;
     arena.init(16384);
@@ -410,4 +451,18 @@ fn void test_inline_limits_bracket_when_needed() @test
     test::eq(tex::unicode(&arena, "\\sum_{i=1}^n i"), "∑ᵢ₌₁..ₙ i");
     test::eq(tex::unicode(&arena, "\\int_{-\\infty}^{\\infty} e^{-x^2} dx"), "∫(-∞..∞) e^(-x²) dx");
     test::eq(tex::unicode(&arena, "\\lim_{x \\to 0} f"), "lim(x→0) f");
+}
+
+fn void testLatexCoverage() @test
+{
+    ast::Arena arena;
+    arena.init(16384);
+    defer arena.free();
+    test::eq(tex::unicode(&arena, "\\not\\in \\binom{n}{k} \\big( x \\big)"), "∉ C(n,k) ( x )");
+    test::eq(tex::unicode(&arena, "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}"), "(a b; c d)");
+    MathBox sum = tex::latex(&arena, "\\sum\\limits_{i}^{n} \\lvert x \\rvert \\therefore");
+    test::eq(sum.height, 3);
+    test::eq(sum.rows[1], " ∑ |x| ∴ ");
+    MathBox over = tex::latex(&arena, "{a \\over b}");
+    test::eq(over.height, 3);
 }

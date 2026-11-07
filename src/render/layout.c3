@@ -69,7 +69,11 @@ fn void Renderer.paragraph(&self, Span[] list, int src, int max, String first, S
     {
         self.buf.append(first);
         spans(&self.buf, list, self.config.plain);
-        self.flush(src);
+        @pool()
+        {
+            foreach (part : self.buf.str_view().tsplit("\n")) self.emit(part, src);
+        };
+        self.buf.clear();
         return;
     }
     self.pieces.clear();
@@ -135,7 +139,28 @@ fn void Renderer.callout(&self, Block* b)
         self.buf.append(ansi::RESET);
     }
     self.flush(b.start);
-    if (b.spans.len > 0) self.paragraph(b.spans, b.end, self.width - 6, "│ ", "│ ");
+    self.nested(b.children, self.config.plain ? "" : THEMES[b.callout.kind].color);
+}
+
+fn void Renderer.nested(&self, Block[] children, String color)
+{
+    sz from = self.lines.len();
+    self.width -= 2;
+    foreach (&c : children) self.render(c);
+    self.width += 2;
+    foreach (&line : self.lines.array_view()[from..])
+    {
+        self.buf.append(color);
+        self.buf.append("│");
+        if (color.len > 0) self.buf.append(ansi::RESET);
+        if (line.text.len > 0)
+        {
+            self.buf.append_char(' ');
+            self.buf.append(line.text);
+        }
+        line.text = self.page.arena.copy(self.buf.str_view());
+        self.buf.clear();
+    }
 }
 
 fn void Renderer.item(&self, Block* b)
@@ -210,7 +235,7 @@ fn void Renderer.render(&self, Block* b)
                 self.flush(b.start + (int)i);
             }
         case CALLOUT: self.callout(b);
-        case BLOCKQUOTE: self.paragraph(b.spans, b.start, self.width - 6, "│ ", "│ ");
+        case BLOCKQUOTE: self.nested(b.children, "");
         case LIST_ITEM: self.item(b);
         case TABLE: self.table(&b.table, b.start);
         case MATH_BLOCK: self.math(b);
