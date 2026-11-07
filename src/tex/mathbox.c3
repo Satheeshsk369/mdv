@@ -118,54 +118,8 @@ fn MathBox beside(ast::Arena* arena, MathBox left, MathBox right, int gap = 0)
 
 fn MathBox fraction(ast::Arena* arena, MathBox num, MathBox den)
 {
-    int maxW = num.width > den.width ? num.width : den.width;
-    int w = maxW + 2;
-
-    int newH = num.height + 1 + den.height;
-    int newBase = num.height;
-
-    String* rBuf = (String*)arena.alloc((usz)newH * String::size);
-
-    DString mb;
-    mb.init(mem, 512);
-    defer mb.free();
-
-    for (int r = 0; r < num.height; r++)
-    {
-        mb.clear();
-        int rowW = text::width(num.rows[r]);
-        int totalPad = w - rowW;
-        int lpad = totalPad / 2;
-        int rpad = totalPad - lpad;
-        if (lpad > 0) mb.spaces(lpad);
-        mb.append_string(num.rows[r]);
-        if (rpad > 0) mb.spaces(rpad);
-        rBuf[r] = mb.keep(arena);
-    }
-
-    mb.clear();
-    mb.repeat("─", w);
-    rBuf[num.height] = mb.keep(arena);
-
-    for (int r = 0; r < den.height; r++)
-    {
-        mb.clear();
-        int rowW = text::width(den.rows[r]);
-        int totalPad = w - rowW;
-        int lpad = totalPad / 2;
-        int rpad = totalPad - lpad;
-        if (lpad > 0) mb.spaces(lpad);
-        mb.append_string(den.rows[r]);
-        if (rpad > 0) mb.spaces(rpad);
-        rBuf[num.height + 1 + r] = mb.keep(arena);
-    }
-
-    MathBox res;
-    res.width = w;
-    res.height = newH;
-    res.baseline = newBase;
-    res.rows = rBuf[0 : (usz)newH];
-    return res;
+    int w = max(num.width, den.width) + 2;
+    return column(arena, { num, rule(arena, "─", w), den }, w, num.height);
 }
 
 fn MathBox root(ast::Arena* arena, MathBox inner, MathBox degree)
@@ -255,6 +209,33 @@ const String[] PI = { " ─── ", " ┬ ┬ ", " │ │ ", " │ │ ", " �
 const String[] CUP = { " ╷ ╷ ", " │ │ ", " ╰─╯ " };
 const String[] CAP = { " ╭─╮ ", " │ │ ", " ╵ ╵ " };
 
+fn MathBox present(MathBox b)
+{
+    return b.width > 0 ? b : (MathBox){};
+}
+
+fn MathBox rule(ast::Arena* arena, String glyph, int count)
+{
+    DString mb;
+    mb.init(mem, 64);
+    defer mb.free();
+    mb.repeat(glyph, count);
+    return atom(arena, mb.str_view());
+}
+
+fn MathBox column(ast::Arena* arena, MathBox[] parts, int width, int baseline)
+{
+    int height;
+    foreach (b : parts) height += b.height;
+    String* rows = arena.alloc((usz)max(height, 1) * String::size);
+    int r;
+    foreach (b : parts)
+    {
+        for (int i = 0; i < b.height; i++) rows[r++] = centered(arena, b.rows[i], width);
+    }
+    return { width, height, baseline, rows[:height] };
+}
+
 fn String centered(ast::Arena* arena, String row, int width)
 {
     DString mb;
@@ -270,16 +251,9 @@ fn String centered(ast::Arena* arena, String row, int width)
 
 fn MathBox bigop(ast::Arena* arena, MathBox sub, MathBox sup, String[] glyph)
 {
-    int width = max(5, sub.width, sup.width);
+    MathBox op = { 5, (int)glyph.len, (int)glyph.len / 2, glyph };
     int supH = sup.width > 0 ? sup.height : 0;
-    int subH = sub.width > 0 ? sub.height : 0;
-    int height = supH + (int)glyph.len + subH;
-    String* rows = (String*)arena.alloc((usz)height * String::size);
-    int r;
-    for (int i = 0; i < supH; i++) rows[r++] = centered(arena, sup.rows[i], width);
-    foreach (g : glyph) rows[r++] = centered(arena, g, width);
-    for (int i = 0; i < subH; i++) rows[r++] = centered(arena, sub.rows[i], width);
-    return { width, height, supH + (int)glyph.len / 2, rows[:height] };
+    return column(arena, { present(sup), op, present(sub) }, max(5, sub.width, sup.width), supH + op.baseline);
 }
 
 fn MathBox integral(ast::Arena* arena, MathBox sub, MathBox sup, int intOrder = 1)
@@ -366,67 +340,8 @@ fn MathBox integral(ast::Arena* arena, MathBox sub, MathBox sup, int intOrder = 
 
 fn MathBox limits(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup)
 {
-    int maxW = op.width;
-    if (sub.width > maxW) maxW = sub.width;
-    if (sup.width > maxW) maxW = sup.width;
-
-    int supH = (sup.width > 0 ? sup.height : 0);
-    int subH = (sub.width > 0 ? sub.height : 0);
-    int totalH = supH + op.height + subH;
-    int base = supH + op.baseline;
-
-    String* rBuf = (String*)arena.alloc((usz)totalH * String::size);
-    DString mb;
-    mb.init(mem, 512);
-    defer mb.free();
-
-    int curR = 0;
-
-    if (sup.width > 0)
-    {
-        for (int r = 0; r < sup.height; r++)
-        {
-            mb.clear();
-            int rw = text::width(sup.rows[r]);
-            int pad = (maxW - rw) / 2;
-            mb.spaces(pad);
-            mb.append_string(sup.rows[r]);
-            mb.spaces(maxW - rw - pad);
-            rBuf[curR++] = mb.keep(arena);
-        }
-    }
-
-    for (int r = 0; r < op.height; r++)
-    {
-        mb.clear();
-        int rw = text::width(op.rows[r]);
-        int pad = (maxW - rw) / 2;
-        mb.spaces(pad);
-        mb.append_string(op.rows[r]);
-        mb.spaces(maxW - rw - pad);
-        rBuf[curR++] = mb.keep(arena);
-    }
-
-    if (sub.width > 0)
-    {
-        for (int r = 0; r < sub.height; r++)
-        {
-            mb.clear();
-            int rw = text::width(sub.rows[r]);
-            int pad = (maxW - rw) / 2;
-            mb.spaces(pad);
-            mb.append_string(sub.rows[r]);
-            mb.spaces(maxW - rw - pad);
-            rBuf[curR++] = mb.keep(arena);
-        }
-    }
-
-    MathBox res;
-    res.width = maxW;
-    res.height = totalH;
-    res.baseline = base;
-    res.rows = rBuf[0 : (usz)totalH];
-    return res;
+    int supH = sup.width > 0 ? sup.height : 0;
+    return column(arena, { present(sup), op, present(sub) }, max(op.width, sub.width, sup.width), supH + op.baseline);
 }
 
 fn MathBox scripts(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
@@ -512,75 +427,15 @@ fn MathBox scripts(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
 
 fn MathBox xarrow(ast::Arena* arena, MathBox sup, MathBox sub, char arrowDir = 'R')
 {
-    int maxW = sup.width > sub.width ? sup.width : sub.width;
-    int arrowW = maxW + 4;
-    if (arrowW < 6) arrowW = 6;
-
-    int supH = sup.width > 0 ? sup.height : 0;
-    int subH = sub.width > 0 ? sub.height : 0;
-    int totalH = supH + 1 + subH;
-    int base = supH;
-
-    String* rBuf = (String*)arena.alloc((usz)totalH * String::size);
+    int w = max(max(sup.width, sub.width) + 4, 6);
     DString mb;
     mb.init(mem, 512);
     defer mb.free();
-
-    int curR = 0;
-
-    if (sup.width > 0)
-    {
-        for (int r = 0; r < sup.height; r++)
-        {
-            mb.clear();
-            int rw = text::width(sup.rows[r]);
-            int pad = (arrowW - rw) / 2;
-            mb.spaces(pad);
-            mb.append_string(sup.rows[r]);
-            mb.spaces(arrowW - rw - pad);
-            rBuf[curR++] = mb.keep(arena);
-        }
-    }
-
-    mb.clear();
-    if (arrowDir == 'R')
-    {
-        mb.repeat("─", arrowW - 1);
-        mb.append("→");
-    }
-    else if (arrowDir == 'L')
-    {
-        mb.append("←");
-        mb.repeat("─", arrowW - 1);
-    }
-    else
-    {
-        mb.append("←");
-        mb.repeat("─", arrowW - 2);
-        mb.append("→");
-    }
-    rBuf[curR++] = mb.keep(arena);
-
-    if (sub.width > 0)
-    {
-        for (int r = 0; r < sub.height; r++)
-        {
-            mb.clear();
-            int rw = text::width(sub.rows[r]);
-            int pad = (arrowW - rw) / 2;
-            mb.spaces(pad);
-            mb.append_string(sub.rows[r]);
-            mb.spaces(arrowW - rw - pad);
-            rBuf[curR++] = mb.keep(arena);
-        }
-    }
-
-    MathBox res;
-    res.width = arrowW;
-    res.height = totalH;
-    res.baseline = base;
-    res.rows = rBuf[0 : (usz)totalH];
-    return res;
+    if (arrowDir != 'R') mb.append("←");
+    mb.repeat("─", w - (arrowDir == 'R' || arrowDir == 'L' ? 1 : 2));
+    if (arrowDir != 'L') mb.append("→");
+    MathBox arrow = atom(arena, mb.str_view());
+    return column(arena, { present(sup), arrow, present(sub) }, w, sup.width > 0 ? sup.height : 0);
 }
 
 fn MathBox underline(ast::Arena* arena, MathBox inner)
@@ -957,110 +812,13 @@ fn MathBox overline(ast::Arena* arena, MathBox inner)
 
 fn MathBox overbrace(ast::Arena* arena, MathBox inner, MathBox label)
 {
-    int maxW = inner.width > label.width ? inner.width : label.width;
     int labH = label.width > 0 ? label.height : 0;
-    int totalH = labH + 1 + inner.height;
-    int base = labH + 1 + inner.baseline;
-
-    String* rBuf = (String*)arena.alloc((usz)totalH * String::size);
-    DString mb;
-    mb.init(mem, 512);
-    defer mb.free();
-
-    int curR = 0;
-
-    if (label.width > 0)
-    {
-        for (int r = 0; r < label.height; r++)
-        {
-            mb.clear();
-            int rw = text::width(label.rows[r]);
-            int pad = (maxW - rw) / 2;
-            mb.spaces(pad);
-            mb.append_string(label.rows[r]);
-            mb.spaces(maxW - rw - pad);
-            rBuf[curR++] = mb.keep(arena);
-        }
-    }
-
-    mb.clear();
-    int pad = (maxW - inner.width) / 2;
-    mb.spaces(pad);
-    mb.repeat("⏞", inner.width);
-    mb.spaces(maxW - inner.width - pad);
-    rBuf[curR++] = mb.keep(arena);
-
-    for (int r = 0; r < inner.height; r++)
-    {
-        mb.clear();
-        int rw = text::width(inner.rows[r]);
-        int pad2 = (maxW - rw) / 2;
-        mb.spaces(pad2);
-        mb.append_string(inner.rows[r]);
-        mb.spaces(maxW - rw - pad2);
-        rBuf[curR++] = mb.keep(arena);
-    }
-
-    MathBox res;
-    res.width = maxW;
-    res.height = totalH;
-    res.baseline = base;
-    res.rows = rBuf[0 : (usz)totalH];
-    return res;
+    return column(arena, { present(label), rule(arena, "⏞", inner.width), inner }, max(inner.width, label.width), labH + 1 + inner.baseline);
 }
 
 fn MathBox underbrace(ast::Arena* arena, MathBox inner, MathBox label)
 {
-    int maxW = inner.width > label.width ? inner.width : label.width;
-    int labH = label.width > 0 ? label.height : 0;
-    int totalH = inner.height + 1 + labH;
-    int base = inner.baseline;
-
-    String* rBuf = (String*)arena.alloc((usz)totalH * String::size);
-    DString mb;
-    mb.init(mem, 512);
-    defer mb.free();
-
-    int curR = 0;
-
-    for (int r = 0; r < inner.height; r++)
-    {
-        mb.clear();
-        int rw = text::width(inner.rows[r]);
-        int pad = (maxW - rw) / 2;
-        mb.spaces(pad);
-        mb.append_string(inner.rows[r]);
-        mb.spaces(maxW - rw - pad);
-        rBuf[curR++] = mb.keep(arena);
-    }
-
-    mb.clear();
-    int pad = (maxW - inner.width) / 2;
-    mb.spaces(pad);
-    mb.repeat("⏟", inner.width);
-    mb.spaces(maxW - inner.width - pad);
-    rBuf[curR++] = mb.keep(arena);
-
-    if (label.width > 0)
-    {
-        for (int r = 0; r < label.height; r++)
-        {
-            mb.clear();
-            int rw = text::width(label.rows[r]);
-            int pad2 = (maxW - rw) / 2;
-            mb.spaces(pad2);
-            mb.append_string(label.rows[r]);
-            mb.spaces(maxW - rw - pad2);
-            rBuf[curR++] = mb.keep(arena);
-        }
-    }
-
-    MathBox res;
-    res.width = maxW;
-    res.height = totalH;
-    res.baseline = base;
-    res.rows = rBuf[0 : (usz)totalH];
-    return res;
+    return column(arena, { inner, rule(arena, "⏟", inner.width), present(label) }, max(inner.width, label.width), inner.baseline);
 }
 
 fn MathBox grid(ast::Arena* arena, MathBox[] grid, int numRows, int numCols, char alignMode, int colGap = 2)

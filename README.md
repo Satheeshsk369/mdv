@@ -6,7 +6,9 @@ A terminal Markdown viewer written in C3. It renders Markdown with colour, Unico
 
 ```bash
 make          # build build/mdv
-make test     # run unit tests
+make test     # unit tests
+make check    # golden render and TUI snapshots (needs tmux)
+make golden   # rewrite the golden snapshots after an intended change
 make install  # copy to ~/.local/bin/mdv
 ```
 
@@ -59,9 +61,9 @@ cat notes.md | mdv      # render stdin
 
 | Folder | Module | Role |
 | :--- | :--- | :--- |
-| `src/app` | `main`, `app` | CLI, live view, file tree |
+| `src/app` | `main`, `app` | CLI; live view split into `view` (state), `keys` (key tables, dispatch), `draw`, `search`, `outline`, `tree` |
 | `src/ast` | `ast` | Document blocks and spans, arena |
-| `src/parser` | `parser` | Markdown to blocks |
-| `src/render` | `render`, `ansi` | Blocks to coloured lines |
-| `src/tex` | `tex` | LaTeX to 2D boxes and Unicode |
+| `src/parser` | `parser` | `Parser.block` dispatches to one method per block kind; `Inline` scans spans |
+| `src/render` | `render`, `ansi` | `Renderer` turns blocks into a `Page` of lines; one `wrap` for paragraphs and table cells |
+| `src/tex` | `tex` | LaTeX to 2D boxes (`column`/`beside` combinators) and to inline Unicode (`Flat`) |
 | `src/sys` | `terminal`, `text` | Raw terminal, keys, display width |

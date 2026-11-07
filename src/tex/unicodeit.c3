@@ -4,530 +4,328 @@ import std::core::mem;
 import ast;
 import text;
 
-fn String unicode(ast::Arena* arena, String input)
+struct Pair
 {
-    if (input.len == 0) return "";
+    String key;
+    String value;
+}
 
-    DString mb;
-    mb.init(mem, (usz)input.len * 4 + 256);
-    defer mb.free();
+const Pair[] ESCAPES = {
+    { "{", "{" }, { "}", "}" }, { ",", "\u2009" }, { ":", "\u205F" }, { ";", "\u2005" },
+    { "!", "" }, { " ", " " }, { "%", "%" }, { "$", "$" },
+};
 
-    usz i = 0;
+const Pair[] RAISED = {
+    { "alpha", "ᵅ" }, { "beta", "ᵝ" }, { "gamma", "ᵞ" }, { "delta", "ᵟ" }, { "epsilon", "ᵋ" },
+    { "theta", "ᶿ" }, { "phi", "ᵠ" }, { "chi", "ᵡ" }, { "infty", "∞" }, { "to", "→" }, { "rightarrow", "→" },
+};
 
-    while (i < (usz)input.len)
+const Pair[] LOWERED = {
+    { "beta", "ᵦ" }, { "gamma", "ᵧ" }, { "rho", "ᵨ" }, { "phi", "ᵩ" }, { "chi", "ᵪ" },
+    { "infty", "∞" }, { "to", "→" }, { "rightarrow", "→" },
+};
+
+const Pair[] VULGAR = {
+    { "1/2", "½" }, { "1/3", "⅓" }, { "2/3", "⅔" }, { "1/4", "¼" }, { "3/4", "¾" },
+    { "1/5", "⅕" }, { "2/5", "⅖" }, { "3/5", "⅗" }, { "4/5", "⅘" }, { "1/6", "⅙" },
+    { "5/6", "⅚" }, { "1/8", "⅛" }, { "3/8", "⅜" }, { "5/8", "⅝" }, { "7/8", "⅞" },
+};
+
+fn bool find(Pair[] table, String key, String* value)
+{
+    foreach (p : table)
     {
-        char c = input[i];
+        if (p.key != key) continue;
+        *value = p.value;
+        return true;
+    }
+    return false;
+}
 
-        if (c == '\\')
+fn bool operated(String s) => s.contains("+") || s.contains("-") || s.contains("=") || s.contains(" ");
+
+struct Flat
+{
+    ast::Arena* arena;
+    String s;
+    usz i;
+    DString out;
+}
+
+fn bool Flat.more(&self) => self.i < self.s.len;
+
+fn bool Flat.at(&self, char c) => self.more() && self.s[self.i] == c;
+
+fn void Flat.skip(&self, String chars)
+{
+    while (self.more() && chars.contains_char(self.s[self.i])) self.i++;
+}
+
+fn String Flat.name(&self)
+{
+    usz start = self.i;
+    while (self.more() && self.s[self.i].is_alpha()) self.i++;
+    return self.s[start : self.i - start];
+}
+
+fn String Flat.until(&self, char close)
+{
+    usz start = self.i;
+    while (self.more() && self.s[self.i] != close) self.i++;
+    String inside = self.s[start : self.i - start];
+    if (self.at(close)) self.i++;
+    return inside;
+}
+
+fn String Flat.nested(&self)
+{
+    usz start = self.i;
+    int depth = 1;
+    while (self.more())
+    {
+        if (self.s[self.i] == '{') depth++;
+        if (self.s[self.i] == '}') depth--;
+        if (depth == 0) break;
+        self.i++;
+    }
+    String inside = self.s[start : self.i - start];
+    if (self.at('}')) self.i++;
+    return inside;
+}
+
+fn String Flat.sub(&self, String s) => unicode(self.arena, s);
+
+fn bool Flat.fraction(&self)
+{
+    self.skip(" ");
+    if (!self.at('{')) return false;
+    self.i++;
+    String num = self.nested();
+    self.skip(" ");
+    if (!self.at('{')) return false;
+    self.i++;
+    String n = self.sub(num);
+    String d = self.sub(self.nested());
+    String glyph;
+    @pool()
+    {
+        if (find(VULGAR, string::tformat("%s/%s", n, d), &glyph))
         {
-            if (i + 1 < (usz)input.len)
-            {
-                char nextC = input[i + 1];
-                if (nextC == '{' || nextC == '}')
-                {
-                    mb.append_char(nextC);
-                    i += 2;
-                    continue;
-                }
-                if (nextC == ',')
-                {
-                    mb.append(" ");
-                    i += 2;
-                    continue;
-                }
-                if (nextC == ':')
-                {
-                    mb.append(" ");
-                    i += 2;
-                    continue;
-                }
-                if (nextC == ';')
-                {
-                    mb.append(" ");
-                    i += 2;
-                    continue;
-                }
-                if (nextC == '!')
-                {
-                    i += 2;
-                    continue;
-                }
-                if (nextC == ' ')
-                {
-                    mb.append_char(' ');
-                    i += 2;
-                    continue;
-                }
-                if (nextC == '%')
-                {
-                    mb.append_char('%');
-                    i += 2;
-                    continue;
-                }
-                if (nextC == '$')
-                {
-                    mb.append_char('$');
-                    i += 2;
-                    continue;
-                }
-            }
-
-            usz cmdStart = i + 1;
-            usz cmdEnd = cmdStart;
-            while (cmdEnd < (usz)input.len && ((input[cmdEnd] >= 'a' && input[cmdEnd] <= 'z') || (input[cmdEnd] >= 'A' && input[cmdEnd] <= 'Z')))
-            {
-                cmdEnd++;
-            }
-
-            String cmd = input[cmdStart : cmdEnd - cmdStart];
-
-            if (cmd == "quad")
-            {
-                mb.append(" ");
-                i = cmdEnd;
-                continue;
-            }
-            if (cmd == "qquad")
-            {
-                mb.append("  ");
-                i = cmdEnd;
-                continue;
-            }
-
-            if (cmd == "pmod" || cmd == "pod")
-            {
-                i = cmdEnd;
-                while (i < (usz)input.len && input[i] == ' ') i++;
-                if (i < (usz)input.len && input[i] == '{')
-                {
-                    i++;
-                    usz mStart = i;
-                    while (i < (usz)input.len && input[i] != '}') i++;
-                    String mContent = input[mStart : i - mStart];
-                    if (i < (usz)input.len && input[i] == '}') i++;
-
-                    String tM = unicode(arena, mContent);
-                    mb.append(" (");
-                    if (cmd == "pmod") mb.append("mod ");
-                    mb.append_string(tM);
-                    mb.append_char(')');
-                    continue;
-                }
-            }
-            if (cmd == "bmod")
-            {
-                mb.append(" mod ");
-                i = cmdEnd;
-                continue;
-            }
-
-            Alphabet alphabet;
-            if (font(cmd, &alphabet))
-            {
-                i = cmdEnd;
-                while (i < (usz)input.len && (input[i] == ' ' || input[i] == '*')) i++;
-                if (i < (usz)input.len && input[i] == '{')
-                {
-                    i++;
-                    while (i < (usz)input.len && input[i] != '}')
-                    {
-                        char ch = input[i++];
-                        Char32 glyph = alphabet.map(ch);
-                        if (glyph)
-                        {
-                            mb.append_char32(glyph);
-                        }
-                        else
-                        {
-                            mb.append_char(ch);
-                        }
-                    }
-                    if (i < (usz)input.len && input[i] == '}') i++;
-                }
-                continue;
-            }
-
-            if (cmd == "operatorname" || cmd == "text" || cmd == "hspace" || cmd == "vspace")
-            {
-                i = cmdEnd;
-                while (i < (usz)input.len && (input[i] == ' ' || input[i] == '*')) i++;
-                if (i < (usz)input.len && input[i] == '{')
-                {
-                    i++;
-                    while (i < (usz)input.len && input[i] != '}')
-                    {
-                        if (cmd != "hspace" && cmd != "vspace")
-                        {
-                            mb.append_char(input[i]);
-                        }
-                        i++;
-                    }
-                    if (i < (usz)input.len && input[i] == '}') i++;
-                }
-                if (cmd == "operatorname") mb.append_char(' ');
-                continue;
-            }
-
-            MathAccent mark;
-            String diacritic;
-            if (accent(cmd, &mark, &diacritic))
-            {
-                i = cmdEnd;
-                while (i < (usz)input.len && input[i] == ' ') i++;
-                if (i < (usz)input.len && input[i] == '{')
-                {
-                    i++;
-                    usz argStart = i;
-                    while (i < (usz)input.len && input[i] != '}') i++;
-                    String argContent = input[argStart : i - argStart];
-                    if (i < (usz)input.len && input[i] == '}') i++;
-
-                    String tArg = unicode(arena, argContent);
-                    mb.append_string(tArg);
-                    mb.append(diacritic);
-                }
-                else if (i < (usz)input.len)
-                {
-                    mb.append_char(input[i++]);
-                    mb.append(diacritic);
-                }
-                continue;
-            }
-
-            if (cmd == "frac" || cmd == "dfrac" || cmd == "tfrac")
-            {
-                i = cmdEnd;
-                while (i < (usz)input.len && input[i] == ' ') i++;
-                if (i < (usz)input.len && input[i] == '{')
-                {
-                    i++;
-                    usz nStart = i;
-                    int depth = 1;
-                    while (i < (usz)input.len && depth > 0)
-                    {
-                        if (input[i] == '{')
-                        {
-                            depth++;
-                        }
-                        else if (input[i] == '}')
-                        {
-                            depth--;
-                        }
-                        if (depth > 0) i++;
-                    }
-                    String num = input[nStart : i - nStart];
-                    if (i < (usz)input.len && input[i] == '}') i++;
-
-                    while (i < (usz)input.len && input[i] == ' ') i++;
-                    if (i < (usz)input.len && input[i] == '{')
-                    {
-                        i++;
-                        usz dStart = i;
-                        depth = 1;
-                        while (i < (usz)input.len && depth > 0)
-                        {
-                            if (input[i] == '{')
-                            {
-                                depth++;
-                            }
-                            else if (input[i] == '}')
-                            {
-                                depth--;
-                            }
-                            if (depth > 0) i++;
-                        }
-                        String den = input[dStart : i - dStart];
-                        if (i < (usz)input.len && input[i] == '}') i++;
-
-                        String tNum = unicode(arena, num);
-                        String tDen = unicode(arena, den);
-
-                        if (tNum == "1" && tDen == "2") { mb.append("½"); continue; }
-                        if (tNum == "1" && tDen == "3") { mb.append("⅓"); continue; }
-                        if (tNum == "2" && tDen == "3") { mb.append("⅔"); continue; }
-                        if (tNum == "1" && tDen == "4") { mb.append("¼"); continue; }
-                        if (tNum == "3" && tDen == "4") { mb.append("¾"); continue; }
-                        if (tNum == "1" && tDen == "5") { mb.append("⅕"); continue; }
-                        if (tNum == "2" && tDen == "5") { mb.append("⅖"); continue; }
-                        if (tNum == "3" && tDen == "5") { mb.append("⅗"); continue; }
-                        if (tNum == "4" && tDen == "5") { mb.append("⅘"); continue; }
-                        if (tNum == "1" && tDen == "6") { mb.append("⅙"); continue; }
-                        if (tNum == "5" && tDen == "6") { mb.append("⅚"); continue; }
-                        if (tNum == "1" && tDen == "8") { mb.append("⅛"); continue; }
-                        if (tNum == "3" && tDen == "8") { mb.append("⅜"); continue; }
-                        if (tNum == "5" && tDen == "8") { mb.append("⅝"); continue; }
-                        if (tNum == "7" && tDen == "8") { mb.append("⅞"); continue; }
-
-                        bool hasOpNum = tNum.contains("+") || tNum.contains("-") || tNum.contains("=") || tNum.contains(" ");
-                        bool hasOpDen = tDen.contains("+") || tDen.contains("-") || tDen.contains("=") || tDen.contains(" ");
-
-                        if (hasOpNum) mb.append_char('(');
-                        mb.append_string(tNum);
-                        if (hasOpNum) mb.append_char(')');
-
-                        mb.append_char('/');
-
-                        if (hasOpDen) mb.append_char('(');
-                        mb.append_string(tDen);
-                        if (hasOpDen) mb.append_char(')');
-                        continue;
-                    }
-                }
-            }
-
-            if (cmd == "sqrt")
-            {
-                i = cmdEnd;
-                while (i < (usz)input.len && input[i] == ' ') i++;
-
-                if (i < (usz)input.len && input[i] == '[')
-                {
-                    i++;
-                    while (i < (usz)input.len && input[i] != ']')
-                    {
-                        String deg = SUPER.map(input[i]);
-                        if (deg.len)
-                        {
-                            mb.append(deg);
-                        }
-                        else
-                        {
-                            mb.append_char(input[i]);
-                        }
-                        i++;
-                    }
-                    if (i < (usz)input.len && input[i] == ']') i++;
-                }
-
-                mb.append("√");
-
-                while (i < (usz)input.len && input[i] == ' ') i++;
-                if (i < (usz)input.len && input[i] == '{')
-                {
-                    i++;
-                    usz radStart = i;
-                    int depth = 1;
-                    while (i < (usz)input.len && depth > 0)
-                    {
-                        if (input[i] == '{')
-                        {
-                            depth++;
-                        }
-                        else if (input[i] == '}')
-                        {
-                            depth--;
-                        }
-                        if (depth > 0) i++;
-                    }
-                    String rad = input[radStart : i - radStart];
-                    if (i < (usz)input.len && input[i] == '}') i++;
-
-                    String tRad = unicode(arena, rad);
-                    bool hasOpRad = tRad.contains("+") || tRad.contains("-") || tRad.contains("=") || tRad.contains(" ");
-                    if (hasOpRad && (tRad[0] != '(' || tRad[tRad.len - 1] != ')'))
-                    {
-                        mb.append_char('(');
-                        mb.append_string(tRad);
-                        mb.append_char(')');
-                    }
-                    else
-                    {
-                        mb.append_string(tRad);
-                    }
-                }
-                continue;
-            }
-
-            String symGlyph;
-            if (symbol(cmd, &symGlyph))
-            {
-                mb.append_string(symGlyph);
-                if (cmdEnd < (usz)input.len && ((input[cmdEnd] >= 'a' && input[cmdEnd] <= 'z') || (input[cmdEnd] >= 'A' && input[cmdEnd] <= 'Z') || (input[cmdEnd] >= '0' && input[cmdEnd] <= '9')))
-                {
-                    mb.append_char(' ');
-                }
-                i = cmdEnd;
-                continue;
-            }
-
-            mb.append_string(cmd);
-            if (cmdEnd < (usz)input.len && ((input[cmdEnd] >= 'a' && input[cmdEnd] <= 'z') || (input[cmdEnd] >= 'A' && input[cmdEnd] <= 'Z') || (input[cmdEnd] >= '0' && input[cmdEnd] <= '9')))
-            {
-                mb.append_char(' ');
-            }
-            i = cmdEnd;
-            continue;
+            self.out.append(glyph);
+            return true;
         }
+    };
+    bool top = operated(n);
+    bool bottom = operated(d);
+    if (top) self.out.append_char('(');
+    self.out.append(n);
+    if (top) self.out.append_char(')');
+    self.out.append_char('/');
+    if (bottom) self.out.append_char('(');
+    self.out.append(d);
+    if (bottom) self.out.append_char(')');
+    return true;
+}
 
-        if (c == '^')
+fn void Flat.root(&self)
+{
+    self.skip(" ");
+    if (self.at('['))
+    {
+        self.i++;
+        foreach (c : self.until(']'))
         {
-            i++;
-            if (i < (usz)input.len && input[i] == '{')
+            String raised = SUPER.map(c);
+            if (raised.len)
             {
-                i++;
-                while (i < (usz)input.len && input[i] != '}')
-                {
-                    if (input[i] == '\\')
-                    {
-                        usz sStart = i + 1;
-                        usz sEnd = sStart;
-                        while (sEnd < (usz)input.len && ((input[sEnd] >= 'a' && input[sEnd] <= 'z') || (input[sEnd] >= 'A' && input[sEnd] <= 'Z'))) sEnd++;
-                        String scmd = input[sStart : sEnd - sStart];
-                        String sglyph;
-                        if (scmd == "alpha") { mb.append("ᵅ"); }
-                        else if (scmd == "beta") { mb.append("ᵝ"); }
-                        else if (scmd == "gamma") { mb.append("ᵞ"); }
-                        else if (scmd == "delta") { mb.append("ᵟ"); }
-                        else if (scmd == "epsilon") { mb.append("ᵋ"); }
-                        else if (scmd == "theta") { mb.append("ᶿ"); }
-                        else if (scmd == "phi") { mb.append("ᵠ"); }
-                        else if (scmd == "chi") { mb.append("ᵡ"); }
-                        else if (scmd == "infty") { mb.append("∞"); }
-                        else if (scmd == "to" || scmd == "rightarrow") { mb.append("→"); }
-                        else if (symbol(scmd, &sglyph))
-                        {
-                            mb.append_string(sglyph);
-                        }
-                        else
-                        {
-                            mb.append_string(scmd);
-                        }
-                        i = sEnd;
-                        continue;
-                    }
-
-                    String sup = SUPER.map(input[i]);
-                    if (sup.len)
-                    {
-                        mb.append(sup);
-                    }
-                    else
-                    {
-                        mb.append_char(input[i]);
-                    }
-                    i++;
-                }
-                if (i < (usz)input.len && input[i] == '}') i++;
-                continue;
-            }
-            else if (i < (usz)input.len)
-            {
-                String sup = SUPER.map(input[i]);
-                if (sup.len)
-                {
-                    mb.append(sup);
-                    i++;
-                    continue;
-                }
-                else
-                {
-                    mb.append_char('^');
-                    mb.append_char(input[i++]);
-                    continue;
-                }
-            }
-            mb.append_char('^');
-            continue;
-        }
-
-        if (c == '_')
-        {
-            i++;
-            if (i < (usz)input.len && input[i] == '{')
-            {
-                i++;
-                while (i < (usz)input.len && input[i] != '}')
-                {
-                    if (input[i] == '\\')
-                    {
-                        usz sStart = i + 1;
-                        usz sEnd = sStart;
-                        while (sEnd < (usz)input.len && ((input[sEnd] >= 'a' && input[sEnd] <= 'z') || (input[sEnd] >= 'A' && input[sEnd] <= 'Z'))) sEnd++;
-                        String scmd = input[sStart : sEnd - sStart];
-                        String sglyph;
-                        if (scmd == "beta") { mb.append("ᵦ"); }
-                        else if (scmd == "gamma") { mb.append("ᵧ"); }
-                        else if (scmd == "rho") { mb.append("ᵨ"); }
-                        else if (scmd == "phi") { mb.append("ᵩ"); }
-                        else if (scmd == "chi") { mb.append("ᵪ"); }
-                        else if (scmd == "infty") { mb.append("∞"); }
-                        else if (scmd == "to" || scmd == "rightarrow") { mb.append("→"); }
-                        else if (symbol(scmd, &sglyph))
-                        {
-                            mb.append_string(sglyph);
-                        }
-                        else
-                        {
-                            mb.append_string(scmd);
-                        }
-                        i = sEnd;
-                        continue;
-                    }
-
-                    String sub = SUB.map(input[i]);
-                    if (sub.len)
-                    {
-                        mb.append(sub);
-                    }
-                    else
-                    {
-                        mb.append_char(input[i]);
-                    }
-                    i++;
-                }
-                if (i < (usz)input.len && input[i] == '}') i++;
-                continue;
-            }
-            else if (i < (usz)input.len)
-            {
-                String sub = SUB.map(input[i]);
-                if (sub.len)
-                {
-                    mb.append(sub);
-                    i++;
-                    continue;
-                }
-                else
-                {
-                    mb.append_char('_');
-                    mb.append_char(input[i++]);
-                    continue;
-                }
-            }
-            mb.append_char('_');
-            continue;
-        }
-
-        if (c == '\'')
-        {
-            int primeCount = 0;
-            while (i < (usz)input.len && input[i] == '\'')
-            {
-                primeCount++;
-                i++;
-            }
-            if (primeCount == 1)
-            {
-                mb.append("′");
-            }
-            else if (primeCount == 2)
-            {
-                mb.append("″");
-            }
-            else if (primeCount == 3)
-            {
-                mb.append("‴");
+                self.out.append(raised);
             }
             else
             {
-                for (int p = 0; p < primeCount; p++) mb.append("′");
+                self.out.append_char(c);
             }
-            continue;
         }
-
-        mb.append_char(c);
-        i++;
     }
+    self.out.append("√");
+    self.skip(" ");
+    if (!self.at('{')) return;
+    self.i++;
+    String r = self.sub(self.nested());
+    bool wrap = operated(r) && (r[0] != '(' || r[^1] != ')');
+    if (wrap) self.out.append_char('(');
+    self.out.append(r);
+    if (wrap) self.out.append_char(')');
+}
 
-    return mb.keep(arena);
+fn bool Flat.command(&self, String cmd)
+{
+    switch (cmd)
+    {
+        case "quad": self.out.append("\u2003");
+        case "qquad": self.out.append("\u2003\u2003");
+        case "bmod": self.out.append(" mod ");
+        case "pmod":
+        case "pod":
+            self.skip(" ");
+            if (!self.at('{')) return false;
+            self.i++;
+            String inner = self.sub(self.until('}'));
+            self.out.append(cmd == "pmod" ? " (mod " : " (");
+            self.out.append(inner);
+            self.out.append_char(')');
+        case "operatorname":
+        case "text":
+        case "hspace":
+        case "vspace":
+            self.skip(" *");
+            if (self.at('{'))
+            {
+                self.i++;
+                String inner = self.until('}');
+                if (cmd != "hspace" && cmd != "vspace") self.out.append(inner);
+            }
+            if (cmd == "operatorname") self.out.append_char(' ');
+        case "frac":
+        case "dfrac":
+        case "tfrac":
+            return self.fraction();
+        case "sqrt":
+            self.root();
+        default:
+            return false;
+    }
+    return true;
+}
+
+fn bool Flat.styled(&self, String cmd)
+{
+    Alphabet alphabet;
+    if (!font(cmd, &alphabet)) return false;
+    self.skip(" *");
+    if (!self.at('{')) return true;
+    self.i++;
+    foreach (c : self.until('}'))
+    {
+        Char32 glyph = alphabet.map(c);
+        if (glyph)
+        {
+            self.out.append_char32(glyph);
+        }
+        else
+        {
+            self.out.append_char(c);
+        }
+    }
+    return true;
+}
+
+fn bool Flat.accented(&self, String cmd)
+{
+    MathAccent mark;
+    String diacritic;
+    if (!accent(cmd, &mark, &diacritic)) return false;
+    self.skip(" ");
+    if (self.at('{'))
+    {
+        self.i++;
+        self.out.append(self.sub(self.until('}')));
+        self.out.append(diacritic);
+    }
+    else if (self.more())
+    {
+        self.out.append_char(self.s[self.i++]);
+        self.out.append(diacritic);
+    }
+    return true;
+}
+
+fn void Flat.control(&self)
+{
+    String glyph;
+    if (self.i + 1 < self.s.len && find(ESCAPES, self.s[self.i + 1 : 1], &glyph))
+    {
+        self.out.append(glyph);
+        self.i += 2;
+        return;
+    }
+    self.i++;
+    String cmd = self.name();
+    usz end = self.i;
+    if (self.command(cmd) || self.styled(cmd) || self.accented(cmd)) return;
+    self.i = end;
+    self.out.append(symbol(cmd, &glyph) ? glyph : cmd);
+    if (self.more() && self.s[self.i].is_alnum()) self.out.append_char(' ');
+}
+
+fn void Flat.script(&self, Pair[] greek, Script script, char mark)
+{
+    self.i++;
+    if (self.at('{'))
+    {
+        self.i++;
+        while (self.more() && !self.at('}'))
+        {
+            if (self.at('\\'))
+            {
+                self.i++;
+                String cmd = self.name();
+                String glyph;
+                self.out.append(find(greek, cmd, &glyph) || symbol(cmd, &glyph) ? glyph : cmd);
+                continue;
+            }
+            String g = script.map(self.s[self.i]);
+            if (g.len)
+            {
+                self.out.append(g);
+            }
+            else
+            {
+                self.out.append_char(self.s[self.i]);
+            }
+            self.i++;
+        }
+        if (self.at('}')) self.i++;
+        return;
+    }
+    if (!self.more())
+    {
+        self.out.append_char(mark);
+        return;
+    }
+    String g = script.map(self.s[self.i]);
+    if (g.len)
+    {
+        self.out.append(g);
+    }
+    else
+    {
+        self.out.append_char(mark);
+        self.out.append_char(self.s[self.i]);
+    }
+    self.i++;
+}
+
+fn String unicode(ast::Arena* arena, String input)
+{
+    if (input.len == 0) return "";
+    Flat f = { .arena = arena, .s = input };
+    f.out.init(mem, input.len * 4 + 256);
+    defer f.out.free();
+    while (f.more())
+    {
+        switch (input[f.i])
+        {
+            case '\\': f.control();
+            case '^': f.script(RAISED, SUPER, '^');
+            case '_': f.script(LOWERED, SUB, '_');
+            case '\'':
+                int count;
+                for (; f.at('\''); f.i++) count++;
+                f.out.append(count <= 3 ? PRIMES[count - 1] : "");
+                if (count > 3) f.out.repeat("′", count);
+            default:
+                f.out.append_char(input[f.i++]);
+        }
+    }
+    return f.out.keep(arena);
 }

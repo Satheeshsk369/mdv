@@ -1,6 +1,6 @@
 #!/bin/bash
 cd "$(dirname "$0")/golden"
-bin=../../build/mdv
+bin=${MDV:-../../build/mdv}
 mode=${1:-check}
 out=${TMPDIR:-/tmp}/mdv-golden
 rm -rf "$out" && mkdir -p "$out"
@@ -17,13 +17,15 @@ done
 
 if command -v tmux > /dev/null; then
   mkdir -p "$out/dir" && cp *.md "$out/dir" && pushd "$out/dir" > /dev/null
-  bin=$(realpath "$OLDPWD/../../build/mdv")
+  bin=$(cd "$OLDPWD" && realpath "$bin")
   screen() {
     local name=$1 file=$2; shift 2
     tmux kill-session -t mdvgolden 2>/dev/null
     tmux new-session -d -s mdvgolden -x 100 -y 30 -c "$PWD" "EDITOR=true $bin $file"
     sleep 0.5
-    for k in "$@"; do tmux send-keys -t mdvgolden "$k"; sleep 0.3; done
+    for k in "$@"; do
+      if [ "${k:0:1}" = "!" ]; then eval "${k:1}"; sleep 0.5; else tmux send-keys -t mdvgolden "$k"; sleep 0.3; fi
+    done
     tmux capture-pane -e -p -t mdvgolden > "$out/tui.$name"
   }
   screen open sample.md
@@ -53,6 +55,10 @@ if command -v tmux > /dev/null; then
   screen copy sample.md y
   screen math math.md G
   screen text text.md d
+  cp sample.md live.md
+  screen reload live.md G "!sed -i '40a NEWLINE' live.md"
+  rm live.md
+  screen resize sample.md "!tmux resize-window -t mdvgolden -x 70 -y 20"
   popd > /dev/null
 fi
 

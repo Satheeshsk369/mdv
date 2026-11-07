@@ -1,6 +1,6 @@
 # Math coverage
 
-Inline: $x^2$, $a_{ij}$, $x^{n+1}_k$, $f'(x)$, $f''$, $\frac{a}{b}$, $\sqrt{x}$, $\sqrt[3]{x}$, $\alpha\beta\Gamma$, $\mathbb{RZN}$, $\mathcal{L}$, $\mathfrak{g}$, $\mathbf{v}$, $\vec{v}$, $\hat{x}$, $\bar{z}$, $\dot{x}$, $\ddot{x}$, $\tilde{n}$, $\overline{AB}$, $\underline{u}$, $a \pmod{n}$, $a \bmod n$, $\text{if } x$, $\operatorname{rank} A$, $x \le y \ne z \in S \subseteq T$, $\not\in$, $\to \Rightarrow \iff \mapsto$, $\sum_{i=1}^n i$, $\int_0^1 f$, $\lim_{n \to \infty}$, costs $5 and $10.
+Inline: $a \, b \: c \; d \quad e \qquad f \! g$, $\frac{1}{2} \frac{a+1}{b} \sqrt[3]{x+1}$, $\pmod 7$, $x^{\alpha\to} y_{\beta\infty} z^q w_y$, $x^2$, $a_{ij}$, $x^{n+1}_k$, $f'(x)$, $f''$, $\frac{a}{b}$, $\sqrt{x}$, $\sqrt[3]{x}$, $\alpha\beta\Gamma$, $\mathbb{RZN}$, $\mathcal{L}$, $\mathfrak{g}$, $\mathbf{v}$, $\vec{v}$, $\hat{x}$, $\bar{z}$, $\dot{x}$, $\ddot{x}$, $\tilde{n}$, $\overline{AB}$, $\underline{u}$, $a \pmod{n}$, $a \bmod n$, $\text{if } x$, $\operatorname{rank} A$, $x \le y \ne z \in S \subseteq T$, $\not\in$, $\to \Rightarrow \iff \mapsto$, $\sum_{i=1}^n i$, $\int_0^1 f$, $\lim_{n \to \infty}$, costs $5 and $10.
 
 ## Fractions and roots
 
