@@ -1,16 +1,16 @@
-[1m[38;2;102;217;239m[48;2;39;40;34m mdv [38;2;248;248;242m[48;2;30;32;36m text.md [0m[38;2;117;113;94m│[39m [1m[38;2;166;226;46mLn 12[0m [38;2;117;113;94m(15/64 · 23%)[39m                                                 [38;2;117;113;94m[Space Options][39m
-[38;2;117;113;94m──────────────────────────────────────────────────────────────────────────────────────────────────[39m
-[1m[38;2;102;217;239m▌[0m
- [1m[38;2;230;219;116mHeading four[0m
+[1m[38;2;137;179;182m[48;2;55;50;47m mdv [38;2;236;225;215m[48;2;29;26;24m text.md [0m[38;2;134;116;98m│[39m [1m[38;2;133;182;149mLn 12[0m [38;2;134;116;98m(15/64 · 23%)[39m                                                 [38;2;134;116;98m[Space Options][39m
+[38;2;134;116;98m──────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[1m[38;2;137;179;182m▌[0m
+ [1m[38;2;235;192;109mHeading four[0m
 
 
- [1m[38;2;174;129;255mHeading five[0m
+ [1m[38;2;207;155;194mHeading five[0m
 
 
- [1m[38;2;102;217;239mHeading six[0m
+ [1m[38;2;137;179;182mHeading six[0m
 
- A paragraph with [1mbold[0m, [3mitalic[0m, [1m*both[0m*, [9mstruck[0m, [38;2;102;217;239m[48;2;39;40;34mcode[39m[49m, a [38;2;102;217;239mlink[39m [38;2;117;113;94m(https://example.com)[39m, an image, a
- footnote[38;2;102;217;239m1[39m, © — ∞ entities, snake_case_words and a very long sentence that keeps going so that
+ A paragraph with [1mbold[0m, [3mitalic[0m, [1m*both[0m*, [9mstruck[0m, [38;2;137;179;182m[48;2;55;50;47mcode[39m[49m, a [38;2;137;179;182mlink[39m [38;2;134;116;98m(https://example.com)[39m, an image, a
+ footnote[38;2;137;179;182m1[39m, © — ∞ entities, snake_case_words and a very long sentence that keeps going so that
  wrapping at forty columns has to break it into several lines.
 
    [1] The footnote body with [3memphasis[0m.

@@ -1,30 +1,30 @@
-[1m[38;2;102;217;239m[48;2;39;40;34m mdv [38;2;248;248;242m[48;2;30;32;36m sample.md [0m[38;2;117;113;94m│[39m [1m[38;2;253;151;31mKeyboard Controls & Keybindings[0m
-[38;2;117;113;94m──────────────────────────────────────────────────────────────────────────────────────────────────[39m
-  [1m[38;2;102;217;239mVertical Navigation:[0m
-    [38;2;230;219;116m↓ / ↑[39m                 Scroll down / up (accelerated)
-    [38;2;230;219;116mPgDn / PgUp[39m           Half-page scroll down / up
-    [38;2;230;219;116mHome / End[39m            Jump to Top / Bottom
-    [38;2;230;219;116m: <line>[39m              Goto line number (e.g. :42)
+[1m[38;2;137;179;182m[48;2;55;50;47m mdv [38;2;236;225;215m[48;2;29;26;24m sample.md [0m[38;2;134;116;98m│[39m [1m[38;2;228;155;93mKeyboard Controls & Keybindings[0m
+[38;2;134;116;98m──────────────────────────────────────────────────────────────────────────────────────────────────[39m
+  [1m[38;2;137;179;182mVertical Navigation:[0m
+    [38;2;235;192;109m↓ / ↑[39m                 Scroll down / up (accelerated)
+    [38;2;235;192;109mPgDn / PgUp[39m           Half-page scroll down / up
+    [38;2;235;192;109mHome / End[39m            Jump to Top / Bottom
+    [38;2;235;192;109m: <line>[39m              Goto line number (e.g. :42)
 
-  [1m[38;2;102;217;239mHorizontal & Layout:[0m
-    [38;2;230;219;116mw[39m                     Toggle Wrap / No-Wrap mode
-    [38;2;230;219;116m← / →[39m                 Horizontal scroll (accelerated)
+  [1m[38;2;137;179;182mHorizontal & Layout:[0m
+    [38;2;235;192;109mw[39m                     Toggle Wrap / No-Wrap mode
+    [38;2;235;192;109m← / →[39m                 Horizontal scroll (accelerated)
 
-  [1m[38;2;102;217;239mFeatures & Actions:[0m
-    [38;2;166;226;46mSpace[39m                 Options menu
-    [38;2;166;226;46mTab / t[39m               Toggle Document Outline (Table of Contents)
-    [38;2;166;226;46mh[39m                     Highlight the current block
-    [38;2;166;226;46mo[39m                     Switch Document (Markdown File Tree)
-    [38;2;166;226;46m/[39m                     In-document search (n next, N prev)
-    [38;2;166;226;46me[39m                     Edit with live preview (Ctrl+O lists editor commands)
-    [38;2;166;226;46mE[39m                     Open $EDITOR at current line
-    [38;2;166;226;46my[39m                     Copy document to clipboard (OSC 52)
-    [38;2;166;226;46m?[39m                     Show / hide this help screen
-[38;2;60;60;50m~[39m
-[38;2;60;60;50m~[39m
-[38;2;60;60;50m~[39m
-[38;2;60;60;50m~[39m
-[38;2;60;60;50m~[39m
-[38;2;60;60;50m~[39m
-[38;2;60;60;50m~[39m
-[38;2;60;60;50m~[39m
+  [1m[38;2;137;179;182mFeatures & Actions:[0m
+    [38;2;133;182;149mSpace[39m                 Options menu
+    [38;2;133;182;149mTab / t[39m               Toggle Document Outline (Table of Contents)
+    [38;2;133;182;149mh[39m                     Highlight the current block
+    [38;2;133;182;149mc[39m                     Colour theme with live preview
+    [38;2;133;182;149mo[39m                     Switch Document (Markdown File Tree)
+    [38;2;133;182;149m/[39m                     In-document search (n next, N prev)
+    [38;2;133;182;149me[39m                     Edit with live preview (Ctrl+O lists editor commands)
+    [38;2;133;182;149mE[39m                     Open $EDITOR at current line
+    [38;2;133;182;149my[39m                     Copy document to clipboard (OSC 52)
+    [38;2;133;182;149m?[39m                     Show / hide this help screen
+[38;2;83;73;63m~[39m
+[38;2;83;73;63m~[39m
+[38;2;83;73;63m~[39m
+[38;2;83;73;63m~[39m
+[38;2;83;73;63m~[39m
+[38;2;83;73;63m~[39m
+[38;2;83;73;63m~[39m

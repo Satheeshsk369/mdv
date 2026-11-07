@@ -22,7 +22,7 @@ if command -v tmux > /dev/null; then
   screen() {
     local name=$1 file=$2; shift 2
     tmux kill-session -t mdvgolden 2>/dev/null
-    tmux new-session -d -s mdvgolden -x 100 -y 30 -c "$PWD" "EDITOR=true $bin $file"
+    tmux new-session -d -s mdvgolden -x 100 -y 30 -e XDG_CONFIG_HOME="$XDG_CONFIG_HOME" -c "$PWD" "EDITOR=true $bin $file"
     sleep 0.5
     for k in "$@"; do
       if [ "${k:0:1}" = "!" ]; then eval "${k:1}"; sleep 0.5; else tmux send-keys -t mdvgolden "$k"; sleep 0.3; fi
