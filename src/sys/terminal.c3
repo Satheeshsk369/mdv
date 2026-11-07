@@ -23,6 +23,7 @@ const int CTRLH = 8;
 const int CTRLK = 11;
 const int CTRLN = 14;
 const int CTRLO = 15;
+const int CTRLQ = 17;
 const int CTRLR = 18;
 const int CTRLS = 19;
 const int CTRLV = 22;

@@ -850,6 +850,15 @@ fn void View.ask(&self, Prompt prompt, String initial)
     e.input.append(initial);
 }
 
+fn bool View.quit(&self)
+{
+    Editor* e = &self.editor;
+    if (!e.dirty() || e.warned) return true;
+    e.warned = true;
+    self.say("Unsaved changes: Ctrl+S to save, Ctrl+Q again to quit");
+    return false;
+}
+
 fn void View.command(&self, Act act)
 {
     Editor* e = &self.editor;
@@ -946,19 +955,20 @@ fn void View.answer(&self, int key)
     }
 }
 
-fn void View.type(&self, int key)
+fn bool View.type(&self, int key)
 {
     Editor* e = &self.editor;
     if (e.prompt != NONE)
     {
         self.answer(key);
-        return;
+        return false;
     }
     Act act = e.pasting ? NONE : lookup(EDITING, key);
+    if (act == QUIT) return self.quit();
     if (act != NONE)
     {
         self.command(act);
-        return;
+        return false;
     }
     int page = max(self.paneRows() - 2, 1);
     int base = key & terminal::KEY;
@@ -970,7 +980,7 @@ fn void View.type(&self, int key)
     if (base == terminal::CLICK || base == terminal::DRAG || base == terminal::RELEASE)
     {
         self.point(key);
-        return;
+        return false;
     }
     if (motion && base != terminal::WHEELUP && base != terminal::WHEELDOWN)
     {
@@ -983,7 +993,7 @@ fn void View.type(&self, int key)
             if (collapse)
             {
                 e.at = edge;
-                return;
+                return false;
             }
         }
     }
@@ -1020,20 +1030,21 @@ fn void View.type(&self, int key)
                 e.insert("    ");
             }
         case terminal::BACKSPACE:
-            if (e.remove()) return;
+            if (e.remove()) return false;
             if (!ctrl && e.paired())
             {
                 e.erase(e.at - 1, e.at + 1);
-                return;
+                return false;
             }
             e.erase(ctrl ? e.wordLeft(e.at) : e.backward(e.at), e.at);
         case terminal::DELETE:
             if (!e.remove()) e.erase(e.at, ctrl ? e.wordRight(e.at) : e.forward(e.at));
         default:
-            if (key < 32 || key > 255 || key == 127) return;
+            if (key < 32 || key > 255 || key == 127) return false;
             char c = (char)key;
-            if (!e.pasting && e.pair(c)) return;
+            if (!e.pasting && e.pair(c)) return false;
             e.remove();
             e.insert((String)(&c)[:1]);
     }
+    return false;
 }

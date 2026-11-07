@@ -81,6 +81,7 @@ cat notes.md | mdv      # render stdin
 | `Ctrl+W` | Toggle wrap |
 | `Ctrl+R` | Toggle the preview |
 | `Esc` | Close; twice to discard unsaved changes |
+| `Ctrl+Q` | Quit mdv; twice when there are unsaved changes |
 
 ## Rendering
 

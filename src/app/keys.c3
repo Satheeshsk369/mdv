@@ -78,7 +78,7 @@ const Bind[] MOTION = {
 };
 
 const Bind[] DOCUMENT = {
-    { 'q', QUIT }, { 'Q', QUIT }, { terminal::CTRLC, QUIT },
+    { 'q', QUIT }, { 'Q', QUIT }, { terminal::CTRLC, QUIT }, { terminal::CTRLQ, QUIT },
     { terminal::ESC, CLEAR },
     { terminal::LEFT, LEFT }, { terminal::RIGHT, RIGHT },
     { ' ', MENU },
@@ -117,7 +117,7 @@ struct Item
 }
 
 const Bind[] EDITING = {
-    { terminal::ESC, CLOSE }, { terminal::CTRLO, MENU },
+    { terminal::ESC, CLOSE }, { terminal::CTRLO, MENU }, { terminal::CTRLQ, QUIT },
     { terminal::CTRLS, SAVE }, { terminal::CTRLZ, UNDO }, { terminal::CTRLY, REDO },
     { terminal::CTRLH, MARK }, { terminal::CTRLW, WRAP }, { terminal::CTRLR, PREVIEW },
     { terminal::CTRLC, COPY }, { terminal::CTRLX, CUT }, { terminal::CTRLV, PASTE },
@@ -150,6 +150,7 @@ const Item[] EDITS = {
     { "Ctrl+W", "Toggle wrap", WRAP },
     { "Ctrl+R", "Toggle preview", PREVIEW },
     { "Esc", "Close editor", CLOSE },
+    { "Ctrl+Q", "Quit mdv", QUIT },
 };
 
 const Item[] ITEMS = {
@@ -359,6 +360,7 @@ fn bool View.pick(&self, Act act)
     self.mode = self.back;
     if (self.back == EDITOR)
     {
+        if (act == QUIT) return self.quit();
         self.command(act);
         return false;
     }
@@ -446,7 +448,7 @@ fn bool View.key(&self, int key)
         case MENU:
             return self.choose(key);
         case EDITOR:
-            self.type(key);
+            return self.type(key);
         case THEME:
             Act act = lookup(CHOICES, key);
             self.preview(act == QUIT ? CLOSE : act != NONE ? act : lookup(MOTION, key));

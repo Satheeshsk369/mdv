@@ -79,6 +79,9 @@ screen editorhighlight sample.md e Down Down C-h
 screen editorhighlightblock sample.md e C-g 1 1 2 Enter C-h
 screen editorhighlightoff sample.md e C-g 1 1 2 Enter C-h C-h
 screen ctrlc sample.md C-c "!echo"
+screen editorquit sample.md e C-q
+screen editorquitwarn sample.md e x C-q
+screen editorquitforce sample.md e x C-q C-q
 screen editorselect sample.md e Down Down S-Right S-Right S-Right S-Right S-Right S-Right S-Right
 screen editorselectlines sample.md e Down Down S-Down S-Down S-End
 screen editorselectcut sample.md e S-End C-x
