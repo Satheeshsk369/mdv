@@ -185,13 +185,22 @@ struct Row
     usz base;
     int number;
     bool current;
+    bool lit;
     bool first;
     bool heading;
 }
 
-fn void source(DString* fb, Row row, usz low, usz high, int left, int width)
+struct Marks
 {
-    if (row.current) fb.append(ansi::FOCUS);
+    usz low;
+    usz high;
+    usz[] hits;
+    usz size;
+}
+
+fn void source(DString* fb, Row row, Marks marks, int left, int width)
+{
+    if (row.lit) fb.append(ansi::FOCUS);
     fb.append(row.current ? ansi::CURSOR : ansi::MUTED);
     if (row.first)
     {
@@ -202,7 +211,7 @@ fn void source(DString* fb, Row row, usz low, usz high, int left, int width)
         fb.append("   ↪ ");
     }
     fb.append(ansi::RESET);
-    if (row.current) fb.append(ansi::FOCUS);
+    if (row.lit) fb.append(ansi::FOCUS);
     String t = row.text.trim();
     bool fence = t.starts_with("```") || t.starts_with("~~~") || t.starts_with("$$");
     String color = row.heading ? ansi::H2 : fence ? ansi::MUTED : ansi::TEXT;
@@ -210,17 +219,20 @@ fn void source(DString* fb, Row row, usz low, usz high, int left, int width)
     DString expanded;
     expanded.init(mem, row.text.len + 64);
     defer expanded.free();
-    bool inside;
+    String state = "";
+    usz k;
     foreach (i, c : row.text)
     {
         usz at = row.base + (usz)i;
-        bool want = at >= low && at < high;
-        if (want != inside)
+        while (k < marks.hits.len && marks.hits[k] + marks.size <= at) k++;
+        bool hit = k < marks.hits.len && marks.hits[k] <= at;
+        String want = at >= marks.low && at < marks.high ? ansi::SELECTION : hit ? ansi::MATCH : "";
+        if (want != state)
         {
-            expanded.append(want ? ansi::SELECTION : ansi::RESET);
-            if (!want && row.current) expanded.append(ansi::FOCUS);
-            if (!want) expanded.append(color);
-            inside = want;
+            expanded.append(want.len > 0 ? want : ansi::RESET);
+            if (want.len == 0 && row.lit) expanded.append(ansi::FOCUS);
+            if (want.len == 0) expanded.append(color);
+            state = want;
         }
         if (c == '\t')
         {
@@ -231,7 +243,14 @@ fn void source(DString* fb, Row row, usz low, usz high, int left, int width)
             expanded.append_char(c);
         }
     }
-    if (!inside && row.base + row.text.len >= low && row.base + row.text.len < high) expanded.append(ansi::SELECTION);
+    usz end = row.base + row.text.len;
+    bool continues = end >= marks.low && end < marks.high;
+    if (continues && state != ansi::SELECTION) expanded.append(ansi::SELECTION);
+    if (!continues && state.len > 0)
+    {
+        expanded.append(ansi::RESET);
+        if (row.lit) expanded.append(ansi::FOCUS);
+    }
     fb.spaces(width - text::clip(fb, expanded.str_view(), left, width));
     fb.append(ansi::RESET);
 }
@@ -290,6 +309,11 @@ fn void View.drawEditor(&self, DString* fb)
     {
         hint.append(self.status.str_view());
     }
+    else if (self.focus && e.page.count() > 0)
+    {
+        Block* b = &e.doc.blocks[e.page.lines[e.page.find(line)].block];
+        hint.appendf("Block L%d–%d (Ctrl+H)", b.start + 1, b.end + 1);
+    }
     else
     {
         hint.append("[Ctrl+O Options]");
@@ -298,7 +322,7 @@ fn void View.drawEditor(&self, DString* fb)
     if (pad > 0)
     {
         fb.spaces(pad);
-        fb.append(e.prompt != NONE || self.status.len() > 0 ? ansi::STATUS : ansi::MUTED);
+        fb.append(e.prompt != NONE || self.status.len() > 0 || self.focus ? ansi::STATUS : ansi::MUTED);
         fb.append(hint.str_view());
         fb.append(ansi::RESET);
     }
@@ -336,8 +360,16 @@ fn void View.drawEditor(&self, DString* fb)
     String current = number < count ? e.slice(number) : "";
     usz origin = e.offset(number);
     int rows = number < count ? e.height(number) : 1;
-    usz low = e.selected() ? e.low() : 0;
-    usz high = e.selected() ? e.high() : 0;
+    String needle = e.needle.str_view();
+    e.hits.clear();
+    String all = e.str();
+    for (usz p = 0; needle.len > 0 && p + needle.len <= all.len; p++)
+    {
+        if (!text::same(all[p : needle.len], needle)) continue;
+        e.hits.push(p);
+        p += needle.len - 1;
+    }
+    Marks marks = { e.selected() ? e.low() : 0, e.selected() ? e.high() : 0, e.hits.array_view(), needle.len };
     for (int r = 0; r < body; r++)
     {
         if (split || r < editRows)
@@ -347,10 +379,10 @@ fn void View.drawEditor(&self, DString* fb)
                 fold(current, e.span(), &e.starts);
                 usz from = e.starts[row];
                 usz to = row + 1 < rows ? e.starts[(usz)row + 1] : current.len;
-                bool lit = number == line || (number >= first && number <= last);
+                bool lit = number >= first && number <= last;
                 int left = number == line && !e.wrap ? e.left : 0;
-                Row segment = { current[from : to - from], origin + from, number + 1, lit, row == 0, current.starts_with("#") };
-                source(fb, segment, low, high, left, textWidth);
+                Row segment = { current[from : to - from], origin + from, number + 1, number == line, lit, row == 0, current.starts_with("#") };
+                source(fb, segment, marks, left, textWidth);
                 row++;
                 if (row >= rows)
                 {

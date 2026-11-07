@@ -59,7 +59,9 @@ cat notes.md | mdv      # render stdin
 | :--- | :--- |
 | `Ctrl+S` | Save |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
-| `Ctrl+F` / `Ctrl+N` | Find / find next |
+| `Ctrl+F` / `Ctrl+N` | Find / find next; every match is tinted, `Esc` clears |
+| `Ctrl+E` | Replace all (asks for the text, then the replacement) |
+| Mouse | Click places the cursor, drag or `Shift`+click selects, click in the preview jumps to that source line, wheel scrolls |
 | `Ctrl+G` | Go to line |
 | `Shift+arrows` `Shift+Home/End` | Select |
 | `Ctrl+A` | Select all |
@@ -69,6 +71,7 @@ cat notes.md | mdv      # render stdin
 | `Ctrl+K` / `Ctrl+D` | Delete / duplicate the lines |
 | `Alt+↑` `Alt+↓` | Move the lines up / down |
 | `Tab` / `Shift+Tab` | Indent / outdent the selected lines |
+| `(` `[` `{` `` ` `` `"` | Insert the pair; typing the closer steps over it, `Backspace` removes both. With a selection these and `*` `_` `~` `$` wrap it |
 | `Ctrl+H` | Highlight the block in source and preview |
 | `Ctrl+W` | Toggle wrap |
 | `Ctrl+R` | Toggle the preview |

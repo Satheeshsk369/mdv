@@ -2,9 +2,9 @@
 [38;2;117;113;94m──────────────────────────────────────────────────────────────────────────────────────────────────[39m
 [38;2;117;113;94m   1 [1m[38;2;166;226;46m# C3 Markdown & LaTeX Engine Showcase        [0m[38;2;117;113;94m│[39m [1m[38;2;249;38;114mC3 Markdown & LaTeX Engine Showcase[0m
 [38;2;117;113;94m   2 [38;2;248;248;242m                                             [38;2;117;113;94m│[39m
-[1m[38;2;102;217;239m[48;2;62;61;50m   3 [0m[38;2;248;248;242m[48;2;68;71;90mWelcome to **mdv**! This document tests and  [38;2;117;113;94m[49m│[39m Welcome to [1mmdv[0m! This document tests and
-[1m[38;2;102;217;239m[48;2;62;61;50m   ↪ [0m[38;2;248;248;242m[48;2;68;71;90mdemonstrates the full suite of in-editor     [38;2;117;113;94m[49m│[39m demonstrates the full suite of in-editor
-[1m[38;2;102;217;239m[48;2;62;61;50m   ↪ [0m[38;2;248;248;242m[48;2;68;71;90mMarkdown and LaTeX rendering capabilities.   [38;2;117;113;94m[49m│[39m Markdown and LaTeX rendering capabilities.
+[1m[38;2;102;217;239m   3 [0m[38;2;248;248;242m[48;2;68;71;90mWelcome to **mdv**! This document tests and  [38;2;117;113;94m[49m│[39m Welcome to [1mmdv[0m! This document tests and
+[1m[38;2;102;217;239m   ↪ [0m[38;2;248;248;242m[48;2;68;71;90mdemonstrates the full suite of in-editor     [38;2;117;113;94m[49m│[39m demonstrates the full suite of in-editor
+[1m[38;2;102;217;239m   ↪ [0m[38;2;248;248;242m[48;2;68;71;90mMarkdown and LaTeX rendering capabilities.[39m[49m   [38;2;117;113;94m│[39m Markdown and LaTeX rendering capabilities.
 [38;2;117;113;94m   4 [38;2;248;248;242m                                             [38;2;117;113;94m│[39m
 [38;2;117;113;94m   5 [38;2;248;248;242m---                                          [38;2;117;113;94m│[39m [38;2;117;113;94m────────────────────────────────────────────[39m
 [38;2;117;113;94m   6 [38;2;248;248;242m                                             [38;2;117;113;94m│[39m

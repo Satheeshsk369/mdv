@@ -75,6 +75,8 @@ if command -v tmux > /dev/null; then
   screen editorcut sample.md e Down Down C-x
   screen editorredo sample.md e x C-z C-y
   screen editorhighlight sample.md e Down Down C-h
+  screen editorhighlightblock sample.md e C-g 1 1 2 Enter C-h
+  screen editorhighlightoff sample.md e C-g 1 1 2 Enter C-h C-h
   screen ctrlc sample.md C-c "!echo"
   screen editorselect sample.md e Down Down S-Right S-Right S-Right S-Right S-Right S-Right S-Right
   screen editorselectlines sample.md e Down Down S-Down S-Down S-End
@@ -86,6 +88,12 @@ if command -v tmux > /dev/null; then
   screen editorindent sample.md e S-Down S-Down Tab
   screen editoroutdent sample.md e Tab Tab BTab
   screen editorreplace sample.md e C-e L a T e X Enter T e X Enter
+  screen editorpair sample.md e C-End "(" x ")" " " "[" a BSpace BSpace " " "\`" c
+  screen editorwrapsel sample.md e S-C-Right S-C-Right "*"
+  screen editormatches sample.md e C-f m d v Enter
+  screen editorclick sample.md e "!tmux send-keys -t mdvgolden -l \$'\\e[<0;12;8M\\e[<0;12;8m'"
+  screen editordrag sample.md e "!tmux send-keys -t mdvgolden -l \$'\\e[<0;8;5M\\e[<32;20;5M\\e[<0;20;5m'"
+  screen editorpreviewclick sample.md e "!tmux send-keys -t mdvgolden -l \$'\\e[<0;60;12M'"
   cp sample.md saved.md
   screen editorsave saved.md e "#" " " C-s Escape
   rm saved.md

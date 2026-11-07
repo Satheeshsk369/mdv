@@ -1,6 +1,6 @@
 [1m[38;2;102;217;239m[48;2;39;40;34m mdv [38;2;248;248;242m[48;2;30;32;36m sample.md [0m[38;2;117;113;94m│[39m [1m[38;2;253;151;31mEditing[0m[38;2;253;151;31m ●[38;2;117;113;94m  Ln 1, Col 2[39m      [1m[38;2;166;226;46m[48;2;39;40;34mUnsaved changes: Ctrl+S to save, Esc again to discard[0m
 [38;2;117;113;94m──────────────────────────────────────────────────────────────────────────────────────────────────[39m
-[1m[38;2;102;217;239m[48;2;62;61;50m   1 [0m[38;2;248;248;242m[48;2;62;61;50mx# C3 Markdown & LaTeX Engine Showcase       [38;2;117;113;94m[49m│[39m x# C3 Markdown & LaTeX Engine Showcase
+[1m[38;2;102;217;239m   1 [0m[38;2;248;248;242mx# C3 Markdown & LaTeX Engine Showcase       [38;2;117;113;94m│[39m x# C3 Markdown & LaTeX Engine Showcase
 [38;2;117;113;94m   2 [38;2;248;248;242m                                             [38;2;117;113;94m│[39m
 [38;2;117;113;94m   3 [38;2;248;248;242mWelcome to **mdv**! This document tests and  [38;2;117;113;94m│[39m Welcome to [1mmdv[0m! This document tests and
 [38;2;117;113;94m   ↪ [38;2;248;248;242mdemonstrates the full suite of in-editor     [38;2;117;113;94m│[39m demonstrates the full suite of in-editor

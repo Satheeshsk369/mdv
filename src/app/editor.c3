@@ -398,6 +398,54 @@ fn void Editor.newline(&self)
     };
 }
 
+const String OPENERS = "([{`\"";
+const String CLOSERS = ")]}`\"";
+const String WRAPPERS = "*_~$";
+
+fn bool Editor.paired(&self)
+{
+    String s = self.str();
+    if (self.at == 0 || self.at >= s.len) return false;
+    sz k = OPENERS.index_of_char(s[self.at - 1]) ?? -1;
+    return k >= 0 && s[self.at] == CLOSERS[k];
+}
+
+fn bool Editor.pair(&self, char c)
+{
+    String s = self.str();
+    sz open = OPENERS.index_of_char(c) ?? -1;
+    if (self.selected() && (open >= 0 || WRAPPERS.contains_char(c)))
+    {
+        char close = open >= 0 ? CLOSERS[open] : c;
+        usz low = self.low();
+        usz high = self.high();
+        @pool()
+        {
+            self.splice(low, high, string::tformat("%c%s%c", c, s[low : high - low], close));
+        };
+        self.select(low + 1, high + 1);
+        return true;
+    }
+    if (self.selected()) return false;
+    char next = self.at < s.len ? s[self.at] : '\n';
+    char prior = self.at > 0 ? s[self.at - 1] : '\n';
+    if (CLOSERS.contains_char(c) && next == c)
+    {
+        self.at++;
+        return true;
+    }
+    if (open < 0) return false;
+    bool quote = c == '"' || c == '`';
+    if (quote && (prior.is_alnum() || prior == c)) return false;
+    if (next != '\n' && next != ' ' && !CLOSERS.contains_char(next)) return false;
+    @pool()
+    {
+        self.insert(string::tformat("%c%c", c, CLOSERS[open]));
+    };
+    self.at--;
+    return true;
+}
+
 fn bool word(char c) => c.is_alnum() || c == '_' || c >= 0x80;
 
 fn usz Editor.wordLeft(&self, usz at)
@@ -725,6 +773,7 @@ fn void View.edit(&self)
     self.editor.open(self.content, src);
     self.editor.width = max(self.editWidth() - 5, 1);
     self.mode = EDITOR;
+    terminal::mouse(true);
 }
 
 fn void View.write(&self)
@@ -744,9 +793,53 @@ fn void View.write(&self)
 
 fn void View.close(&self)
 {
+    terminal::mouse(false);
     self.mode = NORMAL;
     self.cursor = self.lines.find(self.editor.line(self.editor.at));
     self.center(self.cursor, self.rows / 3);
+}
+
+fn void View.point(&self, int key)
+{
+    Editor* e = &self.editor;
+    int base = key & terminal::KEY;
+    int r = terminal::pointerRow - 3;
+    int x = terminal::pointerColumn - 1;
+    if (base == terminal::RELEASE || r < 0 || r >= self.rows) return;
+    bool split = self.split();
+    int editRows = self.paneRows();
+    if (split ? x >= self.editWidth() : r >= editRows)
+    {
+        int p = e.view + (split ? r : r - editRows - 1);
+        if (base != terminal::CLICK || !e.preview || p < e.view || p >= e.page.count()) return;
+        e.marked = false;
+        e.at = e.offset(e.page.lines[p].src);
+        return;
+    }
+    int count = e.count();
+    int line = e.top;
+    int row = e.skip;
+    for (int k = 0; k < r && line < count; k++)
+    {
+        if (++row < e.height(line)) continue;
+        line++;
+        row = 0;
+    }
+    if (line >= count)
+    {
+        line = count - 1;
+        row = e.height(line) - 1;
+    }
+    int column = max(x - 5, 0);
+    if (!e.wrap && line == e.line(e.at)) column += e.left;
+    usz at = e.place(line, row, column);
+    if (base == terminal::DRAG || (key & terminal::SHIFT) != 0)
+    {
+        if (!e.marked) e.select(e.at, e.at);
+        e.at = at;
+        return;
+    }
+    e.select(at, at);
 }
 
 fn void View.ask(&self, Prompt prompt, String initial)
@@ -766,6 +859,11 @@ fn void View.command(&self, Act act)
             if (e.selected())
             {
                 e.marked = false;
+                return;
+            }
+            if (e.needle.len() > 0)
+            {
+                e.needle.clear();
                 return;
             }
             if (e.dirty() && !e.warned)
@@ -869,6 +967,11 @@ fn void View.type(&self, int key)
     bool vertical = base == terminal::UP || base == terminal::DOWN || base == terminal::PAGEUP || base == terminal::PAGEDOWN || base == terminal::WHEELUP || base == terminal::WHEELDOWN;
     bool motion = vertical || base == terminal::LEFT || base == terminal::RIGHT || base == terminal::HOME || base == terminal::END;
     if (!vertical || ctrl) e.goal = -1;
+    if (base == terminal::CLICK || base == terminal::DRAG || base == terminal::RELEASE)
+    {
+        self.point(key);
+        return;
+    }
     if (motion && base != terminal::WHEELUP && base != terminal::WHEELDOWN)
     {
         if (shift && !e.marked) e.select(e.at, e.at);
@@ -917,13 +1020,20 @@ fn void View.type(&self, int key)
                 e.insert("    ");
             }
         case terminal::BACKSPACE:
-            if (!e.remove()) e.erase(ctrl ? e.wordLeft(e.at) : e.backward(e.at), e.at);
+            if (e.remove()) return;
+            if (!ctrl && e.paired())
+            {
+                e.erase(e.at - 1, e.at + 1);
+                return;
+            }
+            e.erase(ctrl ? e.wordLeft(e.at) : e.backward(e.at), e.at);
         case terminal::DELETE:
             if (!e.remove()) e.erase(e.at, ctrl ? e.wordRight(e.at) : e.forward(e.at));
         default:
             if (key < 32 || key > 255 || key == 127) return;
-            e.remove();
             char c = (char)key;
+            if (!e.pasting && e.pair(c)) return;
+            e.remove();
             e.insert((String)(&c)[:1]);
     }
 }
