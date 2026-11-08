@@ -26,9 +26,9 @@ story = [("", 1800, "Enter", "open the file")] + [("Down", 160, "↓", "scroll")
 
 def frames():
     work = tempfile.mkdtemp()
-    os.makedirs(os.path.join(work, "config"))
     try:
         for n in range(len(story)):
+            shutil.rmtree(os.path.join(work, "config"), ignore_errors=True)
             shutil.copy(os.path.join(root, "assets/demo.md"), os.path.join(work, "demo.md"))
             keys = "\n".join(s[0] for s in story[1:n + 1])
             env = dict(os.environ, MDV_SIZE=f"{cols}x{rows}", MDV_KEYS=keys, XDG_CONFIG_HOME=os.path.join(work, "config"), EDITOR="true")
