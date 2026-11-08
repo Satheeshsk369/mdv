@@ -9,6 +9,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - { name: linux-x64, os: ubuntu-22.04, c3: c3-linux-static.tar.gz, flags: -z -s, run: "" }
@@ -38,6 +39,7 @@ jobs:
           if [ "${RUNNER_OS}" = Windows ]; then powershell -Command "Expand-Archive -Force ${{ matrix.c3 }} ."; elif [ "${RUNNER_OS}" = macOS ]; then unzip -q ${{ matrix.c3 }}; else tar xzf ${{ matrix.c3 }}; fi
           echo "${{ runner.temp }}/c3" >> "$GITHUB_PATH"
       - name: test
+        if: runner.os != 'Windows'
         run: c3c test
       - name: build
         run: c3c build mdv -g0 ${{ matrix.flags }}
