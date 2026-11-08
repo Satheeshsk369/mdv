@@ -245,6 +245,7 @@ fn bool View.tick(&self)
     {
         if (key == terminal::DONE)
         {
+            if (self.theme != 0) @pool() { io::print(ansi::backdrop()); };
             io::print(self.frame.str_view());
             return true;
         }

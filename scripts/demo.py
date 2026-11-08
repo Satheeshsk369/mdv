@@ -13,13 +13,15 @@ story = [("", 1800, "Enter", "open the file")] + [("Down", 160, "↓", "scroll")
     ("PageDown", 900, "PgDn", "half page down"), ("PageDown", 900, "PgDn", "half page down"), ("Home", 700, "Home", "back to the top"),
     ("Tab", 1200, "Tab", "outline"), ("Down", 500, "↓", "pick a heading"), ("Down", 500, "↓", "pick a heading"), ("Enter", 1200, "Enter", "jump to it"),
     ("h", 1400, "h", "highlight the block"), ("h", 400, "h", "highlight off"),
-    ("c", 1000, "c", "theme picker"), ("Down", 800, "↓", "live preview"), ("Down", 800, "↓", "live preview"),
-    ("Down", 800, "↓", "live preview"), ("Down", 800, "↓", "live preview"), ("Escape", 700, "Esc", "keep the current theme"),
+    ("c", 1000, "c", "theme picker"), ("Down", 700, "↓", "live preview"), ("Down", 700, "↓", "live preview"),
+    ("Down", 700, "↓", "live preview"), ("Down", 700, "↓", "live preview"), ("Up", 700, "↑", "live preview"),
+    ("Up", 900, "↑", "live preview"), ("Enter", 1300, "Enter", "keep Kanagawa"),
     (saved, 2600, "Ctrl+S", "saved in another editor: mdv reloads and marks the change"),
     ("e", 1300, "e", "edit with live preview"), ("C-End", 600, "Ctrl+End", "end of file"),
     ("Enter", 250, "Enter", "new line"), ("Enter", 250, "Enter", "new line")] + \
     [(c if c != " " else "Space", 70, "type", "the preview follows every key") for c in typed[:-1]] + \
-    [(typed[-1], 4000, "type", "the preview follows every key")]
+    [(typed[-1], 1500, "type", "the preview follows every key"),
+     ("C-s", 1300, "Ctrl+S", "save"), ("Escape", 4500, "Esc", "back to the viewer, with the new equation")]
 
 
 def frames():
@@ -81,7 +83,12 @@ def sgr(state, codes):
 
 
 def draw(text, key, note):
-    image = Image.new("RGB", (cols * cell + 2 * pad, rows * line + 2 * pad + bar), background)
+    back, fore = background, foreground
+    for kind, value in re.findall(r"\x1b\](1[01]);#([0-9a-fA-F]{6})", text):
+        color = tuple(bytes.fromhex(value))
+        if kind == "11": back = color
+        else: fore = color
+    image = Image.new("RGB", (cols * cell + 2 * pad, rows * line + 2 * pad + bar), back)
     pen = ImageDraw.Draw(image)
     caption(pen, key, note)
     state = dict(fg=None, bg=None, bold=False, italic=False, under=False, strike=False)
@@ -101,7 +108,7 @@ def draw(text, key, note):
             elif token == "\x1b[?25l": cursor = None
             elif final == "K":
                 x = pad + col * cell
-                pen.rectangle([x, pad + row * line, pad + cols * cell, pad + (row + 1) * line - 1], fill=state["bg"] or background)
+                pen.rectangle([x, pad + row * line, pad + cols * cell, pad + (row + 1) * line - 1], fill=state["bg"] or back)
         elif not token.startswith("\x1b"):
             if unicodedata.combining(token) and glyphs:
                 glyphs[-1] = glyphs[-1][:2] + (glyphs[-1][2] + token,) + glyphs[-1][3:]
@@ -111,7 +118,7 @@ def draw(text, key, note):
             if state["bg"]: pen.rectangle([x, pad + row * line, x + width * cell - 1, pad + (row + 1) * line - 1], fill=state["bg"])
             col += width
             y = pad + row * line
-            color = state["fg"] or foreground
+            color = state["fg"] or fore
             glyphs.append((x, y, token, color, dict(state)))
     for x, y, token, color, look in glyphs:
         if token != " ":
