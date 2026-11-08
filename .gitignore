@@ -1,4 +1,1 @@
 build/
-obj/
-.zig-cache/
-zig-out/

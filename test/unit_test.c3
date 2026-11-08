@@ -184,6 +184,13 @@ fn void testCommonMarkInline() @test
     test::eq(s[7].text, "\nnext");
 }
 
+fn void testCapitalSuperscript() @test
+{
+    Document doc = parser::parse("$A^T P^{RW}$");
+    defer doc.free();
+    test::eq(doc.blocks[0].spans[0].text, "Aᵀ Pᴿᵂ");
+}
+
 fn void testSetextAndFences() @test
 {
     Document doc = parser::parse("Title\n===\n\n```math\nx^2\n```\n\n\\[ y \\]\n\npara\n\n    code");
