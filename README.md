@@ -16,7 +16,7 @@ Linux and macOS (x64 and arm64), into `~/.local/bin`:
 curl -fsSL https://raw.githubusercontent.com/Satheeshsk369/mdv/main/scripts/install.sh | sh
 ```
 
-Windows (x64 and arm64), into `%LOCALAPPDATA%\mdv`, added to your `PATH`:
+Windows (x64; also runs on ARM through Windows' x64 emulation), into `%LOCALAPPDATA%\mdv`, added to your `PATH`:
 
 ```powershell
 irm https://raw.githubusercontent.com/Satheeshsk369/mdv/main/scripts/install.ps1 | iex
