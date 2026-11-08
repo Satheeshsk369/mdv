@@ -2,7 +2,7 @@
 
 # mdv
 
-My notes are Markdown files, and many of them have math in them. I wanted to read them in the terminal, in a pane next to my editor, with the equations drawn as equations instead of raw LaTeX. mdv does that. Open a note, keep writing in any editor, and the view redraws each time you save.
+My notes are mostly Markdown files, and many of them have math in them. I wanted to read them in the terminal, in a pane next to my editor, with the equations drawn as equations instead of raw LaTeX. mdv does that. Open a note, keep writing in any editor, and the view redraws each time you save.
 
 ![mdv opening a note, scrolling, using the outline, switching themes, reloading after a save and editing math with a live preview](assets/demo.gif)
 

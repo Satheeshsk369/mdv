@@ -555,3 +555,16 @@ fn void testEnvironmentSkipsStrayBrace() @test
     MathBox box = tex::latex(&arena, "\\begin{aligned} a } b \\end{aligned}");
     test::eq(box.height, 1);
 }
+
+fn void testPaddedInlineMath() @test
+{
+    Arena arena;
+    arena.init(4096);
+    defer arena.free();
+    Span[] padded = parser::spans(&arena, "a $ 2_3 $ b $$ x^2 $$ c $ y $");
+    test::eq(padded[1].text, "2₃");
+    test::eq((int)padded[3].kind, (int)SpanKind.MATH_DISPLAY);
+    test::eq(padded[5].text, "y");
+    Span[] money = parser::spans(&arena, "costs $ 5 and $ 10 total");
+    test::eq((int)money.len, 1);
+}

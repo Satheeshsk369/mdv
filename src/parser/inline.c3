@@ -258,18 +258,29 @@ fn bool Inline.escaped(&self)
     return true;
 }
 
+fn bool signals(String latex)
+{
+    foreach (c : latex) if ("\\^_{}=+-*/<>()|".contains_char(c)) return true;
+    return false;
+}
+
 fn bool Inline.math(&self)
 {
     String s = self.src;
     sz i = self.at;
     bool twice = i + 1 < s.len && s[i + 1] == '$';
     sz start = twice ? i + 2 : i + 1;
-    if (start >= s.len || space(s[start]) || s[start] == '\r' || s[start] == '\n') return false;
-    for (sz e = start; e < s.len; e++)
+    if (start >= s.len || s[start] == '\r' || s[start] == '\n') return false;
+    bool padded = space(s[start]);
+    for (sz e = start + 1; e < s.len; e++)
     {
-        if (s[e] != '$' || space(s[e - 1]) || s[e - 1] == '\\') continue;
+        if (s[e] != '$' || space(s[e - 1]) != padded || s[e - 1] == '\\') continue;
         if (twice && (e + 1 >= s.len || s[e + 1] != '$')) continue;
-        return self.formula(twice ? MATH_DISPLAY : MATH_INLINE, s[start : e - start], twice ? e + 2 : e + 1);
+        if (padded && e + 1 < s.len && s[e + 1].is_digit()) continue;
+        String latex = s[start : e - start].trim();
+        if (latex.len == 0) return false;
+        if (padded && latex.contains_char(' ') && !signals(latex)) return false;
+        return self.formula(twice ? MATH_DISPLAY : MATH_INLINE, latex, twice ? e + 2 : e + 1);
     }
     return false;
 }
