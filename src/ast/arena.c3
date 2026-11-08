@@ -52,6 +52,13 @@ fn String Arena.copy(&self, String s)
     return (String)buf[:s.len];
 }
 
+fn usz Arena.bytes(&self)
+{
+    usz total;
+    for (ArenaBlock* block = self.head; block; block = block.next) total += block.capacity;
+    return total;
+}
+
 fn void Arena.free(&self)
 {
     for (ArenaBlock* block = self.head; block;)

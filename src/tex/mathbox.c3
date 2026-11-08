@@ -81,9 +81,6 @@ fn MathBox beside(ast::Arena* arena, MathBox left, MathBox right, int gap = 0)
         if (lr >= 0 && lr < left.height)
         {
             mb.append_string(left.rows[lr]);
-            int rowW = text::width(left.rows[lr]);
-            int pad = left.width - rowW;
-            if (pad > 0) mb.spaces(pad);
         }
         else
         {
@@ -96,9 +93,6 @@ fn MathBox beside(ast::Arena* arena, MathBox left, MathBox right, int gap = 0)
         if (rr >= 0 && rr < right.height)
         {
             mb.append_string(right.rows[rr]);
-            int rowW = text::width(right.rows[rr]);
-            int pad = right.width - rowW;
-            if (pad > 0) mb.spaces(pad);
         }
         else
         {

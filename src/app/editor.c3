@@ -69,8 +69,7 @@ struct Editor
     List{usz} starts;
     List{usz} begins;
     bool indexed;
-    Document doc;
-    render::Page page;
+    render::Live live;
 }
 
 fn int columns(String s)
@@ -747,10 +746,7 @@ fn void Editor.open(&self, String content, int line)
 
 fn void Editor.refresh(&self, int width)
 {
-    self.doc.free();
-    self.doc = parser::parse(self.str());
-    self.page.free();
-    self.page = render::layout(&self.doc, { .width = width });
+    self.live.update(self.str(), width);
     self.fresh = false;
 }
 
@@ -765,6 +761,7 @@ fn void Editor.init(&self)
     self.hits.init(mem, 16);
     self.starts.init(mem, 16);
     self.begins.init(mem, 1024);
+    self.live.init();
     self.wrap = true;
     self.preview = true;
 }
@@ -782,8 +779,7 @@ fn void Editor.free(&self)
     self.input.free();
     self.needle.free();
     self.clip.free();
-    self.doc.free();
-    self.page.free();
+    self.live.free();
 }
 
 fn bool View.wide(&self) => self.width >= 100;
@@ -841,9 +837,9 @@ fn void View.point(&self, int key)
     if (split ? x >= self.editWidth() : r >= editRows)
     {
         int p = e.view + (split ? r : r - editRows - 1);
-        if (base != terminal::CLICK || !e.preview || p < e.view || p >= e.page.count()) return;
+        if (base != terminal::CLICK || !e.preview || p < e.view || p >= e.live.page.count()) return;
         e.marked = false;
-        e.at = e.offset(e.page.lines[p].src);
+        e.at = e.offset(e.live.page.lines[p].src);
         return;
     }
     int count = e.count();

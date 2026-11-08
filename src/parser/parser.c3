@@ -613,11 +613,96 @@ fn Document parse(String content)
         Entry entry;
         if (definition(line.trim(), &entry)) refs.push({ doc.arena.copy(entry.key), doc.arena.copy(entry.value) });
     }
-    Parser p = { .doc = &doc, .lines = all, .refs = keep(&doc.arena, &refs) };
+    doc.refs = keep(&doc.arena, &refs);
+    Parser p = { .doc = &doc, .lines = all, .refs = doc.refs };
     p.blocks.init(mem, 64);
     defer p.blocks.free();
     if (all.len > 0 && all[0].trim() == "---") p.frontmatter();
     while (!p.done()) p.block();
     doc.blocks = keep(&doc.arena, &p.blocks);
     return doc;
+}
+
+fn int locate(Block[] blocks, int line)
+{
+    int lo;
+    int hi = (int)blocks.len;
+    while (lo < hi)
+    {
+        int mid = (lo + hi) / 2;
+        bool before = blocks[mid].start <= line;
+        lo = before ? mid + 1 : lo;
+        hi = before ? hi : mid;
+    }
+    return lo - 1;
+}
+
+fn void shift(Block[] blocks, int delta)
+{
+    foreach (&b : blocks)
+    {
+        b.start += delta;
+        b.end += delta;
+        shift(b.children, delta);
+    }
+}
+
+fn bool defines(String[] lines)
+{
+    foreach (line : lines) if (line.contains("]:")) return true;
+    return false;
+}
+
+fn bool alike(Block[] a, Block[] b)
+{
+    if (a.len == 0 || b.len == 0 || a[^1].kind != b[^1].kind) return false;
+    BlockKind x = BLANK;
+    BlockKind y = BLANK;
+    foreach_r (block : a) if (block.kind != BLANK) { x = block.kind; break; }
+    foreach_r (block : b) if (block.kind != BLANK) { y = block.kind; break; }
+    return x == y;
+}
+
+fn bool reparse(Document* doc, List{Block}* blocks, String before, String after, Splice* splice)
+{
+    List{String} was;
+    was.init(mem, 1024);
+    defer was.free();
+    List{String} now;
+    now.init(mem, 1024);
+    defer now.free();
+    String[] old = split(before, &was);
+    String[] fresh = split(after, &now);
+    int limit = (int)min(old.len, fresh.len);
+    int first;
+    while (first < limit && old[first] == fresh[first]) first++;
+    int same;
+    while (same < limit - first && old[old.len - 1 - same] == fresh[fresh.len - 1 - same]) same++;
+    if (defines(old[first : old.len - same - first]) || defines(fresh[first : fresh.len - same - first])) return false;
+    Block[] seen = blocks.array_view();
+    if (seen.len == 0) return false;
+    int restart = max(locate(seen, first - 1) - 1, 0);
+    if (restart == 0 && fresh.len > 0 && fresh[0].trim() == "---") return false;
+    int delta = (int)fresh.len - (int)old.len;
+    int changed = (int)fresh.len - same;
+    Parser p = { .doc = doc, .lines = fresh, .refs = doc.refs, .at = restart == 0 ? 0 : seen[restart].start };
+    p.blocks.init(mem, seen.len + 64);
+    p.blocks.push_all(seen[:restart]);
+    int resume = (int)seen.len;
+    while (!p.done())
+    {
+        p.block();
+        if (p.at < changed) continue;
+        int k = locate(seen, p.at - delta);
+        if (k < restart || seen[k].start != p.at - delta || !alike(p.blocks.array_view(), seen[:k])) continue;
+        resume = k;
+        break;
+    }
+    *splice = { restart, resume - restart, (int)p.blocks.len() - restart, delta };
+    shift(seen[resume..], delta);
+    p.blocks.push_all(seen[resume..]);
+    blocks.free();
+    *blocks = p.blocks;
+    doc.blocks = blocks.array_view();
+    return true;
 }

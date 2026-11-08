@@ -123,7 +123,16 @@ fn Block make(BlockKind kind, int start, int end, Span[] spans = {})
 struct Document
 {
     Block[] blocks;
+    Entry[] refs;
     Arena arena;
+}
+
+struct Splice
+{
+    int first;
+    int removed;
+    int added;
+    int delta;
 }
 
 fn void Document.free(&self)

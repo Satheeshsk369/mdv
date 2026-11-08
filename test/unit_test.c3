@@ -473,3 +473,85 @@ fn void testLatexCoverage() @test
     MathBox over = tex::latex(&arena, "{a \\over b}");
     test::eq(over.height, 3);
 }
+
+const String[] PIECES = {
+    "\n", "\n\n", "```", "```math\n", "$$", "# ", "> ", "- ", "1. ", "- [ ] ", "| a | b |\n| --- | --- |\n", "===", "---",
+    "    ", "x", " ", "\\", "[^1]: n", "> [!NOTE]\n", "<!--", "-->", "*", "[x]: http://a", "\\begin{aligned}", "\\end{aligned}",
+};
+
+fn usz boundary(String s, usz at)
+{
+    while (at < s.len && (s[at] & 0xC0) == 0x80) at++;
+    return at;
+}
+
+fn void testIncrementalMatchesFull() @test
+{
+    String[] files = { "test/golden/sample.md", "test/golden/markdown.md", "test/golden/math.md", "test/golden/latex.md", "test/golden/text.md", "README.md" };
+    uint seed = 7;
+    foreach (name : files)
+    {
+        String base = (String)io::file::load(mem, name)!!;
+        defer free(base);
+        DString text;
+        text.init(mem, base.len + 1024);
+        defer text.free();
+        text.append(base);
+        render::Live live;
+        live.init();
+        defer live.free();
+        live.update(text.str_view(), 80);
+        for (int step = 0; step < 100; step++)
+        {
+            seed = seed * 1103515245 + 12345;
+            String now = text.str_view();
+            usz at = boundary(now, (usz)(seed >> 8) % (usz)(now.len + 1));
+            DString next;
+            next.init(mem, now.len + 64);
+            defer next.free();
+            next.append(now[:at]);
+            if ((seed >> 4) % 3 == 0)
+            {
+                usz end = boundary(now, min((usz)now.len, at + 1 + (usz)((seed >> 12) % 24)));
+                next.append(now[end..]);
+            }
+            else
+            {
+                next.append(PIECES[(usz)(seed >> 16) % (usz)PIECES.len]);
+                next.append(now[at..]);
+            }
+            text.clear();
+            text.append(next.str_view());
+            live.update(text.str_view(), 80);
+            Document doc = parser::parse(text.str_view());
+            defer doc.free();
+            render::Page page = render::layout(&doc, { .width = 80 });
+            defer page.free();
+            test::eq(live.doc.blocks.len, doc.blocks.len);
+            foreach (i, b : doc.blocks)
+            {
+                test::eq(live.doc.blocks[i].kind, b.kind);
+                test::eq(live.doc.blocks[i].start, b.start);
+                test::eq(live.doc.blocks[i].end, b.end);
+            }
+            test::eq(live.page.lines.len, page.lines.len);
+            test::eq(live.page.anchors.len, page.anchors.len);
+            foreach (i, a : page.anchors) test::eq(live.page.anchors[i], a);
+            foreach (i, line : page.lines)
+            {
+                test::eq(live.page.lines[i].text, line.text);
+                test::eq(live.page.lines[i].src, line.src);
+                test::eq(live.page.lines[i].block, line.block);
+            }
+        }
+    }
+}
+
+fn void testEnvironmentSkipsStrayBrace() @test
+{
+    ast::Arena arena;
+    arena.init();
+    defer arena.free();
+    MathBox box = tex::latex(&arena, "\\begin{aligned} a } b \\end{aligned}");
+    test::eq(box.height, 1);
+}

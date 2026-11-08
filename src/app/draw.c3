@@ -327,9 +327,9 @@ fn void View.drawEditor(&self, DString* fb)
     {
         hint.append(self.status.str_view());
     }
-    else if (self.focus && e.page.count() > 0)
+    else if (self.focus && e.live.page.count() > 0)
     {
-        Block* b = &e.doc.blocks[e.page.lines[e.page.find(line)].block];
+        Block* b = &e.live.doc.blocks[e.live.page.lines[e.live.page.find(line)].block];
         hint.appendf("Block L%d–%d (Ctrl+H)", b.start + 1, b.end + 1);
     }
     else
@@ -362,16 +362,16 @@ fn void View.drawEditor(&self, DString* fb)
         if (spot.column < e.left) e.left = spot.column;
         if (spot.column >= e.left + textWidth) e.left = spot.column - textWidth + 1;
     }
-    int anchor = e.page.find(line);
-    int block = e.page.count() > 0 ? e.page.lines[anchor].block : -1;
+    int anchor = e.live.page.find(line);
+    int block = e.live.page.count() > 0 ? e.live.page.lines[anchor].block : -1;
     int first = -1;
     int last = -1;
-    if (self.focus && block >= 0 && block < e.doc.blocks.len)
+    if (self.focus && block >= 0 && block < e.live.doc.blocks.len)
     {
-        first = e.doc.blocks[block].start;
-        last = e.doc.blocks[block].end;
+        first = e.live.doc.blocks[block].start;
+        last = e.live.doc.blocks[block].end;
     }
-    e.view = math::clamp(anchor - previewRows / 3, 0, max(e.page.count() - previewRows, 0));
+    e.view = math::clamp(anchor - previewRows / 3, 0, max(e.live.page.count() - previewRows, 0));
     int number = e.top;
     int row = e.skip;
     int count = e.count();
@@ -432,7 +432,7 @@ fn void View.drawEditor(&self, DString* fb)
             fb.append(ansi::RESET);
         }
         int p = e.view + (split ? r : r - editRows - 1);
-        if ((split || (stacked && r > editRows)) && p < e.page.count()) preview(fb, e.page.lines[p].text, self.focus && e.page.lines[p].block == block, previewWidth);
+        if ((split || (stacked && r > editRows)) && p < e.live.page.count()) preview(fb, e.live.page.lines[p].text, self.focus && e.live.page.lines[p].block == block, previewWidth);
         fb.append("\e[K");
         if (r < body - 1) fb.append_char('\n');
     }

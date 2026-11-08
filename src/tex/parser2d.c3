@@ -242,6 +242,7 @@ fn MathBox block(Reader* p, MathAtomKind* prevAtom)
     while (!p.eof())
     {
         p.skipSpaces();
+        usz begin = p.pos;
 
         if (p.peek() == '\\')
         {
@@ -292,6 +293,10 @@ fn MathBox block(Reader* p, MathAtomKind* prevAtom)
             if ((int)curRow.size > maxCols) maxCols = (int)curRow.size;
             envRows.push(curRow);
             curRow.init(mem, 4);
+        }
+        else if (p.pos == begin)
+        {
+            p.pos++;
         }
     }
 
