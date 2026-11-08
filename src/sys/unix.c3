@@ -11,6 +11,7 @@ fn void rawMode()
     libc::signal(2, &onSignal);
     libc::signal(15, &onSignal);
     libc::signal(1, &onSignal);
+    listen();
     if (termios::tcgetattr(0, &saved) != 0) return;
     Termios t = saved;
     t.c_lflag.icanon = false;

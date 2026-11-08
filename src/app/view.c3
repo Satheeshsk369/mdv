@@ -44,7 +44,7 @@ struct View
     List{int} matches;
     int match;
     DString status;
-    int ticks;
+    ulong expires;
     Velocity velocity;
     DString frame;
 }
@@ -59,7 +59,7 @@ fn void View.say(&self, String message)
 {
     self.status.clear();
     self.status.append(message);
-    self.ticks = 40;
+    self.expires = terminal::now() + 1200;
 }
 
 fn void View.layout(&self)
@@ -124,7 +124,7 @@ fn void View.external(&self)
         self.replace(fresh);
         self.cursor = self.lines.find(line - 1);
         self.center(self.cursor, self.rows / 3);
-        self.stamp = terminal::stamp(self.name());
+        self.follow();
     }
     self.say("✔ Resumed from Editor");
 }
@@ -148,7 +148,7 @@ fn void View.open(&self)
     self.replace(fresh);
     self.top = 0;
     self.cursor = 0;
-    self.stamp = terminal::stamp(self.name());
+    self.follow();
     @pool()
     {
         self.say(string::tformat("✔ Switched to %s", self.name()));
@@ -178,11 +178,24 @@ fn void View.resize(&self)
     self.draw();
 }
 
+fn void View.follow(&self)
+{
+    self.stamp = terminal::stamp(self.name());
+    terminal::follow(self.name());
+}
+
+fn int View.timeout(&self)
+{
+    if (self.expires == 0) return -1;
+    ulong now = terminal::now();
+    return self.expires > now ? (int)(self.expires - now) : 0;
+}
+
 fn void View.watch(&self)
 {
     terminal::Stamp now = terminal::stamp(self.name());
     if (now.inode == 0 || now.same(self.stamp)) return;
-    self.stamp = now;
+    self.follow();
     String? fresh = load(self.name());
     if (catch fresh) return;
     int diff = changed(self.content, fresh);
@@ -236,8 +249,9 @@ fn void View.start(&self, String name, String content, int line, bool noWrap)
 fn bool View.tick(&self)
 {
     bool dirty;
-    if (self.ticks > 0 && --self.ticks == 0)
+    if (self.expires != 0 && terminal::now() >= self.expires)
     {
+        self.expires = 0;
         self.status.clear();
         dirty = true;
     }
@@ -276,7 +290,7 @@ fn bool run(String file, int line, bool noWrap, bool picker)
     view.restore();
     if (picker) view.files();
     view.draw();
-    view.stamp = terminal::stamp(view.name());
-    while (!view.tick()) terminal::wait(30);
+    view.follow();
+    while (!view.tick()) terminal::wait(view.timeout());
     return true;
 }

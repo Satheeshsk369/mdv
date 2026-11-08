@@ -10,6 +10,7 @@ const uint VT_OUTPUT = 0x0004;
 const uint LINE_INPUT = 0x0002;
 const uint ECHO_INPUT = 0x0004;
 const uint PROCESSED_INPUT = 0x0001;
+const uint WINDOW_INPUT = 0x0008;
 const uint UTF8 = 65001;
 
 struct Coord
@@ -48,13 +49,17 @@ extern fn int setConsoleMode(void* handle, uint mode) @cname("SetConsoleMode");
 extern fn int setConsoleCP(uint page) @cname("SetConsoleCP");
 extern fn int setConsoleOutputCP(uint page) @cname("SetConsoleOutputCP");
 extern fn int getConsoleScreenBufferInfo(void* handle, ScreenInfo* info) @cname("GetConsoleScreenBufferInfo");
-extern fn uint waitForSingleObject(void* handle, uint ms) @cname("WaitForSingleObject");
+extern fn uint waitForMultipleObjects(uint count, void** handles, int all, uint ms) @cname("WaitForMultipleObjects");
+extern fn void* findFirstChangeNotificationW(WString dir, int subtree, uint filter) @cname("FindFirstChangeNotificationW");
+extern fn int findNextChangeNotification(void* handle) @cname("FindNextChangeNotification");
+extern fn int findCloseChangeNotification(void* handle) @cname("FindCloseChangeNotification");
 extern fn int getNumberOfConsoleInputEvents(void* handle, uint* count) @cname("GetNumberOfConsoleInputEvents");
 extern fn int readConsoleInputW(void* handle, KeyRecord* records, uint length, uint* read) @cname("ReadConsoleInputW");
 
 uint savedInput;
 uint savedOutput;
 ushort surrogate;
+void* changes;
 
 fn int[2] size()
 {
@@ -70,7 +75,7 @@ fn void rawMode()
     void* output = getStdHandle(STD_OUTPUT);
     getConsoleMode(input, &savedInput);
     getConsoleMode(output, &savedOutput);
-    setConsoleMode(input, (savedInput & ~(LINE_INPUT | ECHO_INPUT | PROCESSED_INPUT)) | VT_INPUT);
+    setConsoleMode(input, (savedInput & ~(LINE_INPUT | ECHO_INPUT | PROCESSED_INPUT)) | VT_INPUT | WINDOW_INPUT);
     setConsoleMode(output, savedOutput | VT_OUTPUT);
     setConsoleCP(UTF8);
     setConsoleOutputCP(UTF8);
@@ -92,10 +97,28 @@ fn bool wait(int ms)
 {
     if (scripted)
     {
-        fake += (ulong)ms;
+        fake += (ulong)(ms < 0 ? 30 : min(ms, 30));
         return pendingLen > 0;
     }
-    return waitForSingleObject(getStdHandle(STD_INPUT), (uint)ms) == 0;
+    void*[2] handles = { getStdHandle(STD_INPUT), changes };
+    uint woke = waitForMultipleObjects(changes == null ? 1 : 2, &handles, 0, (uint)ms);
+    if (woke == 1) findNextChangeNotification(changes);
+    return woke == 0;
+}
+
+fn void follow(String file)
+{
+    if (changes != null) findCloseChangeNotification(changes);
+    changes = null;
+    sz slash = max(file.rindex_of_char('/') ?? -1, file.rindex_of_char('\\') ?? -1);
+    String dir = slash < 0 ? "." : file[:slash + 1];
+    @pool()
+    {
+        WString? wide = dir.to_temp_wstring();
+        if (catch wide) return;
+        void* handle = findFirstChangeNotificationW(wide, 0, 0x1 | 0x8 | 0x10);
+        if ((iptr)handle != -1) changes = handle;
+    };
 }
 
 fn void fill()
