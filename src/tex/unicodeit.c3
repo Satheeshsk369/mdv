@@ -194,7 +194,7 @@ fn bool Flat.command(&self, String cmd)
             {
                 self.i++;
                 String inner = self.until('}');
-                if (cmd != "hspace" && cmd != "vspace") self.out.append(inner);
+                if (cmd != "hspace" && cmd != "vspace") foreach (c : inner) self.out.append_char(c == '~' ? ' ' : c);
             }
             if (cmd == "operatorname") self.out.append_char(' ');
         case "frac":
@@ -369,18 +369,8 @@ fn bool Flat.styled(&self, String cmd)
     self.skip(" *");
     if (!self.at('{')) return true;
     self.i++;
-    foreach (c : self.until('}'))
-    {
-        Char32 glyph = alphabet.map(c);
-        if (glyph)
-        {
-            self.out.append_char32(glyph);
-        }
-        else
-        {
-            self.out.append_char(c);
-        }
-    }
+    String inner = self.sub(self.until('}'));
+    self.out.append(alphabet.upper == 0 ? inner : alphabet.apply(self.arena, inner));
     return true;
 }
 
@@ -581,6 +571,7 @@ fn bool Flat.operator(&self, String cmd)
 fn String unicode(ast::Arena* arena, String input)
 {
     if (input.len == 0) return "";
+    input = degrees(arena, input);
     Flat f = { .arena = arena, .s = input };
     f.out.init(mem, input.len * 4 + 256);
     defer f.out.free();

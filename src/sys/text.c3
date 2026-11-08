@@ -69,6 +69,20 @@ fn int width(String s)
     return total;
 }
 
+fn void DString.bare(&self, String s)
+{
+    for (usz i = 0; i < s.len; i++)
+    {
+        if (s[i] != '\e')
+        {
+            self.append_char(s[i]);
+            continue;
+        }
+        while (i + 1 < s.len && !s[i + 1].is_alpha()) i++;
+        i++;
+    }
+}
+
 fn void DString.repeat(&self, String s, int count)
 {
     if (count > 0) self.append_string_repeat(s, count);

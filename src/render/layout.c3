@@ -213,7 +213,14 @@ fn void Renderer.math(&self, Block* b)
     foreach (row : box.rows[:box.height])
     {
         self.buf.spaces(4);
-        self.buf.append(row);
+        if (self.config.plain)
+        {
+            self.buf.bare(row);
+        }
+        else
+        {
+            self.buf.append(row);
+        }
         self.flush(b.start);
     }
     self.emit("", b.end);

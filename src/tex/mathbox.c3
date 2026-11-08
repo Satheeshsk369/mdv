@@ -4,6 +4,59 @@ import std::core::mem;
 import ast;
 import text;
 
+const String[] DEGREES = { "^{\\circ}", "^\\circ" };
+
+fn String degrees(ast::Arena* arena, String s)
+{
+    if (!s.contains("circ")) return s;
+    DString mb;
+    mb.init(mem, s.len + 8);
+    defer mb.free();
+    for (usz i = 0; i < s.len; i++)
+    {
+        bool found;
+        foreach (d : DEGREES)
+        {
+            usz end = i + d.len;
+            if (!s[i..].starts_with(d) || (end < s.len && d[^1] == 'c' && s[end].is_alpha())) continue;
+            mb.append("°");
+            i = end - 1;
+            found = true;
+            break;
+        }
+        if (!found) mb.append_char(s[i]);
+    }
+    return mb.keep(arena);
+}
+
+fn String Alphabet.apply(&self, ast::Arena* arena, String s)
+{
+    DString mb;
+    mb.init(mem, s.len * 4 + 8);
+    defer mb.free();
+    for (usz i = 0; i < s.len; i++)
+    {
+        if (s[i] == '\e')
+        {
+            usz start = i;
+            while (i + 1 < s.len && !s[i + 1].is_alpha()) i++;
+            if (i + 1 < s.len) i++;
+            mb.append(s[start .. i]);
+            continue;
+        }
+        Char32 glyph = self.map(s[i]);
+        if (glyph)
+        {
+            mb.append_char32(glyph);
+        }
+        else
+        {
+            mb.append_char(s[i]);
+        }
+    }
+    return mb.keep(arena);
+}
+
 fn MathBox blank(ast::Arena* arena)
 {
     MathBox box;
@@ -450,14 +503,25 @@ fn MathBox colorize(ast::Arena* arena, MathBox inner, String color)
     return res;
 }
 
+fn MathBox fence(ast::Arena* arena, char code, bool open)
+{
+    switch (code)
+    {
+        case 'F': return atom(arena, open ? "⌊" : "⌋");
+        case 'C': return atom(arena, open ? "⌈" : "⌉");
+        case '<': return atom(arena, "⟨");
+        case '>': return atom(arena, "⟩");
+        case 'V': return atom(arena, "‖");
+        default: return letter(arena, code);
+    }
+}
+
 fn MathBox delimit(ast::Arena* arena, MathBox inner, char openCh, char closeCh)
 {
     if (inner.height <= 1)
     {
-        MathBox lBox = letter(arena, openCh == 'F' ? 0 : openCh);
-        MathBox rBox = letter(arena, closeCh == 'F' ? 0 : closeCh);
-        MathBox mid = (openCh != 0) ? beside(arena, lBox, inner, 1) : inner;
-        return (closeCh != 0) ? beside(arena, mid, rBox, 1) : mid;
+        MathBox mid = (openCh != 0) ? beside(arena, fence(arena, openCh, true), inner, 1) : inner;
+        return (closeCh != 0) ? beside(arena, mid, fence(arena, closeCh, false), 1) : mid;
     }
 
     int h = inner.height;

@@ -568,3 +568,16 @@ fn void testPaddedInlineMath() @test
     Span[] money = parser::spans(&arena, "costs $ 5 and $ 10 total");
     test::eq((int)money.len, 1);
 }
+
+fn void testSymbolSheet() @test
+{
+    ast::Arena arena;
+    arena.init();
+    defer arena.free();
+    test::eq(tex::latex(&arena, "\\left\\{ x \\right\\} \\left\\| y \\right\\| \\left\\lfloor z \\right\\rfloor").rows[0], "{ x } ‖ y ‖ ⌊ z ⌋");
+    test::eq(tex::latex(&arena, "a \\mbox{~and~} b").rows[0], "a  and  b");
+    test::eq(tex::latex(&arena, "\\sin\\theta").rows[0], "sin θ");
+    test::eq(tex::latex(&arena, "\\deg p = 90^\\circ").rows[0], "deg p = 90°");
+    test::eq(tex::unicode(&arena, "45^{\\circ} f \\circ g"), "45° f ∘ g");
+    test::eq(tex::unicode(&arena, "\\mathbf{v} \\mathbb{R^n} \\Bumpeq \\twoheadrightarrow \\biguplus \\Vec{a}"), "𝐯 ℝⁿ ≎ ↠ ⨄ a⃗");
+}

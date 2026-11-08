@@ -95,32 +95,12 @@ fn MathBox styled(Reader* p, MathAtomKind* prevAtom, Alphabet alphabet)
     if (p.peek() == '*') p.get();
     p.skipSpaces();
     *prevAtom = MathAtomKind.ORD;
-    if (alphabet.upper == 0) return group(p);
-    DString mb;
-    mb.init(mem, 32);
-    defer mb.free();
-    if (p.peek() == '{')
-    {
-        p.get();
-        while (!p.eof() && p.peek() != '}')
-        {
-            Char32 glyph = alphabet.map(p.get());
-            if (glyph) mb.append_char32(glyph);
-        }
-        if (p.peek() == '}') p.get();
-        return atom(p.arena, mb.str_view());
-    }
-    char single = p.get();
-    Char32 glyph = alphabet.map(single);
-    if (glyph)
-    {
-        mb.append_char32(glyph);
-    }
-    else if (single)
-    {
-        mb.append_char(single);
-    }
-    return mb.len() ? atom(p.arena, mb.str_view()) : blank(p.arena);
+    MathBox inner = group(p);
+    if (alphabet.upper == 0) return inner;
+    String* rows = (String*)p.arena.alloc((usz)inner.height * String::size);
+    foreach (i, row : inner.rows) rows[i] = alphabet.apply(p.arena, row);
+    inner.rows = rows[:inner.height];
+    return inner;
 }
 
 fn MathBox accented(Reader* p, MathAtomKind* prevAtom, String diacritic, bool isOverline, bool isUnderline)
@@ -149,24 +129,33 @@ fn MathBox accented(Reader* p, MathAtomKind* prevAtom, String diacritic, bool is
     return atom(p.arena, mb.keep(p.arena));
 }
 
+struct Fence
+{
+    String name;
+    char code;
+}
+
+const Fence[] FENCES = {
+    { "lfloor", 'F' }, { "rfloor", 'F' }, { "lceil", 'C' }, { "rceil", 'C' }, { "langle", '<' }, { "rangle", '>' },
+    { "lbrace", '{' }, { "{", '{' }, { "rbrace", '}' }, { "}", '}' }, { "vert", '|' }, { "lvert", '|' }, { "rvert", '|' },
+    { "|", 'V' }, { "Vert", 'V' }, { "lVert", 'V' }, { "rVert", 'V' },
+};
+
+fn char delimiter(Reader* p)
+{
+    usz start = p.pos;
+    while (!p.eof() && p.src[p.pos].is_alpha()) p.pos++;
+    if (p.pos == start && !p.eof()) p.pos++;
+    String name = p.src[start : p.pos - start];
+    foreach (f : FENCES) if (f.name == name) return f.code;
+    return '\\';
+}
+
 fn MathBox paired(Reader* p, MathAtomKind* prevAtom)
 {
     p.skipSpaces();
     char openCh = p.get();
-    if (openCh == '\\')
-    {
-        usz dStart = p.pos;
-        while (!p.eof() && ((p.src[p.pos] >= 'a' && p.src[p.pos] <= 'z') || (p.src[p.pos] >= 'A' && p.src[p.pos] <= 'Z'))) p.pos++;
-        String d_name = p.src[dStart : p.pos - dStart];
-
-        if (d_name == "lfloor") { openCh = 'F'; }
-        else if (d_name == "lceil") { openCh = 'C'; }
-        else if (d_name == "langle") { openCh = '<'; }
-        else if (d_name == "lbrace" || d_name == "{") { openCh = '{'; }
-        else if (d_name == "rbrace" || d_name == "}") { openCh = '}'; }
-        else if (d_name == "vert" || d_name == "lvert" || d_name == "|") { openCh = '|'; }
-        else if (d_name == "Vert" || d_name == "lVert") { openCh = 'V'; }
-    }
+    if (openCh == '\\') openCh = delimiter(p);
     if (openCh == '.') openCh = 0;
 
     MathBox inner = expression(p, false, false);
@@ -183,20 +172,7 @@ fn MathBox paired(Reader* p, MathAtomKind* prevAtom)
         {
             p.skipSpaces();
             closeCh = p.get();
-            if (closeCh == '\\')
-            {
-                usz rdStart = p.pos;
-                while (!p.eof() && ((p.src[p.pos] >= 'a' && p.src[p.pos] <= 'z') || (p.src[p.pos] >= 'A' && p.src[p.pos] <= 'Z'))) p.pos++;
-                String rdName = p.src[rdStart : p.pos - rdStart];
-
-                if (rdName == "rfloor") { closeCh = 'F'; }
-                else if (rdName == "rceil") { closeCh = 'C'; }
-                else if (rdName == "rangle") { closeCh = '>'; }
-                else if (rdName == "lbrace" || rdName == "{") { closeCh = '{'; }
-                else if (rdName == "rbrace" || rdName == "}") { closeCh = '}'; }
-                else if (rdName == "vert" || rdName == "rvert" || rdName == "|") { closeCh = '|'; }
-                else if (rdName == "Vert" || rdName == "rVert") { closeCh = 'V'; }
-            }
+            if (closeCh == '\\') closeCh = delimiter(p);
             if (closeCh == '.') closeCh = 0;
         }
     }
@@ -346,8 +322,8 @@ struct Large
 
 const Large[] LARGE = {
     { SUM, "∑" }, { PROD, "∏" }, { COPROD, "∐" }, { BIG_UNION, "⋃" }, { BIG_INTERSECTION, "⋂" },
-    { BIG_PLUS, "⨁" }, { BIG_TIMES, "⨂" }, { BIG_DOT, "⨀" }, { BIG_SQ_CUP, "⨆" }, { BIG_VEE, "⋁" },
-    { BIG_WEDGE, "⋀" }, { INT, "∫" }, { IINT, "∬" }, { IIINT, "∭" }, { OINT, "∮" }, { OIINT, "∯" }, { OIIINT, "∰" },
+    { BIG_PLUS, "⨁" }, { BIG_TIMES, "⨂" }, { BIG_DOT, "⨀" }, { BIG_SQ_CUP, "⨆" }, { BIG_UPLUS, "⨄" }, { BIG_VEE, "⋁" },
+    { BIG_WEDGE, "⋀" }, { INT, "∫" }, { IINT, "∬" }, { IIINT, "∭" }, { IIIINT, "⨌" }, { OINT, "∮" }, { OIINT, "∯" }, { OIIINT, "∰" },
     { LIM, "lim" }, { LIMINF, "lim inf" }, { LIMSUP, "lim sup" }, { MAX, "max" }, { MIN, "min" },
     { SUP, "sup" }, { INF, "inf" }, { ARGMAX, "arg max" }, { ARGMIN, "arg min" },
 };
@@ -552,11 +528,13 @@ fn MathBox commanded(Reader* p, MathAtomKind* prevAtom, MathCommand mcmd, String
         case BIG_TIMES:
         case BIG_DOT:
         case BIG_SQ_CUP:
+        case BIG_UPLUS:
         case BIG_VEE:
         case BIG_WEDGE:
         case INT:
         case IINT:
         case IIINT:
+        case IIIINT:
         case OINT:
         case OIINT:
         case OIIINT:
@@ -638,7 +616,9 @@ fn MathBox commanded(Reader* p, MathAtomKind* prevAtom, MathCommand mcmd, String
                 String txt = p.src[txtStart : p.pos - txtStart];
                 if (p.peek() == '}') p.get();
                 *prevAtom = MathAtomKind.ORD;
-                return atom(p.arena, txt);
+                MathBox words = atom(p.arena, txt);
+                foreach (&c : words.rows[0]) if (*c == '~') *c = ' ';
+                return words;
             }
             *prevAtom = MathAtomKind.ORD;
             return atom(p.arena, "text");
@@ -815,6 +795,21 @@ fn MathBox group(Reader* p)
     return term(p, &atom);
 }
 
+const String[] FUNCTIONS = {
+    "arccos", "arcsin", "arctan", "arg", "cos", "cosh", "cot", "coth", "csc", "deg", "det", "dim", "exp", "gcd", "hom", "ker",
+    "lg", "ln", "log", "Pr", "sec", "sin", "sinh", "tan", "tanh",
+};
+
+fn bool named(Reader* p)
+{
+    usz start = p.pos + 1;
+    usz end = start;
+    while (end < p.src.len && p.src[end].is_alpha()) end++;
+    String name = p.src[start : end - start];
+    foreach (f : FUNCTIONS) if (f == name) return true;
+    return false;
+}
+
 fn bool joins(MathAtomKind kind) => kind == MathAtomKind.ORD || kind == MathAtomKind.CLOSE || kind == MathAtomKind.INNER || kind == MathAtomKind.OP;
 
 struct Piece
@@ -832,6 +827,7 @@ fn MathBox expression(Reader* p, bool stopAtAmp = false, bool stopAtBslash = fal
     defer pieces.free();
     MathAtomKind prevAtom = MathAtomKind.OPEN;
     bool raise;
+    bool function;
     while (!p.eof())
     {
         p.skipSpaces();
@@ -865,6 +861,8 @@ fn MathBox expression(Reader* p, bool stopAtAmp = false, bool stopAtBslash = fal
             p.pos = save;
             if (name == "right" || name == "end") break;
         }
+        bool after = function;
+        function = c == '\\' && named(p);
         Piece piece = { .base = term(p, &prevAtom), .sup = blank(p.arena), .sub = blank(p.arena) };
         while (true)
         {
@@ -882,7 +880,7 @@ fn MathBox expression(Reader* p, bool stopAtAmp = false, bool stopAtBslash = fal
         }
         bool scripted = piece.sup.width > 0 || piece.sub.width > 0;
         raise = raise || (scripted && !flat(piece.base, piece.sup, piece.sub));
-        piece.gap = spaced && joins(prevAtom) && prevAtom != MathAtomKind.CLOSE;
+        piece.gap = (spaced && joins(prevAtom) && prevAtom != MathAtomKind.CLOSE) || (after && prevAtom != MathAtomKind.OPEN && prevAtom != MathAtomKind.PUNCT);
         pieces.push(piece);
     }
     return assemble(p.arena, pieces.array_view(), raise);
@@ -903,7 +901,7 @@ fn MathBox latex(ast::Arena* arena, String latex)
 {
     Reader parser;
     parser.arena = arena;
-    parser.src = latex;
+    parser.src = degrees(arena, latex);
     parser.pos = 0;
 
     return expression(&parser, false, false);

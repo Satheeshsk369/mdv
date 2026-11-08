@@ -1,7 +1,7 @@
 # Math coverage
 
 Inline: a   b   c   d   e    f g, ½ (a+1)/b ³√(x+1), pmod 7, x^(α→) y_(β∞) z^q w_y, x², aᵢⱼ, xⁿ⁺¹ₖ, f′(x), f″, a/b, √x, ³√x, αβΓ,
-ℝℤℕ, ℒ, 𝔤, v, v⃗, x̂, z̄, ẋ, ẍ, ñ, ĀB̄, u̲, a (mod n), a mod n, if x, rank A, x ≤ y ≠ z ∈ S ⊆ T, ∉, → ⇒ ⟺ ↦, ∑ᵢ₌₁..ₙ i, ∫₀..₁ f,
+ℝℤℕ, ℒ, 𝔤, 𝐯, v⃗, x̂, z̄, ẋ, ẍ, ñ, ĀB̄, u̲, a (mod n), a mod n, if x, rank A, x ≤ y ≠ z ∈ S ⊆ T, ∉, → ⇒ ⟺ ↦, ∑ᵢ₌₁..ₙ i, ∫₀..₁ f,
 lim(n→∞), costs $5 and $10.
 
 
@@ -71,7 +71,7 @@ lim(n→∞), costs $5 and $10.
 
 
 
-    [38;2;249;38;114mx[0m + [38;2;166;226;46my[0m + [38;2;174;129;255mz[0m + [38;2;117;113;94mw[0m
+    x + y + z + w
 
 
 
@@ -90,16 +90,17 @@ lim(n→∞), costs $5 and $10.
 
 
 
-    𝔸 ℂ 𝟘 𝒜 ℬ ℋ 𝔄 𝔷 d x y z β γ
+    𝔸 ℂ 𝟘 𝒜 ℬ ℋ 𝔄 𝔷 d 𝑥 𝗒 𝚣 β γ
 
 
 
 ## Delimiters
 
 
-    ⎛  a  ⎞ ⎡  c  ⎤ \  e  \
-    ⎜ ─── ⎟ ⎢ ─── ⎥ \ ─── \
-    ⎝  b  ⎠ ⎣  d  ⎦ \  f  \
+    ⎛  a  ⎞ ⎡  c  ⎤ ⎧  e  ⎫ │  g  │        d   │ 
+    ⎜ ─── ⎟ ⎢ ─── ⎥ ⎨ ─── ⎬ │ ─── │ ⟨ x ⟩ ──── │ 
+    ⎝  b  ⎠ ⎣  d  ⎦ ⎩  f  ⎭ │  h  │        dx  │ 
+                                                0
 
 
 
@@ -107,7 +108,7 @@ lim(n→∞), costs $5 and $10.
 
 
     1  2 ⎛ a ⎞          │ 1  0 │                 
-    3  4 ⎝ b ⎠ [ x  y ] │ 0  1 │ V p V { q } s  t
+    3  4 ⎝ b ⎠ [ x  y ] │ 0  1 │ ‖ p ‖ { q } s  t
 
 
 
