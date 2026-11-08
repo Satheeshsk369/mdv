@@ -10,13 +10,13 @@ It is one small binary with no runtime. It also has its own editor, so you can f
 
 ## Install
 
-Linux (x64) and macOS (Apple silicon and Intel), into `~/.local/bin`:
+Linux and macOS (x64 and arm64), into `~/.local/bin`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Satheeshsk369/mdv/main/scripts/install.sh | sh
 ```
 
-Windows (x64), into `%LOCALAPPDATA%\mdv`, added to your `PATH`:
+Windows (x64 and arm64), into `%LOCALAPPDATA%\mdv`, added to your `PATH`:
 
 ```powershell
 irm https://raw.githubusercontent.com/Satheeshsk369/mdv/main/scripts/install.ps1 | iex

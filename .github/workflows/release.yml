@@ -11,32 +11,44 @@ jobs:
     strategy:
       matrix:
         include:
-          - { name: linux-x64, os: ubuntu-22.04, c3: c3-linux-static.tar.gz, unpack: tar xzf, flags: --x86cpu=baseline, run: true }
-          - { name: macos-arm64, os: macos-latest, c3: c3-macos.zip, unpack: unzip -q, flags: "", run: true }
-          - { name: macos-x64, os: macos-latest, c3: c3-macos.zip, unpack: unzip -q, flags: "--x86cpu=baseline --target macos-x64 --macos-sdk $(xcrun --show-sdk-path)", run: false }
-          - { name: windows-x64, os: windows-latest, c3: c3-windows.zip, unpack: 7z x -y, flags: --x86cpu=baseline, run: true }
+          - { name: linux-x64, os: ubuntu-22.04, c3: c3-linux-static.tar.gz, flags: -z -s, run: "" }
+          - name: linux-arm64
+            os: ubuntu-22.04
+            c3: c3-linux-static.tar.gz
+            setup: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu qemu-user
+            flags: -z -s --target linux-aarch64 --cc aarch64-linux-gnu-gcc --linux-crt /usr/aarch64-linux-gnu/lib --linux-crtbegin "$(dirname "$(aarch64-linux-gnu-gcc -print-libgcc-file-name)")"
+            run: qemu-aarch64 -L /usr/aarch64-linux-gnu
+          - { name: macos-arm64, os: macos-latest, c3: c3-macos.zip, flags: "", run: "" }
+          - { name: macos-x64, os: macos-latest, c3: c3-macos.zip, flags: "--target macos-x64 --macos-sdk $(xcrun --show-sdk-path)", run: arch -x86_64 }
+          - { name: windows-x64, os: windows-latest, c3: c3-windows.zip, flags: "", run: "" }
+          - { name: windows-arm64, os: windows-11-arm, c3: c3-windows-aarch64.zip, flags: "", run: "" }
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+      - name: setup
+        if: matrix.setup
+        run: ${{ matrix.setup }}
       - name: c3c
         working-directory: ${{ runner.temp }}
         run: |
           curl -sLO https://github.com/c3lang/c3c/releases/download/v0.8.5/${{ matrix.c3 }}
-          ${{ matrix.unpack }} ${{ matrix.c3 }}
+          if [ "${RUNNER_OS}" = Windows ]; then powershell -Command "Expand-Archive -Force ${{ matrix.c3 }} ."; elif [ "${RUNNER_OS}" = macOS ]; then unzip -q ${{ matrix.c3 }}; else tar xzf ${{ matrix.c3 }}; fi
           echo "${{ runner.temp }}/c3" >> "$GITHUB_PATH"
-      - name: build
-        run: c3c build mdv ${{ matrix.flags }}
       - name: test
-        if: matrix.run
-        run: |
-          c3c test
-          printf '# mdv\n\n$x^2$\n' | ./build/mdv -p
+        run: c3c test
+      - name: build
+        run: c3c build mdv -g0 ${{ matrix.flags }}
+      - name: strip
+        if: runner.os == 'macOS'
+        run: strip build/mdv
+      - name: smoke
+        run: printf '# mdv\n\n$x^2$\n' | ${{ matrix.run }} ./build/mdv -p
       - name: package
         run: |
-          if [ -f build/mdv.exe ]; then 7z a mdv-${{ matrix.name }}.zip ./build/mdv.exe; else tar czf mdv-${{ matrix.name }}.tar.gz -C build mdv; fi
+          if [ -f build/mdv.exe ]; then powershell -Command "Compress-Archive -Force build/mdv.exe mdv-${{ matrix.name }}.zip"; else tar czf mdv-${{ matrix.name }}.tar.gz -C build mdv; fi
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}
@@ -57,4 +69,5 @@ jobs:
         run: |
           tag=v$(jq -r .version project.json)
           gh release delete "$tag" --cleanup-tag --yes || true
+          (cd dist && sha256sum * > SHA256SUMS)
           gh release create "$tag" dist/* --target "${{ github.sha }}" --title "$tag" --generate-notes

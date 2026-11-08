@@ -4,7 +4,7 @@
   "dependency-search-paths": [],
   "dependencies": [],
   "authors": ["Satheeshkumar"],
-  "version": "0.3.1",
+  "version": "0.3.2",
   "build-dir": "build",
   "output": "build",
   "targets": {
@@ -14,6 +14,6 @@
     }
   },
   "test-sources": ["test/**"],
-  "cpu": "native",
+  "x86cpu": "baseline",
   "opt": "O5"
 }
