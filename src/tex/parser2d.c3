@@ -826,7 +826,6 @@ fn MathBox expression(Reader* p, bool stopAtAmp = false, bool stopAtBslash = fal
     pieces.init(mem, 16);
     defer pieces.free();
     MathAtomKind prevAtom = MathAtomKind.OPEN;
-    bool raise;
     bool function;
     while (!p.eof())
     {
@@ -851,7 +850,7 @@ fn MathBox expression(Reader* p, bool stopAtAmp = false, bool stopAtBslash = fal
             }
             if (name == "over" || name == "choose" || name == "atop")
             {
-                MathBox left = assemble(p.arena, pieces.array_view(), raise);
+                MathBox left = assemble(p.arena, pieces.array_view());
                 MathBox right = expression(p, stopAtAmp, stopAtBslash, stopAtRbracket);
                 if (name == "over") return fraction(p.arena, left, right);
                 MathBox[2] pair = { left, right };
@@ -879,20 +878,22 @@ fn MathBox expression(Reader* p, bool stopAtAmp = false, bool stopAtBslash = fal
             *slot = group(p);
         }
         bool scripted = piece.sup.width > 0 || piece.sub.width > 0;
-        raise = raise || (scripted && !flat(piece.base, piece.sup, piece.sub));
         piece.gap = (spaced && joins(prevAtom) && prevAtom != MathAtomKind.CLOSE) || (after && prevAtom != MathAtomKind.OPEN && prevAtom != MathAtomKind.PUNCT);
         pieces.push(piece);
     }
-    return assemble(p.arena, pieces.array_view(), raise);
+    return assemble(p.arena, pieces.array_view());
 }
 
-fn MathBox assemble(ast::Arena* arena, Piece[] pieces, bool raise)
+fn MathBox assemble(ast::Arena* arena, Piece[] pieces)
 {
     MathBox res = blank(arena);
+    bool loose;
     foreach (piece : pieces)
     {
-        MathBox next = scripts(arena, piece.base, piece.sup, piece.sub, raise);
-        res = beside(arena, res, next, piece.gap && res.width > 0 ? 1 : 0);
+        MathBox next = scripts(arena, piece.base, piece.sup, piece.sub);
+        bool spaced = piece.gap || (loose && piece.base.height == 1 && piece.base.rows[0].len > 0 && piece.base.rows[0][0].is_alnum());
+        res = beside(arena, res, next, spaced && res.width > 0 ? 1 : 0);
+        loose = spelled(piece.sub, SUB) || spelled(piece.sup, SUPER);
     }
     return res;
 }

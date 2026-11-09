@@ -404,15 +404,15 @@ fn void testHeadingAfterTab() @test
     test::eq(doc.blocks[0].level, 1);
 }
 
-fn void testScriptsRaiseTogether() @test
+fn void testScriptsStayOnOneLine() @test
 {
     ast::Arena arena;
     arena.init(16384);
     defer arena.free();
-    MathBox mixed = tex::latex(&arena, "e^x x^{n - 1}");
-    test::eq(mixed.height, 2);
-    MathBox simple = tex::latex(&arena, "e^x x^2");
-    test::eq(simple.height, 1);
+    test::eq(tex::latex(&arena, "e^x x^{n - 1} n_i^2 T^{3/2}").rows[0], "eˣ xⁿ⁻¹ nᵢ² T³ᐟ²");
+    test::eq(tex::latex(&arena, "I_C = \\beta I_B, V_{CE}, e^{-E_g/2k_BT}").rows[0], "I_C = β I_B, V_CE, e^(-E_g/2k_B T)");
+    test::eq(tex::unicode(&arena, "V_{CE} k_BT \\sqrt{V/N}"), "V_CE k_B T √(V/N)");
+    test::eq(tex::latex(&arena, "e^{\\frac{a}{b}}").height, 4);
 }
 
 fn void testVerticalRootKeepsRadicandAligned() @test

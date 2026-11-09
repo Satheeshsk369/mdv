@@ -181,7 +181,7 @@ fn MathBox root(ast::Arena* arena, MathBox inner, MathBox degree)
     if (h == 1 && (d == 0 || (degree.height == 1 && SUPER.fits(mark))))
     {
         String r = inner.rows[0].trim();
-        bool wrap = operated(r) && (r[0] != '(' || r[^1] != ')');
+        bool wrap = covers(r);
         if (d > 0) mb.append(SUPER.apply(arena, mark));
         mb.append("√");
         if (wrap) mb.append_char('(');
@@ -285,23 +285,59 @@ fn MathBox limits(ast::Arena* arena, MathBox op, MathBox sub, MathBox sup)
     return column(arena, { present(sup), op, present(sub) }, max(op.width, sub.width, sup.width), supH + op.baseline);
 }
 
-fn bool flat(MathBox base, MathBox sup, MathBox sub)
+fn String compact(String s)
 {
-    if (base.height != 1 || sup.height > 1 || sub.height > 1) return false;
-    return (sup.width == 0 || SUPER.fits(sup.rows[0])) && (sub.width == 0 || SUB.fits(sub.rows[0]));
+    String t = s.trim();
+    if (!t.contains_char(' ')) return t;
+    DString mb;
+    mb.init(tmem, t.len);
+    foreach (c : t) if (c != ' ') mb.append_char(c);
+    return mb.str_view();
 }
 
-fn MathBox scripts(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub, bool raise = false)
+fn bool spelled(MathBox script, Script table) => script.width > 0 && !table.fits(compact(script.rows[0]));
+
+fn bool token(String s)
+{
+    if (s.len > 0 && s[0] >= 0x80) return s.len <= 4 && text::width(s) == 1;
+    foreach (c : s) if (!c.is_alnum()) return false;
+    return s.len > 0;
+}
+
+fn void spell(DString* out, ast::Arena* arena, String text, Script table, char mark)
+{
+    @pool()
+    {
+        String tight = compact(text);
+        if (table.fits(tight))
+        {
+            out.append(table.apply(arena, tight));
+            return;
+        }
+    };
+    String t = text.trim();
+    out.append_char(mark);
+    if (token(t))
+    {
+        out.append(t);
+        return;
+    }
+    out.append_char('(');
+    out.append(t);
+    out.append_char(')');
+}
+
+fn MathBox scripts(ast::Arena* arena, MathBox base, MathBox sup, MathBox sub)
 {
     if (sup.width == 0 && sub.width == 0) return base;
-    if (!raise && flat(base, sup, sub))
+    if (base.height == 1 && sup.height <= 1 && sub.height <= 1)
     {
         DString mb;
         mb.init(mem, 128);
         defer mb.free();
         mb.append(base.rows[0]);
-        if (sub.width > 0) mb.append(SUB.apply(arena, sub.rows[0]));
-        if (sup.width > 0) mb.append(SUPER.apply(arena, sup.rows[0]));
+        if (sub.width > 0) spell(&mb, arena, sub.rows[0], SUB, '_');
+        if (sup.width > 0) spell(&mb, arena, sup.rows[0], SUPER, '^');
         return atom(arena, mb.str_view());
     }
 

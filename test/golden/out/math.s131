@@ -43,8 +43,8 @@ lim(n→∞), costs $5 and $10.
 
 
 
-     lim  lim inf lim sup max min sup inf argmax  arg max arg min f
-    x → 0    n       n     i   j   x   y        θ    x       y     
+     lim  lim inf lim sup max min sup inf argmax_θ arg max arg min f
+    x → 0    n       n     i   j   x   y              x       y     
 
 
 
@@ -149,9 +149,8 @@ lim(n→∞), costs $5 and $10.
 [38;2;166;226;46m[1mScripts[0m
 
 
-                   x²                                  
-                 -────                                 
-     2³            2            n    (n)       T    2  
-    x   + y   + e      + (a + b)  + f   (x) + A  + ∇  ϕ
-           iⱼ                                          
+                         x²                                  
+                       -────                                 
+                         2                                   
+    x^(2³) + y_(iⱼ) + e      + (a + b)ⁿ + f⁽ⁿ⁾(x) + Aᵀ + ∇² ϕ
 

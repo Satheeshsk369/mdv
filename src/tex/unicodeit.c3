@@ -41,7 +41,14 @@ fn bool find(Pair[] table, String key, String* value)
     return false;
 }
 
-fn bool operated(String s) => s.contains("+") || s.contains("-") || s.contains("=") || s.contains(" ");
+fn bool operated(String s) => s.contains("+") || s.contains("-") || s.contains("=") || s.contains("/") || s.contains(" ");
+
+fn bool covers(String r)
+{
+    if (r.len == 0 || (r[0] == '(' && r[^1] == ')') || text::width(r) <= 1) return false;
+    foreach (c : r) if (!c.is_digit() && c != '.') return true;
+    return false;
+}
 
 struct Flat
 {
@@ -150,7 +157,7 @@ fn void Flat.root(&self)
     if (!self.at('{')) return;
     self.i++;
     String r = self.sub(self.nested());
-    bool wrap = operated(r) && (r[0] != '(' || r[^1] != ')');
+    bool wrap = covers(r);
     if (wrap) self.out.append_char('(');
     self.out.append(r);
     if (wrap) self.out.append_char(')');
@@ -437,6 +444,11 @@ fn bool lift(String raw, Pair[] greek, Script script, DString* out)
             while (i < raw.len && raw[i].is_alpha()) i++;
             if (!find(greek, raw[start : i - start], &glyph)) return false;
         }
+        else if (raw[i] == ' ')
+        {
+            i++;
+            continue;
+        }
         else
         {
             glyph = script.map(raw[i++]);
@@ -477,7 +489,17 @@ fn String Flat.raw(&self)
     if (self.at('\\'))
     {
         self.i++;
-        self.name();
+        String cmd = self.name();
+        Alphabet alphabet;
+        MathAccent kind;
+        MathCommand c;
+        MathCmdFlags flags;
+        uint groups = font(cmd, &alphabet) || accent(cmd, &kind) ? 1 : command(cmd, &c, &flags) ? flags.arity : 0;
+        for (uint g = 0; g < groups && self.at('{'); g++)
+        {
+            self.i++;
+            self.nested();
+        }
     }
     else if (self.more())
     {
@@ -509,10 +531,19 @@ fn void Flat.attach(&self, String raw, bool braced, char mark)
         self.out.append(lifted.str_view());
         return;
     }
+    String content = self.sub(raw).trim();
     self.out.append_char(mark);
-    if (braced) self.out.append_char('(');
-    self.out.append(braced ? self.sub(raw) : raw);
-    if (braced) self.out.append_char(')');
+    if (token(content))
+    {
+        self.out.append(content);
+    }
+    else
+    {
+        self.out.append_char('(');
+        self.out.append(content);
+        self.out.append_char(')');
+    }
+    if (self.more() && self.s[self.i].is_alnum()) self.out.append_char(' ');
 }
 
 fn bool Flat.operator(&self, String cmd)

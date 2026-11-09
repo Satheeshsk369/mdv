@@ -41,8 +41,8 @@ Inline: a   b   c   d   e    f  g, ½ (a+1)/b ³√(x+1), pmod 7, x^
 
 
 
-     lim  lim inf lim sup max min sup inf argmax  arg max arg min f
-    x → 0    n       n     i   j   x   y        θ    x       y     
+     lim  lim inf lim sup max min sup inf argmax_θ arg max arg min f
+    x → 0    n       n     i   j   x   y              x       y     
 
 
 
@@ -147,9 +147,8 @@ Inline: a   b   c   d   e    f  g, ½ (a+1)/b ³√(x+1), pmod 7, x^
 [38;2;166;226;46m[1mScripts[0m
 
 
-                   x²                                  
-                 -────                                 
-     2³            2            n    (n)       T    2  
-    x   + y   + e      + (a + b)  + f   (x) + A  + ∇  ϕ
-           iⱼ                                          
+                         x²                                  
+                       -────                                 
+                         2                                   
+    x^(2³) + y_(iⱼ) + e      + (a + b)ⁿ + f⁽ⁿ⁾(x) + Aᵀ + ∇² ϕ
 

@@ -5,9 +5,9 @@ Welcome to [1mmdv[0m! This document tests and demonstrates the full suite of i
 [38;2;117;113;94m────────────────────────────────────[0m
 
 
-            ∞   x  n - 1   
-    Γ(x) =  ∫  e  x      dt
-            0              
+            ∞            
+    Γ(x) =  ∫  eˣ xⁿ⁻¹ dt
+            0            
 
 
 
@@ -38,9 +38,9 @@ Welcome to [1mmdv[0m! This document tests and demonstrates the full suite of i
 
 
 
-     ∞   -x²        
-     ∫  e    dx = √π
-    -∞              
+     ∞                 
+     ∫  e^(-x²) dx = √π
+    -∞                 
 
 
 
@@ -56,15 +56,15 @@ Welcome to [1mmdv[0m! This document tests and demonstrates the full suite of i
 
 
 
-           n     n   ⎛ n ⎞  n - k  k
-    (x + y)  =   ∑   ⎝ k ⎠ x      y 
-               k = 0                
+                 n   ⎛ n ⎞        
+    (x + y)ⁿ =   ∑   ⎝ k ⎠ xⁿ⁻ᵏ yᵏ
+               k = 0              
 
 
 
-               ∞        -i ω t   
-    ℱ{f(t)} =  ∫  f(t) e       dt
-              -∞                 
+               ∞                    
+    ℱ{f(t)} =  ∫  f(t) e^(-i ω t) dt
+              -∞                    
 
 
 
@@ -112,10 +112,9 @@ Welcome to [1mmdv[0m! This document tests and demonstrates the full suite of i
 
 
 
-    ┌─────────────┐
-    │  iπ         │
-    │ e   + 1 = 0 │
-    └─────────────┘
+    ┌────────────────┐
+    │ e^(iπ) + 1 = 0 │
+    └────────────────┘
 
 
 

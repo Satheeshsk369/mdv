@@ -6,9 +6,9 @@ in-editor Markdown and LaTeX rendering capabilities.
 ────────────────────────────────────────────────────────────────────────────
 
 
-            ∞   x  n - 1   
-    Γ(x) =  ∫  e  x      dt
-            0              
+            ∞            
+    Γ(x) =  ∫  eˣ xⁿ⁻¹ dt
+            0            
 
 
 
@@ -40,9 +40,9 @@ in-editor Markdown and LaTeX rendering capabilities.
 
 
 
-     ∞   -x²        
-     ∫  e    dx = √π
-    -∞              
+     ∞                 
+     ∫  e^(-x²) dx = √π
+    -∞                 
 
 
 
@@ -58,15 +58,15 @@ in-editor Markdown and LaTeX rendering capabilities.
 
 
 
-           n     n   ⎛ n ⎞  n - k  k
-    (x + y)  =   ∑   ⎝ k ⎠ x      y 
-               k = 0                
+                 n   ⎛ n ⎞        
+    (x + y)ⁿ =   ∑   ⎝ k ⎠ xⁿ⁻ᵏ yᵏ
+               k = 0              
 
 
 
-               ∞        -i ω t   
-    ℱ{f(t)} =  ∫  f(t) e       dt
-              -∞                 
+               ∞                    
+    ℱ{f(t)} =  ∫  f(t) e^(-i ω t) dt
+              -∞                    
 
 
 
@@ -114,10 +114,9 @@ in-editor Markdown and LaTeX rendering capabilities.
 
 
 
-    ┌─────────────┐
-    │  iπ         │
-    │ e   + 1 = 0 │
-    └─────────────┘
+    ┌────────────────┐
+    │ e^(iπ) + 1 = 0 │
+    └────────────────┘
 
 
 
